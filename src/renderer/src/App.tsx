@@ -7,6 +7,7 @@ import { ProjectHome } from '@/features/projects/project-home';
 import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
+import { CanvasErrorBoundary } from '@/features/workspace/canvas-error-boundary';
 import { ProjectCanvas } from '@/features/workspace/project-canvas';
 import { useInputMethod } from '@/lib/input-method';
 
@@ -97,14 +98,15 @@ export function App() {
           {state.error ? '项目库尚未打开' : '正在打开项目库…'}
         </main>
       ) : project ? (
-        <ProjectCanvas
-          key={project.project.id}
-          snapshot={project}
-          blocked={library.writeBlocked}
-          interactions={library.interactions}
-          inactive={settings || newName !== null}
-          report={state.report}
-        />
+        <CanvasErrorBoundary key={project.project.id} onHome={state.home}>
+          <ProjectCanvas
+            snapshot={project}
+            blocked={library.writeBlocked}
+            interactions={library.interactions}
+            inactive={settings || newName !== null}
+            report={state.report}
+          />
+        </CanvasErrorBoundary>
       ) : (
         <ProjectHome
           projects={library.projects}

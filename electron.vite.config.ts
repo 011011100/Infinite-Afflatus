@@ -14,9 +14,20 @@ export default defineConfig({
   },
   renderer: {
     resolve: {
+      dedupe: ['react', 'react-dom', 'gsap'],
       alias: {
         '@': fileURLToPath(new URL('./src/renderer/src', import.meta.url)),
       },
+    },
+    optimizeDeps: {
+      // Keep React and the animation hooks in the same initial dependency batch.
+      include: [
+        'react',
+        'react-dom/client',
+        '@gsap/react',
+        'gsap',
+        'gsap/Flip',
+      ],
     },
     server: {
       host: '127.0.0.1',
