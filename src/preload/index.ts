@@ -17,6 +17,8 @@ const desktop: DesktopBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.renameProject, id, name),
   saveViewport: (id, viewport) =>
     ipcRenderer.invoke(IPC_CHANNELS.saveViewport, id, viewport),
+  patchCanvas: (id, patch) =>
+    ipcRenderer.invoke(IPC_CHANNELS.patchCanvas, id, patch),
   importVideos: (id) => ipcRenderer.invoke(IPC_CHANNELS.importVideos, id),
   chooseDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.chooseDirectory),
   startMigration: (token) =>

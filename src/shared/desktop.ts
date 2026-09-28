@@ -1,3 +1,4 @@
+import type { CanvasPatch } from './canvas/model';
 import type {
   LibraryState,
   MigrationPreview,
@@ -13,6 +14,7 @@ export const IPC_CHANNELS = {
   openProject: 'project:open',
   renameProject: 'project:rename',
   saveViewport: 'project:viewport',
+  patchCanvas: 'project:canvas-patch',
   importVideos: 'project:import-videos',
   chooseDirectory: 'storage:choose',
   startMigration: 'storage:migrate',
@@ -37,6 +39,7 @@ export interface DesktopBridge {
   openProject: (id: string) => Promise<ProjectSnapshot>;
   renameProject: (id: string, name: string) => Promise<void>;
   saveViewport: (id: string, viewport: Viewport) => Promise<void>;
+  patchCanvas: (id: string, patch: CanvasPatch) => Promise<ProjectSnapshot>;
   importVideos: (id: string) => Promise<void>;
   chooseDirectory: () => Promise<MigrationPreview | null>;
   startMigration: (token: string) => Promise<void>;

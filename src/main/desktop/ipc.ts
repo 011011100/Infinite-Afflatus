@@ -8,6 +8,7 @@ import {
   ipcMain,
   shell,
 } from 'electron';
+import type { CanvasPatch } from '../../shared/canvas/model';
 import { IPC_CHANNELS } from '../../shared/desktop';
 import type { Viewport } from '../../shared/models';
 import {
@@ -75,6 +76,15 @@ export function registerDesktop(
       trustedWindow(event);
       validateViewport(viewport);
       await library.projects.update(id(projectId), { viewport });
+    },
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.patchCanvas,
+    async (event, projectId: unknown, patch: CanvasPatch) => {
+      trustedWindow(event);
+      const snapshot = await library.projects.patchCanvas(id(projectId), patch);
+      library.emit();
+      return snapshot;
     },
   );
   ipcMain.handle(IPC_CHANNELS.chooseDirectory, async (event) => {

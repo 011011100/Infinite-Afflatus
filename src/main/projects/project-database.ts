@@ -1,4 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  applyCanvasPatch,
+  type CanvasDocument,
+  type CanvasPatch,
+  reconcileCanvas,
+} from '../../shared/canvas/model';
 import type {
   Asset,
   ProjectSnapshot,
@@ -73,14 +79,40 @@ function setValue(db: DatabaseSync, key: string, data: unknown): void {
 }
 
 export function readProject(file: string): ProjectSnapshot {
-  return withProject(file, false, (db) => ({
+  return withProject(file, false, snapshot);
+}
+
+function snapshot(db: DatabaseSync): ProjectSnapshot {
+  const assets = db
+    .prepare('SELECT payload FROM assets ORDER BY rowid')
+    .all()
+    .map((row) => JSON.parse(String(row.payload)) as Asset);
+  const stored = db
+    .prepare("SELECT value FROM metadata WHERE key = 'canvas'")
+    .get();
+  return {
     project: value<ProjectSummary>(db, 'project'),
     viewport: value<Viewport>(db, 'viewport'),
-    assets: db
-      .prepare('SELECT payload FROM assets ORDER BY rowid')
-      .all()
-      .map((row) => JSON.parse(String(row.payload)) as Asset),
-  }));
+    assets,
+    canvas: reconcileCanvas(
+      stored ? (JSON.parse(String(stored.value)) as CanvasDocument) : undefined,
+      assets,
+    ),
+  };
+}
+
+export function patchProjectCanvas(
+  file: string,
+  patch: CanvasPatch,
+): ProjectSnapshot {
+  return withProject(file, true, (db) => {
+    const current = snapshot(db);
+    current.canvas = applyCanvasPatch(current.canvas, patch);
+    current.project.updatedAt = new Date().toISOString();
+    setValue(db, 'canvas', current.canvas);
+    setValue(db, 'project', current.project);
+    return current;
+  });
 }
 
 export function verifyProjectDatabase(file: string): void {

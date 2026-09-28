@@ -1,3 +1,5 @@
+import type { CanvasDocument } from './canvas/model';
+
 export interface Viewport {
   x: number;
   y: number;
@@ -24,6 +26,7 @@ export interface ProjectSnapshot {
   project: ProjectSummary;
   viewport: Viewport;
   assets: Asset[];
+  canvas: CanvasDocument;
 }
 
 export type SaveStatus = 'receiving' | 'ready' | 'saving' | 'saved' | 'failed';

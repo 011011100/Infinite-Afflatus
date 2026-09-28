@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { CanvasPatch } from '../../shared/canvas/model';
 import type {
   ProjectSnapshot,
   ProjectSummary,
@@ -11,6 +12,7 @@ import { inside, safeFile, syncDirectory } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
 import {
   createProjectDatabase,
+  patchProjectCanvas,
   readProject,
   updateProject,
 } from './project-database';
@@ -70,6 +72,14 @@ export class ProjectService {
       this.store.putProject(
         updateProject(await this.databasePath(id), changes),
       );
+    });
+  }
+
+  async patchCanvas(id: string, patch: CanvasPatch): Promise<ProjectSnapshot> {
+    return this.gate.run(async () => {
+      const snapshot = patchProjectCanvas(await this.databasePath(id), patch);
+      this.store.putProject(snapshot.project);
+      return snapshot;
     });
   }
 
