@@ -3,6 +3,28 @@ import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appInfo),
+  getLibrary: () => ipcRenderer.invoke(IPC_CHANNELS.state),
+  onLibraryChanged: (listener) => {
+    const changed = () => listener();
+    ipcRenderer.on(IPC_CHANNELS.changed, changed);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.changed, changed);
+    };
+  },
+  createProject: (name) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
+  openProject: (id) => ipcRenderer.invoke(IPC_CHANNELS.openProject, id),
+  renameProject: (id, name) =>
+    ipcRenderer.invoke(IPC_CHANNELS.renameProject, id, name),
+  saveViewport: (id, viewport) =>
+    ipcRenderer.invoke(IPC_CHANNELS.saveViewport, id, viewport),
+  importVideos: (id) => ipcRenderer.invoke(IPC_CHANNELS.importVideos, id),
+  chooseDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.chooseDirectory),
+  startMigration: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.startMigration, token),
+  cancelMigration: () => ipcRenderer.invoke(IPC_CHANNELS.cancelMigration),
+  retryCleanup: () => ipcRenderer.invoke(IPC_CHANNELS.retryCleanup),
+  retrySave: (id) => ipcRenderer.invoke(IPC_CHANNELS.retrySave, id),
+  revealRoot: () => ipcRenderer.invoke(IPC_CHANNELS.revealRoot),
 };
 
 contextBridge.exposeInMainWorld('desktop', desktop);

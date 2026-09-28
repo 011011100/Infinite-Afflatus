@@ -6,13 +6,16 @@
 
 ## 当前状态
 
-项目处于工程初始化阶段，当前可运行的是桌面空画布，不是完整的交互原型。
+已完成本地项目与存储第一版，可在桌面端新建、打开项目并导入视频预览。主画布拼接与镜头编辑仍待实现。
 
 - 已建立 React、TypeScript、React Flow、Electron 和 electron-vite 工程。
 - 已接入窗口、受限 preload/IPC、画布平移和缩放。
 - 已接入 shadcn/ui、Tailwind CSS，以及共用按钮和悬浮提示。
-- 已加入类型检查、代码检查、构建和本地媒体工具检测命令。
-- 视频导入、拼接、播放、裁剪、镜头编辑、项目保存仍待实现。
+- 已实现项目首页、新建／打开／改名，每项目独立 SQLite 保存素材与画布视口。
+- 已实现视频导入和单卡片放大播放、统一保存目录、迁移预览／取消／恢复／精确清理。
+- 已实现独立磁盘暂存和 SQLite 保存队列；目录切换后，待保存结果自动写入新目录。
+- 已加入真实文件与 SQLite 集成测试（包括进程中断恢复）、类型检查、构建和媒体工具检测。
+- 卡片目前按导入顺序排布；自由拖动、拼接、裁剪、镜头编辑、项目包导入导出仍待实现。
 - 云端生成和 FFmpeg 媒体处理尚未接入。当前不包含账号、计费或 ComfyUI。
 
 ## 本地开发
@@ -28,12 +31,13 @@ pnpm dev
 
 ```bash
 pnpm check         # 代码规范与类型检查
+pnpm test          # 真实文件、SQLite、迁移与保存恢复测试
 pnpm build         # 构建到 out/，不产生安装包
 pnpm start         # 打开构建后的桌面应用
 pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 ```
 
-当前空画布运行不依赖 FFmpeg。媒体处理阶段才需要可用的 FFmpeg/FFprobe 二进制文件；安装包内置方式待确定。
+当前项目管理、视频导入和浏览器支持编码的视频预览不依赖 FFmpeg。裁剪、转码与成片导出阶段才需要 FFmpeg/FFprobe；安装包内置方式待确定。
 
 ## 文档入口
 
@@ -44,6 +48,7 @@ pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 | [技术架构](docs/architecture.md) | 进程分工、数据概念、本地媒体和云端生成边界 |
 | [本地项目管理](docs/project-management.md) | 统一保存目录、独立项目、SQLite、素材与项目包 |
 | [生成与保存](docs/generation-saving.md) | 独立磁盘暂存、保存队列、迁移期间等待及恢复 |
+| [存储实现与验证](docs/storage-implementation.md) | 实际模块、恢复行为、测试和当前限制 |
 | [UI 基础与组件约定](docs/ui-foundation.md) | 组件库选择、主题、共用组件与画布的分工 |
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |
@@ -56,6 +61,6 @@ Vite 7 位于当前 electron-vite 5 声明的兼容范围内。依赖具体版�
 
 软件内的本地后台逻辑由 Electron 承担，不额外启动 HTTP 后端。开发时的 Vite 服务仅服务于热更新。
 
-本地数据库已确定使用 SQLite；在设置中统一指定项目保存目录，新建项目只填名称，由软件自动创建独立子目录。生成与保存分开，结果先下载到独立磁盘暂存区，保存队列在目录迁移期间等待，切换成功后写入新位置。旧重复数据按清单清理，保留用户其他文件。具体方案见 [本地项目管理](docs/project-management.md) 和 [生成与保存](docs/generation-saving.md)，当前尚未实现持久化。
+本地数据库使用 Node 内置 SQLite；在设置中统一指定项目保存目录，新建项目只填名称，由软件自动创建独立子目录。生成与保存分开，结果先进入独立磁盘暂存区，保存队列在目录迁移期间等待，切换成功后写入新位置。旧重复数据按清单清理，保留用户其他文件。设计见 [本地项目管理](docs/project-management.md) 和 [生成与保存](docs/generation-saving.md)，已实现范围见 [存储实现与验证](docs/storage-implementation.md)。
 
 远端仓库：[011011100/Infinite-Afflatus](https://github.com/011011100/Infinite-Afflatus)。

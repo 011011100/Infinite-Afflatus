@@ -1,88 +1,161 @@
-import {
-  Background,
-  BackgroundVariant,
-  type Edge,
-  type Node,
-  Panel,
-  ReactFlow,
-} from '@xyflow/react';
-import { useEffect, useState } from 'react';
-import { CanvasControls } from '@/components/canvas/canvas-controls';
-
-const emptyNodes: Node[] = [];
-const emptyEdges: Edge[] = [];
+import { ArrowLeft, Settings2, Upload, X } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Modal } from '@/components/ui/modal';
+import { ProjectHome } from '@/features/projects/project-home';
+import { useLibrary } from '@/features/projects/use-library';
+import { SaveStatus } from '@/features/settings/save-status';
+import { StorageSettings } from '@/features/settings/storage-settings';
+import { ProjectCanvas } from '@/features/workspace/project-canvas';
 
 export function App() {
-  const [desktopError, setDesktopError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    if (!window.desktop) {
-      setDesktopError(true);
-      return;
-    }
-
-    void window.desktop
-      .getAppInfo()
-      .then((info) => {
-        if (active) document.title = info.name;
-      })
-      .catch(() => {
-        if (active) setDesktopError(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
+  const state = useLibrary();
+  const [settings, setSettings] = useState(false);
+  const [newName, setNewName] = useState<string | null>(null);
+  const { library, project, busy, run } = state;
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-13 shrink-0 items-center gap-6 border-b bg-background px-6 select-none">
-        <span className="text-[15px] font-semibold tracking-tight">
-          Infinite Afflatus
-        </span>
-        <span className="text-[13px] text-muted-foreground">未命名项目</span>
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-background px-6 select-none">
+        {project ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="返回项目首页"
+              onClick={state.home}
+            >
+              <ArrowLeft />
+            </Button>
+            <button
+              type="button"
+              disabled={library?.writeBlocked}
+              className="max-w-96 truncate rounded px-1 py-2 text-sm font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
+              title="修改项目名称"
+              onClick={() => setNewName(project.project.name)}
+            >
+              {project.project.name}
+            </button>
+            <span className="text-xs text-muted-foreground">本地项目</span>
+          </>
+        ) : (
+          <span className="text-[15px] font-semibold tracking-tight">
+            Infinite Afflatus
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {project && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                void run(() => window.desktop.importVideos(project.project.id));
+              }}
+            >
+              <Upload />
+              导入视频
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="保存与存储设置"
+            disabled={!library}
+            onClick={() => setSettings(true)}
+          >
+            <Settings2 />
+          </Button>
+        </div>
       </header>
-
-      {desktopError && (
+      {state.error && (
         <div
-          className="bg-warning px-6 py-2.5 text-sm text-warning-foreground"
+          className="flex items-center gap-3 bg-warning px-6 py-2.5 text-sm text-warning-foreground"
           role="alert"
         >
-          无法连接桌面功能，请通过桌面应用重新打开。
+          <span className="min-w-0 flex-1 break-words">{state.error}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="关闭提示"
+            onClick={state.clearError}
+          >
+            <X />
+          </Button>
         </div>
       )}
-
-      <main className="relative min-h-0 flex-1" aria-label="视频创作画布">
-        <ReactFlow
-          nodes={emptyNodes}
-          edges={emptyEdges}
-          minZoom={0.25}
-          maxZoom={2}
-          nodesConnectable={false}
-          zoomOnDoubleClick={false}
+      {library && (
+        <SaveStatus
+          jobs={library.jobs}
+          migrating={library.writeBlocked}
+          run={run}
+        />
+      )}
+      {!library ? (
+        <main className="grid flex-1 place-items-center text-sm text-muted-foreground">
+          {state.error ? '项目库尚未打开' : '正在打开项目库…'}
+        </main>
+      ) : project ? (
+        <ProjectCanvas
+          key={project.project.id}
+          snapshot={project}
+          blocked={library.writeBlocked}
+          report={state.report}
+        />
+      ) : (
+        <ProjectHome
+          projects={library.projects}
+          disabled={busy || library.writeBlocked}
+          onCreate={state.create}
+          onOpen={state.open}
+        />
+      )}
+      {settings && library && (
+        <StorageSettings
+          library={library}
+          error={state.error}
+          run={run}
+          onClose={() => setSettings(false)}
+        />
+      )}
+      {newName !== null && project && (
+        <Modal
+          title="修改项目名称"
+          onClose={() => setNewName(null)}
+          error={state.error}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={24}
-            size={1}
-            color="var(--canvas-dot)"
-          />
-          <CanvasControls />
-          <Panel
-            position="bottom-left"
-            className="text-xs text-muted-foreground select-none"
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                await window.desktop.renameProject(project.project.id, newName);
+                setNewName(null);
+              });
+            }}
           >
-            拖动画布 · 滚轮缩放
-          </Panel>
-        </ReactFlow>
-
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-muted-foreground select-none">
-          <h1 className="mb-2.5 text-xl font-medium">从一个镜头开始</h1>
-          <p className="text-sm">视频将在这里拼接成片</p>
-        </div>
-      </main>
+            <Input
+              aria-label="项目名称"
+              value={newName}
+              maxLength={100}
+              onChange={(event) => setNewName(event.target.value)}
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setNewName(null)}
+              >
+                取消
+              </Button>
+              <Button
+                type="submit"
+                disabled={busy || !newName.trim() || library?.writeBlocked}
+              >
+                保存
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

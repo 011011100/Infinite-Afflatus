@@ -1,78 +1,74 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain, session } from 'electron';
-import { type AppInfo, IPC_CHANNELS } from '../shared/desktop';
+import { app, type BrowserWindow, dialog, session } from 'electron';
+import { registerDesktop } from './desktop/ipc';
+import {
+  registerMediaScheme,
+  serveProjectMedia,
+} from './desktop/media-protocol';
+import { createWindow } from './desktop/window';
+import { errorMessage } from './storage/database';
+import { Library } from './storage/library';
 
+app.setName('Infinite Afflatus');
+// Isolated desktop smoke checks do not touch the user's library.
+if (!app.isPackaged && process.env.AFFLATUS_USER_DATA)
+  app.setPath('userData', process.env.AFFLATUS_USER_DATA);
+registerMediaScheme();
 let mainWindow: BrowserWindow | null = null;
-
-function createWindow(): void {
-  const window = new BrowserWindow({
-    width: 1440,
-    height: 960,
-    minWidth: 960,
-    minHeight: 640,
-    title: 'Infinite Afflatus',
-    backgroundColor: '#f8fafc',
-    show: false,
-    webPreferences: {
-      preload: join(import.meta.dirname, '../preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  mainWindow = window;
-  window.once('ready-to-show', () => window.show());
-  window.once('closed', () => {
+let library: Library | null = null;
+let quitting = false;
+function showWindow(): void {
+  mainWindow = createWindow();
+  mainWindow.once('closed', () => {
     mainWindow = null;
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event) => event.preventDefault());
-
-  const rendererUrl = process.env.ELECTRON_RENDERER_URL;
-  const loading =
-    !app.isPackaged && rendererUrl
-      ? window.loadURL(rendererUrl)
-      : window.loadFile(join(import.meta.dirname, '../renderer/index.html'));
-
-  void loading.catch((error: unknown) => {
-    console.error('Unable to load the application window:', error);
-    app.quit();
-  });
 }
-
-void app.whenReady().then(() => {
-  app.setName('Infinite Afflatus');
-  app.setAppUserModelId('com.infiniteafflatus.desktop');
-  session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, callback) => {
-      callback(false);
-    },
-  );
-  session.defaultSession.setPermissionCheckHandler(() => false);
-
-  ipcMain.handle(IPC_CHANNELS.appInfo, (event): AppInfo => {
-    if (
-      !mainWindow ||
-      event.sender !== mainWindow.webContents ||
-      event.senderFrame !== mainWindow.webContents.mainFrame
-    ) {
-      throw new Error('Untrusted desktop request');
-    }
-
-    return {
-      name: app.getName(),
-      version: app.getVersion(),
-      platform: process.platform,
-    };
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
   });
-
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
+  void app
+    .whenReady()
+    .then(async () => {
+      app.setAppUserModelId('com.infiniteafflatus.desktop');
+      session.defaultSession.setPermissionRequestHandler(
+        (_contents, _permission, callback) => callback(false),
+      );
+      session.defaultSession.setPermissionCheckHandler(() => false);
+      const defaultRoot =
+        (!app.isPackaged && process.env.AFFLATUS_PROJECTS_DIR) ||
+        join(app.getPath('documents'), 'Infinite Afflatus', 'Projects');
+      library = await Library.open(app.getPath('userData'), defaultRoot);
+      registerDesktop(library, () => mainWindow);
+      serveProjectMedia(library);
+      showWindow();
+      app.on('activate', () => {
+        if (!mainWindow) showWindow();
+      });
+    })
+    .catch((error: unknown) => {
+      dialog.showErrorBox(
+        '无法打开项目库',
+        `${errorMessage(error)}\n请确认保存目录和磁盘可用后重新打开应用。`,
+      );
+      app.quit();
+    });
+}
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+app.on('before-quit', (event) => {
+  if (quitting || !library) return;
+  event.preventDefault();
+  quitting = true;
+  void library
+    .close()
+    .then(() => app.quit())
+    .catch((error: unknown) => {
+      console.error('Shutdown error:', error);
+      app.exit(1);
+    });
 });
