@@ -4,6 +4,8 @@
 
 React + TypeScript 构建界面，React Flow 提供画布交互，Electron 提供桌面能力。AI 生成走云端 API，本地媒体处理使用 FFmpeg，媒体元信息由 FFprobe 读取。
 
+通用 UI 使用 shadcn/ui 的 Base UI 组件，样式使用 Tailwind CSS。视频卡片、组合和吸附反馈由业务组件实现，具体分工见 [UI 基础与组件约定](ui-foundation.md)。
+
 本地业务逻辑直接放在 Electron 中，无需另起 HTTP 后端。Vite 开发服务器只用于开发期加载页面和热更新，生产运行不依赖它。
 
 ## 进程与模块边界

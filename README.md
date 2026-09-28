@@ -10,6 +10,7 @@
 
 - 已建立 React、TypeScript、React Flow、Electron 和 electron-vite 工程。
 - 已接入窗口、受限 preload/IPC、画布平移和缩放。
+- 已接入 shadcn/ui、Tailwind CSS，以及共用按钮和悬浮提示。
 - 已加入类型检查、代码检查、构建和本地媒体工具检测命令。
 - 视频导入、拼接、播放、裁剪、镜头编辑、项目保存仍待实现。
 - 云端生成和 FFmpeg 媒体处理尚未接入。当前不包含账号、计费或 ComfyUI。
@@ -41,12 +42,13 @@ pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 | [一期产品范围与页面](docs/product.md) | 已确定的方向、页面职责、待决定事项 |
 | [交互规范](docs/interactions.md) | 卡片拼接、唯一播放入口、镜头编辑、裁剪及验收规则 |
 | [技术架构](docs/architecture.md) | 进程分工、数据概念、本地媒体和云端生成边界 |
+| [UI 基础与组件约定](docs/ui-foundation.md) | 组件库选择、主题、共用组件与画布的分工 |
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |
 
 ## 技术选择
 
-React 19、React Flow 12（`@xyflow/react`）、Electron 44、TypeScript、electron-vite 5、Vite 7、pnpm、Biome。
+React 19、React Flow 12（`@xyflow/react`）、Electron 44、TypeScript、shadcn/ui（Base UI）、Tailwind CSS 4、electron-vite 5、Vite 7、pnpm、Biome。
 
 Vite 7 位于当前 electron-vite 5 声明的兼容范围内。依赖具体版本以 `package.json` 和 `pnpm-lock.yaml` 为准。
 

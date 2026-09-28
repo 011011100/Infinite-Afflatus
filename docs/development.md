@@ -25,7 +25,11 @@ src/
   preload/              受限桌面能力桥接
   renderer/
     index.html          本地页面入口和 CSP
-    src/                React UI 与画布
+    src/
+      components/ui/    共用 shadcn/ui 组件
+      components/canvas/ 画布业务组件
+      lib/              界面工具函数
+      styles.css        Tailwind 入口与主题变量
   shared/               跨进程接口类型
 scripts/                开发辅助脚本
 docs/                   产品、交互、架构和实施计划
@@ -33,6 +37,8 @@ out/                    构建产物，不提交
 ```
 
 不要为了未来可能用到的功能预建大量空目录。出现明确的功能边界后再拆分模块。
+
+UI 组件与样式遵循 [UI 基础与组件约定](ui-foundation.md)。`@/` 只映射到渲染界面的 `src/renderer/src/`；Electron 主进程不使用这个别名。
 
 ## 常用检查
 
@@ -60,6 +66,8 @@ FFMPEG_PATH=/path/to/ffmpeg FFPROBE_PATH=/path/to/ffprobe pnpm doctor:media
 
 1. 应用成功打开，显示中文空画布而非白屏。
 2. 放大／缩小和拖动画布可操作。
+   - 缩放达到边界后，对应按钮禁用；反向缩放后恢复。
+   - 悬停和键盘聚焦时显示中文提示，Tab 焦点可见，Enter／Space 可以操作按钮。
 3. preload 正常加载，应用信息 IPC 可以返回，不出现桌面连接错误。
 4. 生产构建入口可以加载本地文件，不依赖开发服务器。
 5. 关闭应用能够退出相应进程；macOS 保留应用并允许重新打开窗口的行为遵循系统约定。

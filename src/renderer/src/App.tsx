@@ -1,13 +1,13 @@
 import {
   Background,
   BackgroundVariant,
-  Controls,
   type Edge,
   type Node,
   Panel,
   ReactFlow,
 } from '@xyflow/react';
 import { useEffect, useState } from 'react';
+import { CanvasControls } from '@/components/canvas/canvas-controls';
 
 const emptyNodes: Node[] = [];
 const emptyEdges: Edge[] = [];
@@ -37,19 +37,24 @@ export function App() {
   }, []);
 
   return (
-    <div className="application">
-      <header className="application-header">
-        <span className="application-name">Infinite Afflatus</span>
-        <span className="project-name">未命名项目</span>
+    <div className="flex h-full flex-col">
+      <header className="flex h-13 shrink-0 items-center gap-6 border-b bg-background px-6 select-none">
+        <span className="text-[15px] font-semibold tracking-tight">
+          Infinite Afflatus
+        </span>
+        <span className="text-[13px] text-muted-foreground">未命名项目</span>
       </header>
 
       {desktopError && (
-        <div className="desktop-error" role="alert">
+        <div
+          className="bg-warning px-6 py-2.5 text-sm text-warning-foreground"
+          role="alert"
+        >
           无法连接桌面功能，请通过桌面应用重新打开。
         </div>
       )}
 
-      <main className="canvas" aria-label="视频创作画布">
+      <main className="relative min-h-0 flex-1" aria-label="视频创作画布">
         <ReactFlow
           nodes={emptyNodes}
           edges={emptyEdges}
@@ -57,30 +62,25 @@ export function App() {
           maxZoom={2}
           nodesConnectable={false}
           zoomOnDoubleClick={false}
-          ariaLabelConfig={{
-            'controls.zoomIn.ariaLabel': '放大画布',
-            'controls.zoomOut.ariaLabel': '缩小画布',
-          }}
         >
           <Background
             variant={BackgroundVariant.Dots}
             gap={24}
             size={1}
-            color="#dce3ed"
+            color="var(--canvas-dot)"
           />
-          <Controls
-            showFitView={false}
-            showInteractive={false}
-            position="bottom-right"
-          />
-          <Panel position="bottom-left" className="canvas-hint">
+          <CanvasControls />
+          <Panel
+            position="bottom-left"
+            className="text-xs text-muted-foreground select-none"
+          >
             拖动画布 · 滚轮缩放
           </Panel>
         </ReactFlow>
 
-        <div className="canvas-empty-state">
-          <h1>从一个镜头开始</h1>
-          <p>视频将在这里拼接成片</p>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-muted-foreground select-none">
+          <h1 className="mb-2.5 text-xl font-medium">从一个镜头开始</h1>
+          <p className="text-sm">视频将在这里拼接成片</p>
         </div>
       </main>
     </div>

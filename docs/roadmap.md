@@ -8,6 +8,7 @@
 
 - React + React Flow + Electron + TypeScript 工程和锁定的依赖。
 - 能打开的桌面空画布，平移与缩放。
+- shadcn/ui + Tailwind CSS 基础，共用按钮、悬浮提示与浅色主题变量。
 - 隔离的渲染进程、受限 preload 接口。
 - 基础检查、构建命令和 FFmpeg/FFprobe 环境检测。
 - 本仓库的产品范围、交互、架构与开发文档。

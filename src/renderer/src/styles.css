@@ -1,128 +1,86 @@
-:root {
-  font-family:
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@xyflow/react/dist/style.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", sans-serif;
-  color: #273244;
-  background: #f8fafc;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  --accent: #3377ff;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-canvas: var(--canvas);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
-* {
-  box-sizing: border-box;
+:root {
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #273244;
+  --card: #ffffff;
+  --card-foreground: #273244;
+  --popover: #ffffff;
+  --popover-foreground: #273244;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
+  --muted: #edf3ff;
+  --muted-foreground: #68758b;
+  --accent: #edf3ff;
+  --accent-foreground: #273244;
+  --destructive: #dc2626;
+  --border: #e5eaf1;
+  --input: #e5eaf1;
+  --ring: #3377ff;
+  --canvas: #f8fafc;
+  --canvas-dot: #dce3ed;
+  --warning: #fff4df;
+  --warning-foreground: #77521e;
 }
 
-body {
-  margin: 0;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-foreground antialiased;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
 }
 
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-}
-
-button {
-  font: inherit;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.application {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.application-header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 24px;
-  height: 52px;
-  padding: 0 24px;
-  border-bottom: 1px solid #e9edf3;
-  background: #fff;
-  user-select: none;
-}
-
-.application-name {
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.2px;
-}
-
-.project-name {
-  color: #788397;
-  font-size: 13px;
-}
-
-.canvas {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-.canvas-empty-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  user-select: none;
-}
-
-.canvas-empty-state h1 {
-  margin: 0 0 10px;
-  color: #68758b;
-  font-size: 20px;
-  font-weight: 500;
-}
-
-.canvas-empty-state p {
-  margin: 0;
-  color: #8490a3;
-  font-size: 14px;
-}
-
-.canvas-hint {
-  color: #8490a3;
-  font-size: 12px;
-  user-select: none;
-}
-
-.react-flow__controls {
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  box-shadow: none;
-}
-
-.react-flow__controls-button {
-  width: 32px;
-  height: 32px;
-  border: 0;
-  color: #596880;
-  background: #fff;
-}
-
-.react-flow__controls-button:hover {
-  background: #edf3ff;
-}
-
-.desktop-error {
-  padding: 10px 24px;
-  background: #fff4df;
-  color: #77521e;
-  font-size: 14px;
+.react-flow {
+  --xy-background-color: var(--canvas);
 }
