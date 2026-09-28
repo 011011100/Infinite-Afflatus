@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { LoaderCircle, Maximize } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { Asset } from '../../../../shared/models';
-import { mediaUrl } from './media';
+import { useSequencePlayback } from './playback/use-sequence-playback';
 
 export function SequencePlayer({
   assets,
@@ -13,21 +14,12 @@ export function SequencePlayer({
   projectId: string;
   onClose: () => void;
 }) {
-  const [index, setIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const preferences = useRef({ volume: 1, muted: false, rate: 1 });
-  const attachVideo = useCallback((video: HTMLVideoElement | null) => {
-    if (!video) return;
-    video.volume = preferences.current.volume;
-    video.muted = preferences.current.muted;
-    video.playbackRate = preferences.current.rate;
-  }, []);
+  const { index, pending, error, videoRefs, select, stop } =
+    useSequencePlayback(projectId, assets);
+  const surface = useRef<HTMLDivElement>(null);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const asset = assets[index];
   if (!asset) return null;
-  const seek = (next: number) => {
-    setError(null);
-    setIndex(next);
-  };
   return (
     <Modal
       title={
@@ -37,34 +29,55 @@ export function SequencePlayer({
       }
       wide
       onClose={onClose}
-      error={error}
+      onCloseStart={stop}
+      error={error || fullscreenError}
     >
-      <video
-        key={asset.id}
-        ref={attachVideo}
-        controls
-        autoPlay
-        playsInline
-        src={mediaUrl(projectId, asset.id)}
-        onVolumeChange={(event) => {
-          preferences.current.volume = event.currentTarget.volume;
-          preferences.current.muted = event.currentTarget.muted;
-        }}
-        onRateChange={(event) => {
-          preferences.current.rate = event.currentTarget.playbackRate;
-        }}
-        onEnded={() => {
-          if (index + 1 < assets.length) seek(index + 1);
-        }}
-        onError={() =>
-          setError(
-            '这段视频暂时无法播放，请检查文件或编码格式。可以选择其他片段继续预览。',
-          )
-        }
-        className="max-h-[60vh] w-full rounded-lg bg-black"
+      <div
+        ref={surface}
+        className="group relative isolate aspect-video max-h-[60vh] w-full overflow-hidden rounded-lg bg-black fullscreen:max-h-none"
+        aria-busy={pending !== null}
       >
-        <track kind="captions" />
-      </video>
+        {videoRefs.map(({ ref, id }) => (
+          <video
+            key={id}
+            ref={ref}
+            playsInline
+            controlsList="nofullscreen"
+            disablePictureInPicture
+            className="absolute inset-0 size-full bg-black object-contain"
+          >
+            <track kind="captions" />
+          </video>
+        ))}
+        {pending !== null && (
+          <div
+            role="status"
+            className="pointer-events-none absolute right-3 top-3 z-10 rounded-full bg-black/50 p-2 text-white"
+          >
+            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+            <span className="sr-only">正在准备视频</span>
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="切换全屏"
+          className="absolute left-3 top-3 z-10 bg-black/50 text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          onClick={() => {
+            setFullscreenError(null);
+            const operation = document.fullscreenElement
+              ? document.exitFullscreen()
+              : surface.current?.requestFullscreen();
+            void operation?.catch(() => {
+              setFullscreenError(
+                '当前窗口暂时无法进入全屏，可以继续在浮层内预览。',
+              );
+            });
+          }}
+        >
+          <Maximize />
+        </Button>
+      </div>
       {assets.length > 1 && (
         <fieldset
           className="mt-4 flex gap-2 overflow-x-auto pb-1"
@@ -75,7 +88,7 @@ export function SequencePlayer({
               key={item.id}
               variant={index === order ? 'secondary' : 'ghost'}
               aria-pressed={index === order}
-              onClick={() => seek(order)}
+              onClick={() => select(order)}
               className="max-w-52 shrink-0"
             >
               <span className="text-xs tabular-nums text-muted-foreground">
@@ -86,11 +99,6 @@ export function SequencePlayer({
           ))}
         </fieldset>
       )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        {assets.length > 1
-          ? '按从左到右的顺序预览；片段切换可能有短暂间隔。'
-          : '按 Esc 关闭预览，返回原画布。'}
-      </p>
     </Modal>
   );
 }

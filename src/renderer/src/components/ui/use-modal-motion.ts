@@ -4,6 +4,7 @@ import { instantMotion } from '@/lib/input-method';
 export function useModalMotion(
   ref: RefObject<HTMLDialogElement | null>,
   onClose: () => void,
+  onCloseStart?: () => void,
 ) {
   const closing = useRef(false);
   const closeCallback = useRef(onClose);
@@ -30,6 +31,7 @@ export function useModalMotion(
     const modal = ref.current;
     if (!modal || closing.current) return;
     closing.current = true;
+    onCloseStart?.();
     // Stop media immediately even when the surface is still fading out.
     modal
       .querySelectorAll<HTMLMediaElement>('video, audio')
