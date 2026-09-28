@@ -7,7 +7,7 @@
 - 共用 UI 和业务组件；视频顺序与画布坐标分开保存。
 - 通用控件复用 `components/ui` 的 shadcn/ui 组件，样式使用 Tailwind 和主题变量；视频卡片与吸附交互放在业务组件中。详见 `docs/ui-foundation.md`。
 - 渲染进程不直接访问 Node.js、文件系统或 FFmpeg。桌面能力经类型化 preload 接口调用。
-- 项目目录迁移后，生成任务按项目 ID 获取当前保存位置；旧数据按受管文件清单核验后清理，不递归删除用户目录或未登记文件。详见 `docs/project-management.md`。
+- 生成与保存分开：结果先下载到独立磁盘暂存区，保存队列按迁移状态和项目当前位置提交；未确认保存前不能清理暂存文件。旧数据按受管文件清单清理，不递归删除用户目录。详见 `docs/generation-saving.md` 和 `docs/project-management.md`。
 - 不提交 `.env`、密钥、私有素材、数据库文件或构建产物。
 - 使用 pnpm。改动后运行适合范围的检查，至少确保 `pnpm check` 和 `pnpm build` 通过。
 - 非必要不要重复启动本地项目，优先复用已有开发进程。

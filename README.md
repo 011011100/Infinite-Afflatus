@@ -43,6 +43,7 @@ pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 | [交互规范](docs/interactions.md) | 卡片拼接、唯一播放入口、镜头编辑、裁剪及验收规则 |
 | [技术架构](docs/architecture.md) | 进程分工、数据概念、本地媒体和云端生成边界 |
 | [本地项目管理](docs/project-management.md) | 统一保存目录、独立项目、SQLite、素材与项目包 |
+| [生成与保存](docs/generation-saving.md) | 独立磁盘暂存、保存队列、迁移期间等待及恢复 |
 | [UI 基础与组件约定](docs/ui-foundation.md) | 组件库选择、主题、共用组件与画布的分工 |
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |
@@ -55,6 +56,6 @@ Vite 7 位于当前 electron-vite 5 声明的兼容范围内。依赖具体版�
 
 软件内的本地后台逻辑由 Electron 承担，不额外启动 HTTP 后端。开发时的 Vite 服务仅服务于热更新。
 
-本地数据库已确定使用 SQLite；在设置中统一指定项目保存目录，新建项目只填名称，由软件自动创建独立子目录。修改保存目录时迁移已有项目，完整校验后切换；运行中的生成任务随后保存到新位置，并按清单自动清理原位置的重复数据，保留用户其他文件。具体方案见 [本地项目管理](docs/project-management.md)，当前尚未实现持久化。
+本地数据库已确定使用 SQLite；在设置中统一指定项目保存目录，新建项目只填名称，由软件自动创建独立子目录。生成与保存分开，结果先下载到独立磁盘暂存区，保存队列在目录迁移期间等待，切换成功后写入新位置。旧重复数据按清单清理，保留用户其他文件。具体方案见 [本地项目管理](docs/project-management.md) 和 [生成与保存](docs/generation-saving.md)，当前尚未实现持久化。
 
 远端仓库：[011011100/Infinite-Afflatus](https://github.com/011011100/Infinite-Afflatus)。
