@@ -65,10 +65,18 @@ export function CanvasActions({
       {canSplit && (
         <>
           <span className="mx-1 h-4 w-px bg-border" />
-          <Button variant="ghost" disabled={disabled} onClick={split}>
-            <Ungroup />
-            拆分组合
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              disabled={disabled}
+              render={
+                <Button variant="ghost" disabled={disabled} onClick={split} />
+              }
+            >
+              <Ungroup />
+              拆分选中片段
+            </TooltipTrigger>
+            <TooltipContent>只拆出选中的片段，其余片段保持组合</TooltipContent>
+          </Tooltip>
         </>
       )}
     </fieldset>

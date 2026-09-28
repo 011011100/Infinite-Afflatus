@@ -52,16 +52,27 @@ export function joinCards(
   return { before: [moving, target], after: [combined] };
 }
 
-export function splitCard(card: CanvasCard, ids: string[]): CanvasPatch {
-  if (ids.length !== card.assetIds.length)
-    throw new Error('拆分卡片标识不完整');
+export function splitSelectedAsset(
+  card: CanvasCard,
+  assetId: string,
+  detachedId: string,
+): CanvasPatch {
+  if (card.assetIds.length < 2 || !card.assetIds.includes(assetId))
+    throw new Error('请先选中组合中要拆分的片段');
   return {
     before: [card],
-    after: card.assetIds.map((assetId, index) => ({
-      id: ids[index] ?? '',
-      assetIds: [assetId],
-      position: { x: card.position.x + index * 336, y: card.position.y },
-    })),
+    after: [
+      { ...card, assetIds: card.assetIds.filter((id) => id !== assetId) },
+      {
+        id: detachedId,
+        assetIds: [assetId],
+        // Leave the remaining group in place and detach beyond its original right edge.
+        position: {
+          x: card.position.x + cardWidth(card) + 48,
+          y: card.position.y,
+        },
+      },
+    ],
   };
 }
 

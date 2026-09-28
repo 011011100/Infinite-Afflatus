@@ -17,7 +17,7 @@ import {
   findSnapTarget,
   joinCards,
   reversePatch,
-  splitCard,
+  splitSelectedAsset,
 } from '../src/shared/canvas/operations';
 import type { Asset } from '../src/shared/models';
 
@@ -102,22 +102,65 @@ test('snap tolerance is in screen pixels; vertical proximity alone and moving aw
   }
 });
 
-test('splitting preserves all ordered asset references; undo restores one group', () => {
-  const group = card(-300, 6);
-  const patch = splitCard(
-    group,
-    group.assetIds.map(() => randomUUID()),
+for (const index of [0, 1, 2]) {
+  test(`splitting selected segment ${index + 1} leaves the other two grouped in order; undo and redo preserve all data`, () => {
+    const group = card(-300, 3);
+    const unrelated = card(1500, 2);
+    const selected = group.assetIds[index];
+    assert.ok(selected);
+    const detachedId = randomUUID();
+    const patch = splitSelectedAsset(group, selected, detachedId);
+    const split = applyCanvasPatch(document([unrelated, group]), patch);
+    assert.equal(split.cards.length, 3);
+    assert.deepEqual(
+      split.cards.find((item) => item.id === unrelated.id),
+      unrelated,
+    );
+    const remaining = split.cards.find((item) => item.id === group.id);
+    const detached = split.cards.find((item) => item.id === detachedId);
+    assert.deepEqual(
+      remaining?.assetIds,
+      group.assetIds.filter((id) => id !== selected),
+    );
+    assert.deepEqual(remaining?.position, group.position);
+    assert.deepEqual(detached?.assetIds, [selected]);
+    assert.deepEqual(detached?.position, {
+      x: group.position.x + cardWidth(group) + 48,
+      y: group.position.y,
+    });
+    const restored = applyCanvasPatch(split, reversePatch(patch));
+    assert.deepEqual(restored.cards, [unrelated, group]);
+    assert.deepEqual(applyCanvasPatch(restored, patch).cards, split.cards);
+  });
+}
+
+test('splitting a two-segment group leaves two standalone cards without losing the remaining segment', () => {
+  const group = card(100, 2);
+  const selected = group.assetIds[0];
+  assert.ok(selected);
+  const split = applyCanvasPatch(
+    document([group]),
+    splitSelectedAsset(group, selected, randomUUID()),
   );
-  const split = applyCanvasPatch(document([group]), patch);
-  assert.equal(split.cards.length, 6);
+  assert.equal(split.cards.length, 2);
   assert.deepEqual(
-    split.cards.flatMap((item) => item.assetIds),
-    group.assetIds,
+    split.cards.map((item) => item.assetIds),
+    [[group.assetIds[1]], [selected]],
   );
-  assert.ok(
-    split.cards.every((item, index) => item.position.x === -300 + index * 336),
+});
+
+test('splitting requires a valid selected segment in a group', () => {
+  const group = card(100, 3);
+  assert.throws(() => splitSelectedAsset(group, '', randomUUID()), /请先选中/);
+  assert.throws(
+    () => splitSelectedAsset(group, randomUUID(), randomUUID()),
+    /请先选中/,
   );
-  assert.deepEqual(applyCanvasPatch(split, reversePatch(patch)).cards, [group]);
+  const single = card(200);
+  assert.throws(
+    () => splitSelectedAsset(single, single.assetIds[0] ?? '', randomUUID()),
+    /请先选中/,
+  );
 });
 
 test('patches reject stale positions, duplication, invented assets, invalid coordinates and colliding IDs', () => {
@@ -254,6 +297,56 @@ test('legacy read is non-mutating; positions, grouping and order survive databas
       assert.deepEqual(
         (await reopened.projects.open(f.project.id)).canvas,
         joined.canvas,
+      );
+    } finally {
+      await reopened.close();
+    }
+  } finally {
+    await f.dispose();
+  }
+});
+
+test('selected-segment split, undo and redo persist without ungrouping the remaining segments', async () => {
+  const f = await fixture();
+  try {
+    await f.add();
+    await f.add();
+    await f.add();
+    const initial = await f.library.projects.open(f.project.id);
+    const first = initial.canvas.cards[0];
+    assert.ok(first);
+    const group = {
+      ...first,
+      assetIds: initial.canvas.cards.flatMap((item) => item.assetIds),
+    };
+    await f.library.projects.patchCanvas(f.project.id, {
+      before: initial.canvas.cards,
+      after: [group],
+    });
+    const selected = group.assetIds[2];
+    assert.ok(selected);
+    const patch = splitSelectedAsset(group, selected, randomUUID());
+    const split = await f.library.projects.patchCanvas(f.project.id, patch);
+    assert.deepEqual(
+      split.canvas.cards.map((item) => item.assetIds),
+      [group.assetIds.slice(0, 2), [selected]],
+    );
+    assert.deepEqual(
+      (await f.library.projects.open(f.project.id)).canvas,
+      split.canvas,
+    );
+    const undone = await f.library.projects.patchCanvas(
+      f.project.id,
+      reversePatch(patch),
+    );
+    assert.deepEqual(undone.canvas.cards, [group]);
+    const redone = await f.library.projects.patchCanvas(f.project.id, patch);
+    await f.library.close();
+    const reopened = await Library.open(f.data, f.root);
+    try {
+      assert.deepEqual(
+        (await reopened.projects.open(f.project.id)).canvas,
+        redone.canvas,
       );
     } finally {
       await reopened.close();

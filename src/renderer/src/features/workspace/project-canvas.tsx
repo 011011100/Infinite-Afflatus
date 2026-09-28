@@ -9,7 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { CARD_HEIGHT, cardWidth } from '../../../../shared/canvas/model';
-import { splitCard } from '../../../../shared/canvas/operations';
+import { splitSelectedAsset } from '../../../../shared/canvas/operations';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
 import { SequencePlayer } from './sequence-player';
@@ -68,15 +68,28 @@ export function ProjectCanvas({
     [assets, cards, selectCard],
   );
   const selectedCard = cards.find((card) => card.id === selection?.cardId);
+  const selectedAssetId = selection?.assetId;
+  const canSplit =
+    !!selectedCard &&
+    selectedCard.assetIds.length > 1 &&
+    !!selectedAssetId &&
+    selectedCard.assetIds.includes(selectedAssetId);
   const split = () => {
-    if (!selectedCard || selectedCard.assetIds.length < 2) return;
-    const patch = splitCard(
+    if (!canSplit || !selectedCard || !selectedAssetId) return;
+    const patch = splitSelectedAsset(
       selectedCard,
-      selectedCard.assetIds.map((_id, index) =>
-        index === 0 ? selectedCard.id : crypto.randomUUID(),
-      ),
+      selectedAssetId,
+      crypto.randomUUID(),
     );
-    void document.commit(patch);
+    void document.commit(patch).then((saved) => {
+      if (saved)
+        setSelection((current) =>
+          current?.cardId === selectedCard.id &&
+          current.assetId === selectedAssetId
+            ? { cardId: selectedCard.id, assetId: null }
+            : current,
+        );
+    });
   };
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -233,7 +246,7 @@ export function ProjectCanvas({
             disabled={blocked || document.saving || !!drag.drag}
             canUndo={document.canUndo}
             canRedo={document.canRedo}
-            canSplit={!!selectedCard && selectedCard.assetIds.length > 1}
+            canSplit={canSplit}
             undo={document.undo}
             redo={document.redo}
             split={split}
