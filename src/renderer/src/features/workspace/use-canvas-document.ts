@@ -8,6 +8,7 @@ export function useCanvasDocument(
   initial: ProjectSnapshot,
   blocked: boolean,
   report: (reason: unknown) => void,
+  prepareTransition: (patch: CanvasPatch) => (saved: boolean) => void,
 ) {
   const [snapshot, setSnapshot] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -30,6 +31,7 @@ export function useCanvasDocument(
     async (patch: CanvasPatch, action: 'edit' | 'undo' | 'redo' = 'edit') => {
       if (writing.current || blocked) return false;
       writing.current = true;
+      const finishTransition = prepareTransition(patch);
       setSaving(true);
       try {
         const saved = await window.desktop.patchCanvas(
@@ -37,6 +39,7 @@ export function useCanvasDocument(
           patch,
         );
         setSnapshot(saved);
+        finishTransition(true);
         setHistory((current) => {
           if (action === 'undo')
             return {
@@ -52,6 +55,7 @@ export function useCanvasDocument(
         });
         return true;
       } catch (error) {
+        finishTransition(false);
         report(error);
         // An import/migration/external writer may have changed the project. Never overwrite it.
         try {
@@ -66,7 +70,7 @@ export function useCanvasDocument(
         setSaving(false);
       }
     },
-    [initial.project.id, blocked, report],
+    [initial.project.id, blocked, report, prepareTransition],
   );
 
   const undo = useCallback(() => {

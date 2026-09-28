@@ -42,6 +42,8 @@ export function VideoThumbnail({
       aria-label={`选择片段 ${index + 1} ${asset.name}`}
       aria-pressed={active}
       data-video-thumbnail
+      data-asset-id={asset.id}
+      data-flip-id={asset.id}
       onPointerDown={hold.onPointerDown}
       onDoubleClick={hold.cancel}
       onContextMenu={hold.cancel}

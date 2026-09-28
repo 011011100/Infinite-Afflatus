@@ -1,0 +1,26 @@
+.card-liquid-layer {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: -1;
+}
+.card-liquid-surface,
+.card-liquid-bridge {
+  fill: var(--background);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.card-liquid-surface {
+  filter: drop-shadow(0 2px 2px rgb(15 23 42 / 0.06));
+}
+[data-card-morphing="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+[data-card-morphing="true"] [data-thumbnail-row] {
+  overflow: visible;
+  border-radius: 0;
+}

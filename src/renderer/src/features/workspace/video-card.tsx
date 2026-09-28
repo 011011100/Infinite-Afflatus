@@ -30,6 +30,8 @@ export function VideoCard({
   const grouped = data.assets.length > 1;
   return (
     <article
+      data-video-card={id}
+      data-card-assets={data.assets.map((asset) => asset.id).join(',')}
       style={{ width: data.width }}
       className={cn(
         'relative rounded-lg bg-background shadow-sm ring-1 ring-border',
@@ -38,8 +40,9 @@ export function VideoCard({
       )}
     >
       <div
+        data-thumbnail-row
         className="nowheel nopan flex divide-x divide-white/15 overflow-x-auto rounded-t-[7px]"
-        style={{ scrollbarWidth: 'thin' }}
+        style={{ scrollbarWidth: 'thin', height: 162 }}
       >
         {data.assets.map((asset, index) => (
           <VideoThumbnail

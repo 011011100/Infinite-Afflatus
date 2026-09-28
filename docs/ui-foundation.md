@@ -56,3 +56,5 @@ pnpm exec shadcn add dialog
 保留已接入的 tw-animate-css；transitions-dev 作为 CSS 技能接入，不新增同名运行时依赖。共用弹窗的打开／关闭和圆环完成图标使用 `styles/motion.css` 中的动效，原生 dialog 继续负责模态与焦点范围。动效关闭完成后才卸载浮层，媒体在请求关闭时立即暂停。键盘触发与系统减少动态效果模式保持即时响应。
 
 主画布不常驻操作说明；长按时仅在片段中央显示圆环进度与完成图标，文字说明保留在设置与读屏反馈中。
+
+卡片合并／拆分使用 GSAP 3 的 Flip 与 `@gsap/react` 管理布局变化和生命周期，液态连接用小范围 SVG 路径实现。transitions-dev 继续负责共用 CSS 过渡；不用全画布模糊滤镜处理视频或文字。动效模块集中在 `features/workspace/motion/`，遵守系统减少动态效果设置。API 依据：[GSAP Flip](https://gsap.com/docs/v3/Plugins/Flip/)、[GSAP React 生命周期](https://gsap.com/resources/React/)。

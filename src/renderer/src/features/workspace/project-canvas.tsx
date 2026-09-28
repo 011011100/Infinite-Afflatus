@@ -5,6 +5,7 @@ import {
   Panel,
   ReactFlow,
   type ReactFlowInstance,
+  ViewportPortal,
 } from '@xyflow/react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
@@ -16,6 +17,7 @@ import type { InteractionSettings } from '../../../../shared/interaction/setting
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
 import { HoldFeedbackProvider } from './hold-feedback';
+import { useCardMorph } from './motion/use-card-morph';
 import { SequencePlayer } from './sequence-player';
 import { ThumbnailProvider } from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
@@ -50,7 +52,14 @@ function CanvasContent({
   inactive,
   report,
 }: ProjectCanvasProps) {
-  const document = useCanvasDocument(snapshot, blocked, report);
+  const root = useRef<HTMLElement | null>(null);
+  const prepareTransition = useCardMorph(root, blocked || inactive);
+  const document = useCanvasDocument(
+    snapshot,
+    blocked,
+    report,
+    prepareTransition,
+  );
   const { cards } = document.snapshot.canvas;
   const [selection, setSelection] = useState<{
     cardId: string;
@@ -206,6 +215,7 @@ function CanvasContent({
 
   return (
     <main
+      ref={root}
       className="relative min-h-0 flex-1"
       aria-label="视频创作画布"
       aria-busy={document.saving}
@@ -267,6 +277,13 @@ function CanvasContent({
               .catch(report);
         }}
       >
+        <ViewportPortal>
+          <svg
+            data-card-liquid-layer
+            className="card-liquid-layer"
+            aria-hidden="true"
+          />
+        </ViewportPortal>
         <Background
           variant={BackgroundVariant.Dots}
           gap={24}

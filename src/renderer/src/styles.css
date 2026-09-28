@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "./styles/motion.css";
 @import "./styles/hold-feedback.css";
+@import "./styles/card-morph.css";
 @import "shadcn/tailwind.css";
 @import "@xyflow/react/dist/style.css";
 
