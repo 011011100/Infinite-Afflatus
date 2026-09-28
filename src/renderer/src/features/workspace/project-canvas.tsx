@@ -15,7 +15,9 @@ import { DRAG_THRESHOLD } from '../../../../shared/interaction/long-press';
 import type { InteractionSettings } from '../../../../shared/interaction/settings';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
+import { HoldFeedbackProvider } from './hold-feedback';
 import { SequencePlayer } from './sequence-player';
+import { ThumbnailProvider } from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
 import { useCardDrag } from './use-card-drag';
@@ -23,19 +25,31 @@ import { VideoCard, type VideoCardNode } from './video-card';
 
 const edges: Edge[] = [];
 const nodeTypes = { video: VideoCard };
-export function ProjectCanvas({
-  snapshot,
-  blocked,
-  interactions,
-  inactive,
-  report,
-}: {
+type ProjectCanvasProps = {
   snapshot: ProjectSnapshot;
   blocked: boolean;
   interactions: InteractionSettings;
   inactive: boolean;
   report: (error: unknown) => void;
-}) {
+};
+
+export function ProjectCanvas(props: ProjectCanvasProps) {
+  return (
+    <ThumbnailProvider>
+      <HoldFeedbackProvider>
+        <CanvasContent {...props} />
+      </HoldFeedbackProvider>
+    </ThumbnailProvider>
+  );
+}
+
+function CanvasContent({
+  snapshot,
+  blocked,
+  interactions,
+  inactive,
+  report,
+}: ProjectCanvasProps) {
   const document = useCanvasDocument(snapshot, blocked, report);
   const { cards } = document.snapshot.canvas;
   const [selection, setSelection] = useState<{

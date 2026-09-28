@@ -1,0 +1,55 @@
+.hold-feedback {
+  opacity: 0;
+  transform: scale(0.88);
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hold-feedback[data-open="true"] {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: 220ms;
+}
+@starting-style {
+  .hold-feedback[data-open="true"] {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+@keyframes hold-split-progress {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.hold-split-indicator {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hold-split-progress {
+  animation: hold-split-progress linear forwards;
+}
+.hold-feedback[data-open="false"] .hold-split-progress {
+  animation-play-state: paused;
+}
+.hold-split-indicator[data-ready="true"] {
+  transform: scale(1.06);
+}
+.hold-split-indicator[data-ready="true"] .hold-split-progress {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hold-feedback,
+  .hold-split-indicator {
+    transition: none;
+    transform: none;
+  }
+  .hold-split-indicator[data-ready="true"] {
+    transform: none;
+  }
+  .hold-split-progress {
+    animation-timing-function: steps(4, end);
+  }
+}

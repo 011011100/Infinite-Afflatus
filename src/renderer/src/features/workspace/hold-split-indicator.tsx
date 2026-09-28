@@ -7,7 +7,7 @@ import {
 export function HoldSplitIndicator({ ready }: { ready: boolean }) {
   return (
     <span className="pointer-events-none absolute inset-0 grid place-items-center">
-      <span className="hold-split-enter">
+      <span>
         <span
           data-ready={ready}
           className="hold-split-indicator relative block size-16 rounded-full bg-background/95 text-primary shadow-lg ring-1 ring-white/70"

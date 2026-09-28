@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { VideoOff } from 'lucide-react';
+import { useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { Asset } from '../../../../shared/models';
-import { HoldSplitIndicator } from './hold-split-indicator';
-import { formatDuration, mediaUrl } from './media';
+import { formatDuration } from './media';
+import { useThumbnail } from './thumbnail-provider';
 import { useLongPressSplit } from './use-long-press-split';
 
 export function VideoThumbnail({
@@ -24,7 +25,16 @@ export function VideoThumbnail({
   canHold: boolean;
   split: () => void;
 }) {
-  const [duration, setDuration] = useState<number | null>(null);
+  const { frame, failed } = useThumbnail(projectId, asset);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const target = canvas.current;
+    if (!target || !frame) return;
+    target.width = frame.image.width;
+    target.height = frame.image.height;
+    // Paint before the first frame of a new card; no decoder/loading flash.
+    target.getContext('2d')?.drawImage(frame.image, 0, 0);
+  }, [frame]);
   const hold = useLongPressSplit(grouped && canHold, select, split);
   return (
     <button
@@ -48,25 +58,28 @@ export function VideoThumbnail({
         grouped ? 'w-[216px]' : 'w-[288px]',
       )}
     >
-      <video
-        muted
-        preload="metadata"
-        src={mediaUrl(projectId, asset.id)}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+      <canvas
+        ref={canvas}
         className="pointer-events-none h-full w-full object-cover"
+        role="img"
         aria-label={`${asset.name} 缩略预览`}
       />
+      {failed && (
+        <span
+          className="pointer-events-none absolute inset-0 grid place-items-center"
+          title="缩略图读取失败"
+        >
+          <VideoOff size={24} aria-label="缩略图读取失败" />
+        </span>
+      )}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-linear-to-b from-black/60 to-transparent px-3 pt-2.5 pb-7 text-[11px]">
         <span className="min-w-0 truncate">
           {String(index + 1).padStart(2, '0')} · {asset.name}
         </span>
         <span className="shrink-0 tabular-nums">
-          {duration === null ? '' : formatDuration(duration)}
+          {frame?.duration == null ? '' : formatDuration(frame.duration)}
         </span>
       </div>
-      {hold.phase !== 'idle' && (
-        <HoldSplitIndicator ready={hold.phase === 'ready'} />
-      )}
       {active && grouped && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-primary" />
       )}

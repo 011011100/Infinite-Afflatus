@@ -2,20 +2,21 @@ import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
-  useState,
 } from 'react';
 import {
   HOLD_HINT_DELAY_MS,
   LONG_PRESS_MS,
   LongPress,
 } from '../../../../shared/interaction/long-press';
+import { useHoldFeedback } from './hold-feedback';
 
 export function useLongPressSplit(
   enabled: boolean,
   select: () => void,
   split: () => void,
 ) {
-  const [phase, setPhase] = useState<'idle' | 'holding' | 'ready'>('idle');
+  const showFeedback = useHoldFeedback();
+  const feedback = useRef<ReturnType<typeof showFeedback> | null>(null);
   const gesture = useRef(new LongPress());
   const cleanup = useRef<() => void>(() => {});
   const suppressClick = useRef(false);
@@ -25,17 +26,21 @@ export function useLongPressSplit(
   const cancel = () => {
     gesture.current.cancel();
     cleanup.current();
-    setPhase('idle');
+    feedback.current?.hide();
+    feedback.current = null;
   };
   useEffect(() => {
     if (!enabled) {
       gesture.current.cancel();
       cleanup.current();
-      setPhase('idle');
+      feedback.current?.hide();
+      feedback.current = null;
     }
     return () => {
       gesture.current.cancel();
       cleanup.current();
+      feedback.current?.hide();
+      feedback.current = null;
     };
   }, [enabled]);
 
@@ -59,8 +64,11 @@ export function useLongPressSplit(
       event.clientY,
       performance.now(),
     );
-    const hint = setTimeout(() => setPhase('holding'), HOLD_HINT_DELAY_MS);
-    const timer = setTimeout(() => setPhase('ready'), LONG_PRESS_MS);
+    const target = event.currentTarget;
+    const hint = setTimeout(() => {
+      feedback.current = showFeedback(target);
+    }, HOLD_HINT_DELAY_MS);
+    const timer = setTimeout(() => feedback.current?.ready(), LONG_PRESS_MS);
     const move = (next: PointerEvent) => {
       if (!controller.move(next.pointerId, next.clientX, next.clientY))
         cancel();
@@ -100,7 +108,6 @@ export function useLongPressSplit(
     };
   };
   return {
-    phase,
     onPointerDown,
     cancel,
     consumeClick: () => {
