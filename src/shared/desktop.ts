@@ -1,4 +1,5 @@
 import type { CanvasPatch } from './canvas/model';
+import type { InteractionSettings } from './interaction/settings';
 import type {
   LibraryState,
   MigrationPreview,
@@ -8,6 +9,7 @@ import type {
 
 export const IPC_CHANNELS = {
   appInfo: 'app:info',
+  saveInteractions: 'settings:interactions',
   state: 'library:state',
   changed: 'library:changed',
   createProject: 'project:create',
@@ -33,6 +35,7 @@ export interface AppInfo {
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
   getAppInfo: () => Promise<AppInfo>;
+  saveInteractions: (settings: InteractionSettings) => Promise<void>;
   getLibrary: () => Promise<LibraryState>;
   onLibraryChanged: (listener: () => void) => () => void;
   createProject: (name: string) => Promise<ProjectSnapshot>;

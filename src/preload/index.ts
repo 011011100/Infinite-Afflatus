@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  saveInteractions: (settings) =>
+    ipcRenderer.invoke(IPC_CHANNELS.saveInteractions, settings),
   getAppInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appInfo),
   getLibrary: () => ipcRenderer.invoke(IPC_CHANNELS.state),
   onLibraryChanged: (listener) => {

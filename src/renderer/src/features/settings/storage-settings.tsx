@@ -1,7 +1,6 @@
 import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Modal } from '@/components/ui/modal';
 import type { LibraryState, MigrationPreview } from '../../../../shared/models';
 
 const phaseLabels = {
@@ -14,14 +13,10 @@ const phaseLabels = {
 };
 export function StorageSettings({
   library,
-  onClose,
   run,
-  error,
 }: {
   library: LibraryState;
-  onClose: () => void;
   run: (operation: () => Promise<unknown>) => Promise<void>;
-  error: string | null;
 }) {
   const [preview, setPreview] = useState<MigrationPreview | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -36,7 +31,7 @@ export function StorageSettings({
       }
     });
   return (
-    <Modal title="保存与存储" onClose={onClose} error={error}>
+    <>
       <p className="text-sm font-medium">项目保存目录</p>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         所有项目统一保存在这里。修改目录时，已有项目会一起迁移。
@@ -157,6 +152,6 @@ export function StorageSettings({
       <p className="mt-8 text-xs leading-5 text-muted-foreground">
         暂存文件与项目目录分开保存。只有项目保存成功后，才会清除对应的暂存结果。
       </p>
-    </Modal>
+    </>
   );
 }

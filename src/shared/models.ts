@@ -1,4 +1,5 @@
 import type { CanvasDocument } from './canvas/model';
+import type { InteractionSettings } from './interaction/settings';
 
 export interface Viewport {
   x: number;
@@ -66,6 +67,7 @@ export interface MigrationStatus {
 }
 
 export interface LibraryState {
+  interactions: InteractionSettings;
   root: string;
   projects: ProjectSummary[];
   jobs: SaveJob[];

@@ -6,14 +6,18 @@ import {
   ReactFlow,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
+import { isMac } from '@/lib/platform';
 import { CARD_HEIGHT, cardWidth } from '../../../../shared/canvas/model';
 import { splitSelectedAsset } from '../../../../shared/canvas/operations';
+import { DRAG_THRESHOLD } from '../../../../shared/interaction/long-press';
+import type { InteractionSettings } from '../../../../shared/interaction/settings';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
 import { SequencePlayer } from './sequence-player';
 import { useCanvasDocument } from './use-canvas-document';
+import { useCanvasShortcuts } from './use-canvas-shortcuts';
 import { useCardDrag } from './use-card-drag';
 import { VideoCard, type VideoCardNode } from './video-card';
 
@@ -22,10 +26,14 @@ const nodeTypes = { video: VideoCard };
 export function ProjectCanvas({
   snapshot,
   blocked,
+  interactions,
+  inactive,
   report,
 }: {
   snapshot: ProjectSnapshot;
   blocked: boolean;
+  interactions: InteractionSettings;
+  inactive: boolean;
   report: (error: unknown) => void;
 }) {
   const document = useCanvasDocument(snapshot, blocked, report);
@@ -74,55 +82,59 @@ export function ProjectCanvas({
     selectedCard.assetIds.length > 1 &&
     !!selectedAssetId &&
     selectedCard.assetIds.includes(selectedAssetId);
-  const split = () => {
-    if (!canSplit || !selectedCard || !selectedAssetId) return;
-    const patch = splitSelectedAsset(selectedCard, selectedAssetId, () =>
-      crypto.randomUUID(),
-    );
-    void document.commit(patch).then((saved) => {
-      if (saved)
-        setSelection((current) =>
-          current?.cardId === selectedCard.id &&
-          current.assetId === selectedAssetId
-            ? { cardId: selectedCard.id, assetId: null }
-            : current,
-        );
-    });
-  };
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (
-        event.target instanceof Element &&
-        event.target.closest(
-          'dialog, input, textarea, select, [contenteditable="true"]',
-        )
-      )
+  const splitAsset = useCallback(
+    (cardId: string, assetId: string) => {
+      if (blocked || inactive || playing || document.saving || drag.drag)
         return;
-      if (event.key === 'Escape') {
-        if (!drag.cancel()) setSelection(null);
-        event.preventDefault();
-      }
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        event.key.toLowerCase() === 'z'
-      ) {
-        event.preventDefault();
-        if (blocked || document.saving || drag.drag) return;
-        if (event.shiftKey) document.redo();
-        else document.undo();
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [
-    drag.cancel,
-    drag.drag,
-    document.undo,
-    document.redo,
-    document.saving,
-    blocked,
-  ]);
+      const card = cards.find((item) => item.id === cardId);
+      if (!card || card.assetIds.length < 2 || !card.assetIds.includes(assetId))
+        return;
+      const patch = splitSelectedAsset(card, assetId, () =>
+        crypto.randomUUID(),
+      );
+      void document.commit(patch).then((saved) => {
+        if (saved)
+          setSelection((current) =>
+            current?.cardId === cardId && current.assetId === assetId
+              ? { cardId, assetId: null }
+              : current,
+          );
+      });
+    },
+    [
+      blocked,
+      inactive,
+      playing,
+      document.saving,
+      document.commit,
+      drag.drag,
+      cards,
+    ],
+  );
+  const split = () => {
+    if (canSplit && selectedCard && selectedAssetId)
+      splitAsset(selectedCard.id, selectedAssetId);
+  };
+  useCanvasShortcuts({
+    shortcuts: interactions.shortcuts,
+    disabled:
+      blocked || inactive || document.saving || !!drag.drag || !!playing,
+    cancel: () => {
+      if (!drag.cancel()) setSelection(null);
+    },
+    actions: {
+      play: selectedCard ? () => play(selectedCard.id) : null,
+      split: canSplit ? split : null,
+      undo: document.canUndo ? document.undo : null,
+      redo: document.canRedo ? document.redo : null,
+    },
+  });
+  const canHold =
+    interactions.longPressSplit &&
+    !blocked &&
+    !inactive &&
+    !document.saving &&
+    !playing;
 
   const nodes = useMemo<VideoCardNode[]>(
     () =>
@@ -151,6 +163,8 @@ export function ProjectCanvas({
             drag.drag?.snap?.targetId === card.id ? drag.drag.snap.side : null,
           play,
           selectAsset,
+          splitAsset,
+          canHold,
         },
       })),
     [
@@ -162,6 +176,8 @@ export function ProjectCanvas({
       play,
       selectAsset,
       measurements,
+      splitAsset,
+      canHold,
     ],
   );
   const snapTarget = cards.find(
@@ -192,7 +208,8 @@ export function ProjectCanvas({
         maxZoom={2}
         nodesConnectable={false}
         nodesDraggable={!blocked && !document.saving}
-        nodeDragThreshold={0}
+        nodeDragThreshold={DRAG_THRESHOLD}
+        panActivationKeyCode={null}
         nodeClickDistance={5}
         deleteKeyCode={null}
         multiSelectionKeyCode={null}
@@ -218,6 +235,10 @@ export function ProjectCanvas({
           }
         }}
         onPaneClick={() => setSelection(null)}
+        onNodeDoubleClick={(event, node) => {
+          event.preventDefault();
+          if (!inactive && !drag.drag && !document.saving) play(node.id);
+        }}
         onNodeDragStart={(_event, node) => drag.start(node.id)}
         onNodeDrag={(_event, node) =>
           drag.move(node.position, flow.current?.getZoom() ?? 1)
@@ -245,6 +266,8 @@ export function ProjectCanvas({
             canUndo={document.canUndo}
             canRedo={document.canRedo}
             canSplit={canSplit}
+            shortcuts={interactions.shortcuts}
+            isMac={isMac}
             undo={document.undo}
             redo={document.redo}
             split={split}
@@ -271,8 +294,9 @@ export function ProjectCanvas({
               {document.saving
                 ? '正在保存…'
                 : cards.length > 1
-                  ? '拖到卡片左侧或右侧，松开即可拼接'
-                  : '拖动卡片排列 · 点击播放放大预览'}
+                  ? '拖动拼接 · 双击播放' +
+                    (interactions.longPressSplit ? ' · 长按片段后松开拆分' : '')
+                  : '拖动卡片排列 · 双击放大播放'}
             </p>
           )}
         </Panel>

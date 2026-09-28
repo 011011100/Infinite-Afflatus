@@ -84,3 +84,20 @@
 .react-flow {
   --xy-background-color: var(--canvas);
 }
+
+@keyframes hold-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.animate-hold-progress {
+  animation: hold-progress 700ms linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-hold-progress {
+    animation: none;
+  }
+}

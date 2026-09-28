@@ -5,6 +5,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  formatShortcut,
+  type Shortcuts,
+} from '../../../../shared/interaction/shortcuts';
 
 export function CanvasActions({
   disabled,
@@ -14,6 +18,8 @@ export function CanvasActions({
   undo,
   redo,
   split,
+  shortcuts,
+  isMac,
 }: {
   disabled: boolean;
   canUndo: boolean;
@@ -22,6 +28,8 @@ export function CanvasActions({
   undo: () => void;
   redo: () => void;
   split: () => void;
+  shortcuts: Shortcuts;
+  isMac: boolean;
 }) {
   return (
     <fieldset
@@ -43,7 +51,9 @@ export function CanvasActions({
         >
           <Undo2 />
         </TooltipTrigger>
-        <TooltipContent>撤销 · ⌘ / Ctrl Z</TooltipContent>
+        <TooltipContent>
+          撤销{shortcuts.undo && ` · ${formatShortcut(shortcuts.undo, isMac)}`}
+        </TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
@@ -60,7 +70,9 @@ export function CanvasActions({
         >
           <Redo2 />
         </TooltipTrigger>
-        <TooltipContent>重做 · ⌘ / Ctrl Shift Z</TooltipContent>
+        <TooltipContent>
+          重做{shortcuts.redo && ` · ${formatShortcut(shortcuts.redo, isMac)}`}
+        </TooltipContent>
       </Tooltip>
       {canSplit && (
         <>
@@ -75,7 +87,11 @@ export function CanvasActions({
               <Ungroup />
               拆分选中片段
             </TooltipTrigger>
-            <TooltipContent>拆出选中片段，前后各自保留连续组合</TooltipContent>
+            <TooltipContent>
+              拆出选中片段，前后各自保留连续组合
+              {shortcuts.split &&
+                ` · ${formatShortcut(shortcuts.split, isMac)}`}
+            </TooltipContent>
           </Tooltip>
         </>
       )}

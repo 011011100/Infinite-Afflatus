@@ -6,6 +6,7 @@ import { MigrationService } from '../migration/migration-service';
 import { ProjectService } from '../projects/project-service';
 import { SaveQueue } from '../saving/save-queue';
 import { type GeneratedResult, Staging } from '../saving/staging';
+import { InteractionSettingsStore } from '../settings/interaction-settings';
 import { AppStore } from './app-store';
 import { canonicalDirectory, overlaps } from './files';
 import { WriteGate } from './write-gate';
@@ -13,6 +14,7 @@ import { WriteGate } from './write-gate';
 /** Main-process composition root. Feature modules depend on narrow services, never on Electron. */
 export class Library {
   readonly projects: ProjectService;
+  readonly interactions: InteractionSettingsStore;
   readonly staging: Staging;
   readonly saves: SaveQueue;
   readonly migration: MigrationService;
@@ -28,6 +30,7 @@ export class Library {
     userData: string,
     quota?: number,
   ) {
+    this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
     this.staging = new Staging(
       join(userData, 'staging'),
@@ -93,6 +96,7 @@ export class Library {
   state(): LibraryState {
     return {
       root: this.store.root,
+      interactions: this.interactions.get(),
       projects: this.store.projects(),
       jobs: this.store
         .jobs()

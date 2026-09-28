@@ -46,6 +46,11 @@ export function registerDesktop(
       platform: process.platform,
     };
   });
+  ipcMain.handle(IPC_CHANNELS.saveInteractions, (event, settings: unknown) => {
+    trustedWindow(event);
+    library.interactions.save(settings);
+    library.emit();
+  });
   ipcMain.handle(IPC_CHANNELS.state, (event) => {
     trustedWindow(event);
     return library.state();

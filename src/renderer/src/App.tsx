@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { ProjectHome } from '@/features/projects/project-home';
 import { useLibrary } from '@/features/projects/use-library';
+import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
-import { StorageSettings } from '@/features/settings/storage-settings';
 import { ProjectCanvas } from '@/features/workspace/project-canvas';
 
 export function App() {
@@ -59,7 +59,7 @@ export function App() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="保存与存储设置"
+            aria-label="设置"
             disabled={!library}
             onClick={() => setSettings(true)}
           >
@@ -99,6 +99,8 @@ export function App() {
           key={project.project.id}
           snapshot={project}
           blocked={library.writeBlocked}
+          interactions={library.interactions}
+          inactive={settings || newName !== null}
           report={state.report}
         />
       ) : (
@@ -110,7 +112,7 @@ export function App() {
         />
       )}
       {settings && library && (
-        <StorageSettings
+        <AppSettings
           library={library}
           error={state.error}
           run={run}
