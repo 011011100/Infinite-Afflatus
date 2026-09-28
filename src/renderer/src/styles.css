@@ -1,0 +1,128 @@
+:root {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  color: #273244;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --accent: #3377ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.application {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.application-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 24px;
+  height: 52px;
+  padding: 0 24px;
+  border-bottom: 1px solid #e9edf3;
+  background: #fff;
+  user-select: none;
+}
+
+.application-name {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.project-name {
+  color: #788397;
+  font-size: 13px;
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas-empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.canvas-empty-state h1 {
+  margin: 0 0 10px;
+  color: #68758b;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.canvas-empty-state p {
+  margin: 0;
+  color: #8490a3;
+  font-size: 14px;
+}
+
+.canvas-hint {
+  color: #8490a3;
+  font-size: 12px;
+  user-select: none;
+}
+
+.react-flow__controls {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  color: #596880;
+  background: #fff;
+}
+
+.react-flow__controls-button:hover {
+  background: #edf3ff;
+}
+
+.desktop-error {
+  padding: 10px 24px;
+  background: #fff4df;
+  color: #77521e;
+  font-size: 14px;
+}
