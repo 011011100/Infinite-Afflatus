@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  HOLD_HINT_DELAY_MS,
-  LONG_PRESS_MS,
-} from '../../../../shared/interaction/long-press';
 import type { Asset } from '../../../../shared/models';
+import { HoldSplitIndicator } from './hold-split-indicator';
 import { formatDuration, mediaUrl } from './media';
 import { useLongPressSplit } from './use-long-press-split';
 
@@ -68,20 +65,9 @@ export function VideoThumbnail({
         </span>
       </div>
       {hold.phase !== 'idle' && (
-        <span
-          className="pointer-events-none absolute inset-x-0 bottom-0 bg-slate-950/75 px-3 py-2 text-center text-xs"
-          role="status"
-        >
-          {hold.phase === 'ready' ? '松开拆分 · 移动取消' : '按住以拆分…'}
-          <span
-            className="absolute inset-x-0 bottom-0 h-1 origin-left bg-primary animate-hold-progress"
-            style={{
-              animationDuration: `${LONG_PRESS_MS - HOLD_HINT_DELAY_MS}ms`,
-            }}
-          />
-        </span>
+        <HoldSplitIndicator ready={hold.phase === 'ready'} />
       )}
-      {active && grouped && hold.phase === 'idle' && (
+      {active && grouped && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-primary" />
       )}
     </button>

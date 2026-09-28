@@ -8,8 +8,10 @@ import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
 import { ProjectCanvas } from '@/features/workspace/project-canvas';
+import { useInputMethod } from '@/lib/input-method';
 
 export function App() {
+  useInputMethod();
   const state = useLibrary();
   const [settings, setSettings] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);

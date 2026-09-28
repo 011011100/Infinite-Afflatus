@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, useId, useRef } from 'react';
 import { Button } from './button';
+import { useModalMotion } from './use-modal-motion';
 
 export function Modal({
   title,
@@ -17,16 +18,17 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
+  const requestClose = useModalMotion(ref, onClose);
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onCancel={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        requestClose();
+      }}
       onClose={onClose}
-      className={`m-auto max-h-[88vh] overflow-y-auto rounded-xl border bg-background p-0 text-foreground shadow-xl backdrop:bg-slate-950/25 ${wide ? 'w-[min(1000px,90vw)]' : 'w-[min(620px,90vw)]'}`}
+      className={`t-modal m-auto max-h-[88vh] overflow-y-auto rounded-xl border bg-background p-0 text-foreground shadow-xl ${wide ? 'w-[min(1000px,90vw)]' : 'w-[min(620px,90vw)]'}`}
     >
       <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
         <h2 id={titleId} className="text-base font-semibold">
@@ -36,7 +38,7 @@ export function Modal({
           variant="ghost"
           size="icon-sm"
           aria-label="关闭"
-          onClick={onClose}
+          onClick={requestClose}
         >
           <X />
         </Button>

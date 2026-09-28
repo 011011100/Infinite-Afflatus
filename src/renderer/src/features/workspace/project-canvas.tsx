@@ -289,16 +289,14 @@ export function ProjectCanvas({
                 .join(' → ')}{' '}
               <span className="ml-2 text-muted-foreground">Esc 取消</span>
             </p>
-          ) : (
-            <p className="rounded-full bg-canvas/90 px-3 py-1.5 text-xs text-muted-foreground">
-              {document.saving
-                ? '正在保存…'
-                : cards.length > 1
-                  ? '拖动拼接 · 双击播放' +
-                    (interactions.longPressSplit ? ' · 长按片段后松开拆分' : '')
-                  : '拖动卡片排列 · 双击放大播放'}
+          ) : document.saving ? (
+            <p
+              role="status"
+              className="rounded-full bg-canvas/90 px-3 py-1.5 text-xs text-muted-foreground"
+            >
+              正在保存…
             </p>
-          )}
+          ) : null}
         </Panel>
       </ReactFlow>
       {!nodes.length && (
