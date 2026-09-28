@@ -75,7 +75,7 @@ export function CanvasActions({
               <Ungroup />
               拆分选中片段
             </TooltipTrigger>
-            <TooltipContent>只拆出选中的片段，其余片段保持组合</TooltipContent>
+            <TooltipContent>拆出选中片段，前后各自保留连续组合</TooltipContent>
           </Tooltip>
         </>
       )}

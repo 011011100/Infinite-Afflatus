@@ -55,24 +55,29 @@ export function joinCards(
 export function splitSelectedAsset(
   card: CanvasCard,
   assetId: string,
-  detachedId: string,
+  createId: () => string,
 ): CanvasPatch {
-  if (card.assetIds.length < 2 || !card.assetIds.includes(assetId))
+  const selectedIndex = card.assetIds.indexOf(assetId);
+  if (card.assetIds.length < 2 || selectedIndex < 0)
     throw new Error('请先选中组合中要拆分的片段');
+  // Cut at both sides of the selection; never join its former neighbours.
+  const segments = [
+    card.assetIds.slice(0, selectedIndex),
+    [assetId],
+    card.assetIds.slice(selectedIndex + 1),
+  ].filter((ids) => ids.length > 0);
+  let x = card.position.x;
   return {
     before: [card],
-    after: [
-      { ...card, assetIds: card.assetIds.filter((id) => id !== assetId) },
-      {
-        id: detachedId,
-        assetIds: [assetId],
-        // Leave the remaining group in place and detach beyond its original right edge.
-        position: {
-          x: card.position.x + cardWidth(card) + 48,
-          y: card.position.y,
-        },
-      },
-    ],
+    after: segments.map((assetIds, index) => {
+      const part = {
+        id: index === 0 ? card.id : createId(),
+        assetIds,
+        position: { x, y: card.position.y },
+      };
+      x += cardWidth(part) + 48;
+      return part;
+    }),
   };
 }
 

@@ -76,9 +76,7 @@ export function ProjectCanvas({
     selectedCard.assetIds.includes(selectedAssetId);
   const split = () => {
     if (!canSplit || !selectedCard || !selectedAssetId) return;
-    const patch = splitSelectedAsset(
-      selectedCard,
-      selectedAssetId,
+    const patch = splitSelectedAsset(selectedCard, selectedAssetId, () =>
       crypto.randomUUID(),
     );
     void document.commit(patch).then((saved) => {

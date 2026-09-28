@@ -102,63 +102,76 @@ test('snap tolerance is in screen pixels; vertical proximity alone and moving aw
   }
 });
 
-for (const index of [0, 1, 2]) {
-  test(`splitting selected segment ${index + 1} leaves the other two grouped in order; undo and redo preserve all data`, () => {
-    const group = card(-300, 3);
+for (const { count, index, parts } of [
+  { count: 3, index: 0, parts: [[0], [1, 2]] },
+  { count: 3, index: 1, parts: [[0], [1], [2]] },
+  { count: 3, index: 2, parts: [[0, 1], [2]] },
+  { count: 5, index: 2, parts: [[0, 1], [2], [3, 4]] },
+  {
+    count: 11,
+    index: 5,
+    parts: [[0, 1, 2, 3, 4], [5], [6, 7, 8, 9, 10]],
+  },
+]) {
+  test(`splitting segment ${index + 1} of ${count} preserves only contiguous neighbours and supports undo/redo`, () => {
+    const group = card(-300, count);
     const unrelated = card(1500, 2);
     const selected = group.assetIds[index];
     assert.ok(selected);
-    const detachedId = randomUUID();
-    const patch = splitSelectedAsset(group, selected, detachedId);
+    const patch = splitSelectedAsset(group, selected, randomUUID);
     const split = applyCanvasPatch(document([unrelated, group]), patch);
-    assert.equal(split.cards.length, 3);
+    assert.equal(split.cards.length, parts.length + 1);
     assert.deepEqual(
       split.cards.find((item) => item.id === unrelated.id),
       unrelated,
     );
-    const remaining = split.cards.find((item) => item.id === group.id);
-    const detached = split.cards.find((item) => item.id === detachedId);
+    const separated = split.cards.filter((item) => item.id !== unrelated.id);
     assert.deepEqual(
-      remaining?.assetIds,
-      group.assetIds.filter((id) => id !== selected),
+      separated.map((item) => item.assetIds),
+      parts.map((indices) => indices.map((i) => group.assetIds[i])),
     );
-    assert.deepEqual(remaining?.position, group.position);
-    assert.deepEqual(detached?.assetIds, [selected]);
-    assert.deepEqual(detached?.position, {
-      x: group.position.x + cardWidth(group) + 48,
-      y: group.position.y,
-    });
+    assert.deepEqual(separated[0]?.position, group.position);
+    assert.equal(separated[0]?.id, group.id);
+    for (let i = 1; i < separated.length; i++) {
+      const previous = separated[i - 1];
+      const current = separated[i];
+      assert.ok(previous && current);
+      assert.equal(current.position.y, group.position.y);
+      assert.equal(
+        current.position.x - previous.position.x - cardWidth(previous),
+        48,
+      );
+    }
     const restored = applyCanvasPatch(split, reversePatch(patch));
     assert.deepEqual(restored.cards, [unrelated, group]);
     assert.deepEqual(applyCanvasPatch(restored, patch).cards, split.cards);
   });
 }
 
-test('splitting a two-segment group leaves two standalone cards without losing the remaining segment', () => {
+test('splitting a two-segment group leaves two standalone cards in the original order', () => {
   const group = card(100, 2);
-  const selected = group.assetIds[0];
-  assert.ok(selected);
-  const split = applyCanvasPatch(
-    document([group]),
-    splitSelectedAsset(group, selected, randomUUID()),
-  );
-  assert.equal(split.cards.length, 2);
-  assert.deepEqual(
-    split.cards.map((item) => item.assetIds),
-    [[group.assetIds[1]], [selected]],
-  );
+  for (const selected of group.assetIds) {
+    const split = applyCanvasPatch(
+      document([group]),
+      splitSelectedAsset(group, selected, randomUUID),
+    );
+    assert.deepEqual(
+      split.cards.map((item) => item.assetIds),
+      group.assetIds.map((id) => [id]),
+    );
+  }
 });
 
 test('splitting requires a valid selected segment in a group', () => {
   const group = card(100, 3);
-  assert.throws(() => splitSelectedAsset(group, '', randomUUID()), /请先选中/);
+  assert.throws(() => splitSelectedAsset(group, '', randomUUID), /请先选中/);
   assert.throws(
-    () => splitSelectedAsset(group, randomUUID(), randomUUID()),
+    () => splitSelectedAsset(group, randomUUID(), randomUUID),
     /请先选中/,
   );
   const single = card(200);
   assert.throws(
-    () => splitSelectedAsset(single, single.assetIds[0] ?? '', randomUUID()),
+    () => splitSelectedAsset(single, single.assetIds[0] ?? '', randomUUID),
     /请先选中/,
   );
 });
@@ -306,12 +319,10 @@ test('legacy read is non-mutating; positions, grouping and order survive databas
   }
 });
 
-test('selected-segment split, undo and redo persist without ungrouping the remaining segments', async () => {
+test('middle-segment split, undo and redo persist with separate contiguous groups', async () => {
   const f = await fixture();
   try {
-    await f.add();
-    await f.add();
-    await f.add();
+    for (let i = 0; i < 5; i++) await f.add();
     const initial = await f.library.projects.open(f.project.id);
     const first = initial.canvas.cards[0];
     assert.ok(first);
@@ -325,11 +336,11 @@ test('selected-segment split, undo and redo persist without ungrouping the remai
     });
     const selected = group.assetIds[2];
     assert.ok(selected);
-    const patch = splitSelectedAsset(group, selected, randomUUID());
+    const patch = splitSelectedAsset(group, selected, randomUUID);
     const split = await f.library.projects.patchCanvas(f.project.id, patch);
     assert.deepEqual(
       split.canvas.cards.map((item) => item.assetIds),
-      [group.assetIds.slice(0, 2), [selected]],
+      [group.assetIds.slice(0, 2), [selected], group.assetIds.slice(3)],
     );
     assert.deepEqual(
       (await f.library.projects.open(f.project.id)).canvas,
