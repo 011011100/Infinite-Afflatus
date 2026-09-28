@@ -18,6 +18,7 @@ let mainWindow: BrowserWindow | null = null;
 let library: Library | null = null;
 let quitting = false;
 function showWindow(): void {
+  if (quitting || library?.isClosing) return;
   mainWindow = createWindow();
   mainWindow.once('closed', () => {
     mainWindow = null;
@@ -27,6 +28,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    if (quitting) return;
     mainWindow?.show();
     mainWindow?.focus();
   });
@@ -66,7 +68,8 @@ app.on('before-quit', (event) => {
   quitting = true;
   void library
     .close()
-    .then(() => app.quit())
+    // Storage has drained; exit without allowing a late activation to create a new window.
+    .then(() => app.exit(0))
     .catch((error: unknown) => {
       console.error('Shutdown error:', error);
       app.exit(1);
