@@ -42,6 +42,7 @@ pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 | [一期产品范围与页面](docs/product.md) | 已确定的方向、页面职责、待决定事项 |
 | [交互规范](docs/interactions.md) | 卡片拼接、唯一播放入口、镜头编辑、裁剪及验收规则 |
 | [技术架构](docs/architecture.md) | 进程分工、数据概念、本地媒体和云端生成边界 |
+| [本地项目管理](docs/project-management.md) | 独立项目、自选保存位置、SQLite、素材与项目包 |
 | [UI 基础与组件约定](docs/ui-foundation.md) | 组件库选择、主题、共用组件与画布的分工 |
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |
@@ -53,5 +54,7 @@ React 19、React Flow 12（`@xyflow/react`）、Electron 44、TypeScript、shadc
 Vite 7 位于当前 electron-vite 5 声明的兼容范围内。依赖具体版本以 `package.json` 和 `pnpm-lock.yaml` 为准。
 
 软件内的本地后台逻辑由 Electron 承担，不额外启动 HTTP 后端。开发时的 Vite 服务仅服务于热更新。
+
+本地数据库已确定使用 SQLite；项目独立保存，并支持用户选择保存位置。项目目录、自动保存和项目包的具体方案见 [本地项目管理](docs/project-management.md)，当前尚未实现持久化。
 
 远端仓库：[011011100/Infinite-Afflatus](https://github.com/011011100/Infinite-Afflatus)。
