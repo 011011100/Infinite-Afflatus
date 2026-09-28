@@ -7,19 +7,12 @@ import {
   formatTime,
   rulerStep,
   type TimelineClip,
+  timelineOrigin,
   totalDuration,
 } from './timeline';
+import { useTrimGesture } from './use-trim-gesture';
 
 type Edge = 'start' | 'end';
-interface TrimGesture {
-  pointer: number;
-  x: number;
-  scale: number;
-  index: number;
-  edge: Edge;
-  clips: TimelineClip[];
-  value: ClipTrim;
-}
 
 export function SequenceTimeline({
   clips,
@@ -28,6 +21,7 @@ export function SequenceTimeline({
   playingIndex,
   selected,
   disabled,
+  reset,
   onSelect,
   onSeek,
   onPreview,
@@ -41,6 +35,7 @@ export function SequenceTimeline({
   playingIndex: number;
   selected: number;
   disabled: boolean;
+  reset: number;
   onSelect: (index: number) => void;
   onSeek: (time: number) => void;
   onPreview: (index: number, range: ClipTrim, edge: Edge) => void;
@@ -50,59 +45,54 @@ export function SequenceTimeline({
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
-  const gesture = useRef<TrimGesture | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const initial = useRef({
+    duration: totalDuration(clips),
+    origin: timelineOrigin(clips),
+  });
   const [width, setWidth] = useState(900);
   const [zoom, setZoom] = useState(1);
   const total = totalDuration(clips);
+  const origin = timelineOrigin(clips);
+  const scale =
+    Math.max(8, Math.min(100, width / initial.current.duration)) * zoom;
+  const gesture = useTrimGesture({
+    clips,
+    scale,
+    disabled,
+    reset,
+    scrollLeft: () => scroll.current?.scrollLeft ?? 0,
+    preview: onPreview,
+    commit: onCommit,
+    cancel: onCancel,
+    active: onGesture,
+  });
+  const { dragging } = gesture;
   useLayoutEffect(() => {
     const element = scroll.current;
     if (!element) return;
-    const observer = new ResizeObserver(() =>
-      setWidth(element.clientWidth - 64),
-    );
+    let initialized = false;
+    const observer = new ResizeObserver(() => {
+      const width = element.clientWidth - 64;
+      setWidth(width);
+      if (!initialized) {
+        element.scrollLeft =
+          initial.current.origin *
+          Math.max(8, Math.min(100, width / initial.current.duration));
+        initialized = true;
+      }
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const scale =
-    gesture.current?.scale ?? Math.max(8, Math.min(100, width / total)) * zoom;
-  const layout = gesture.current?.clips ?? clips;
   const step = rulerStep(scale);
-  const visualTotal = Math.max(total, totalDuration(layout));
   const ticks = Array.from(
-    { length: Math.floor(visualTotal / step) + 1 },
+    { length: Math.floor(total / step) + 1 },
     (_, index) => index * step,
   );
-  const finish = (cancel: boolean) => {
-    const current = gesture.current;
-    if (!current) return;
-    gesture.current = null;
-    setDragging(false);
-    onGesture(false);
-    if (cancel) onCancel();
-    else onCommit(current.index, current.value);
-  };
-  // Escape and lost window focus cancel the draft instead of committing it.
-  useLayoutEffect(() => {
-    if (!dragging) return;
-    const cancel = () => finish(true);
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        cancel();
-      }
-    };
-    window.addEventListener('keydown', key, true);
-    window.addEventListener('blur', cancel);
-    return () => {
-      window.removeEventListener('keydown', key, true);
-      window.removeEventListener('blur', cancel);
-    };
-  });
   const seekAt = (x: number) => {
     const rect = track.current?.getBoundingClientRect();
-    if (rect) onSeek(Math.max(0, Math.min(total, (x - rect.left) / scale)));
+    if (rect)
+      onSeek(Math.max(0, Math.min(total, (x - rect.left) / scale - origin)));
   };
   return (
     <section
@@ -136,7 +126,13 @@ export function SequenceTimeline({
         <div
           ref={track}
           className="relative h-32 touch-none select-none"
-          style={{ width: Math.max(width, visualTotal * scale) }}
+          style={{
+            width: Math.max(
+              width,
+              (origin + total) * scale,
+              initial.current.origin * scale + width,
+            ),
+          }}
         >
           <div
             role="slider"
@@ -185,7 +181,7 @@ export function SequenceTimeline({
               <span
                 key={tick}
                 className="pointer-events-none absolute bottom-0 h-6 border-l border-border text-[10px] tabular-nums text-muted-foreground"
-                style={{ left: tick * scale }}
+                style={{ left: (origin + tick) * scale }}
               >
                 <span className="relative -top-1 ml-1.5">
                   {tick < 60 ? `${tick}s` : formatTime(tick)}
@@ -194,21 +190,13 @@ export function SequenceTimeline({
             ))}
           </div>
           {clips.map((clip, index) => {
-            const base = layout[index] ?? clip;
-            const left =
-              (base.offset +
-                (dragging && selected === index
-                  ? clip.range.start - base.range.start
-                  : 0)) *
-              scale;
+            const left = (origin + clip.offset) * scale;
             return (
               <div
                 key={clip.asset.id}
                 data-timeline-clip={clip.asset.id}
                 className={cn(
                   'absolute top-10 h-16 rounded-md',
-                  !dragging &&
-                    'transition-[left,width] duration-150 motion-reduce:transition-none',
                   selected === index
                     ? 'z-10 ring-2 ring-primary'
                     : 'ring-1 ring-border',
@@ -283,41 +271,10 @@ export function SequenceTimeline({
                         onPreview(index, range, edge);
                         onCommit(index, range);
                       }}
-                      onPointerDown={(event) => {
-                        if (disabled || event.button !== 0) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                        gesture.current = {
-                          pointer: event.pointerId,
-                          x: event.clientX,
-                          scale,
-                          index,
-                          edge,
-                          clips,
-                          value: clip.range,
-                        };
-                        setDragging(true);
-                        onGesture(true);
-                      }}
-                      onPointerMove={(event) => {
-                        const current = gesture.current;
-                        if (!current || current.pointer !== event.pointerId)
-                          return;
-                        const original = current.clips[index];
-                        if (!original) return;
-                        current.value = changeTrim(
-                          original.range,
-                          edge,
-                          original.range[edge] +
-                            (event.clientX - current.x) / current.scale,
-                          clip.duration,
-                        );
-                        onPreview(index, current.value, edge);
-                      }}
-                      onPointerUp={() => finish(false)}
-                      onPointerCancel={() => finish(true)}
-                      onLostPointerCapture={() => finish(true)}
+                      onPointerDown={(event) =>
+                        gesture.start(event, index, edge)
+                      }
+                      onLostPointerCapture={gesture.lostCapture}
                     >
                       <span className="h-5 w-0.5 rounded-full bg-current/90" />
                     </button>
@@ -328,7 +285,7 @@ export function SequenceTimeline({
           <div
             aria-hidden="true"
             className="pointer-events-none absolute top-0 z-20 h-[116px] w-px bg-primary"
-            style={{ left: Math.min(time, total) * scale }}
+            style={{ left: (origin + Math.min(time, total)) * scale }}
           >
             <span className="absolute -left-[4px] top-0 size-[9px] rounded-b-sm bg-primary" />
           </div>

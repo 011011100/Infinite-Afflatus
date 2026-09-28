@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { isMac } from '@/lib/platform';
 import type {
   CanvasCard,
@@ -13,6 +19,7 @@ import type { Asset } from '../../../../../shared/models';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { useSequencePlayback } from '../playback/use-sequence-playback';
 import { buildTimeline, locateTime, totalDuration } from './timeline';
+import { TrimSaveQueue } from './trim-save-queue';
 
 export interface EditorProps {
   card: CanvasCard;
@@ -34,19 +41,44 @@ export function useSequenceEditor(
   props: EditorProps & { frames: Map<string, ThumbnailFrame> },
 ) {
   const { card, assets, frames, blocked, saving } = props;
-  const [draft, setDraft] = useState<Record<string, ClipTrim> | null>(null);
+  const [draft, setDraft] = useState<{
+    assetId: string;
+    range: ClipTrim;
+  } | null>(null);
+  const write = useRef(props.commit);
+  write.current = props.commit;
+  const [queue] = useState(
+    () => new TrimSaveQueue(card, (patch) => write.current(patch)),
+  );
+  const edits = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
+  useEffect(() => {
+    queue.accept(card);
+  }, [queue, card]);
+  const resetSeen = useRef(0);
+  useEffect(() => {
+    if (edits.reset !== resetSeen.current) {
+      resetSeen.current = edits.reset;
+      setDraft(null);
+      queue.accept(card);
+    }
+  }, [edits.reset, queue, card]);
   const [selectedId, setSelectedId] = useState(assets[0]?.id);
   const [gesturing, setGesturing] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const localSaving = useRef(false);
   const durations = useMemo(
     () => new Map([...frames].map(([id, frame]) => [id, frame.duration ?? 0])),
     [frames],
   );
   const clips = useMemo(
-    () => buildTimeline(assets, durations, draft ?? card.trims),
-    [assets, durations, draft, card.trims],
+    () =>
+      buildTimeline(
+        assets,
+        durations,
+        draft
+          ? { ...edits.card.trims, [draft.assetId]: draft.range }
+          : edits.card.trims,
+      ),
+    [assets, durations, draft, edits.card.trims],
   );
   const playback = useSequencePlayback(props.projectId, clips);
   const selected = Math.max(
@@ -60,9 +92,10 @@ export function useSequenceEditor(
     ? active.offset +
       Math.max(0, Math.min(active.length, playback.time - active.range.start))
     : 0;
-  const disabled = blocked || saving || localSaving.current;
+  const pending = saving || edits.pending;
+  const disabled = blocked || pending;
   const close = () => {
-    if (saving || localSaving.current || gesturing) return;
+    if (pending || gesturing) return;
     playback.stop();
     props.onClose();
   };
@@ -77,38 +110,29 @@ export function useSequenceEditor(
   const preview = (index: number, range: ClipTrim, edge: 'start' | 'end') => {
     const clip = clips[index];
     if (!clip) return;
-    setDraft({ ...card.trims, [clip.asset.id]: range });
+    setDraft({ assetId: clip.asset.id, range });
     // Show the last retained frame, not a frame just outside the outgoing edge.
     playback.select(
       index,
       edge === 'start' ? range.start : Math.max(range.start, range.end - 0.035),
     );
   };
-  const save = async (index: number, range: ClipTrim) => {
-    if (blocked || saving || localSaving.current) {
+  const save = (index: number, range: ClipTrim) => {
+    if (blocked) {
       cancel();
       return;
     }
     const clip = clips[index];
     if (!clip) return;
-    const original = card.trims?.[clip.asset.id] ?? {
+    const original = edits.card.trims?.[clip.asset.id] ?? {
       start: 0,
       end: clip.duration,
     };
-    if (original.start === range.start && original.end === range.end) {
-      setDraft(null);
-      return;
-    }
-    localSaving.current = true;
-    setSaveError(null);
-    const saved = await props.commit({
-      before: [card],
-      after: [{ ...card, trims: { ...card.trims, [clip.asset.id]: range } }],
-    });
-    localSaving.current = false;
+    if (original.start !== range.start || original.end !== range.end)
+      queue.enqueue(clip.asset.id, range);
     setDraft(null);
-    if (!saved) setSaveError('裁剪未保存，已恢复已保存的范围。请重试。');
   };
+
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.isComposing) return;
@@ -159,7 +183,9 @@ export function useSequenceEditor(
     disabled,
     gesturing,
     setGesturing,
-    saveError,
+    saveError: edits.error,
+    pending,
+    reset: edits.reset,
     muted,
     setMuted,
     setSelectedId,

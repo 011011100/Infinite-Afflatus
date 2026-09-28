@@ -60,3 +60,10 @@ export function rulerStep(pixelsPerSecond: number): number {
     ) ?? 3600
   );
 }
+
+/** Left trims move the leading side; right trims move the trailing side.
+ * The ruler shares this origin, so clips stay contiguous in playback time.
+ */
+export function timelineOrigin(clips: TimelineClip[]): number {
+  return clips.reduce((sum, clip) => sum + clip.range.start, 0);
+}

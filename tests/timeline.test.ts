@@ -4,6 +4,7 @@ import {
   buildTimeline,
   formatTime,
   locateTime,
+  timelineOrigin,
   totalDuration,
 } from '../src/renderer/src/features/workspace/editor/timeline';
 import { changeTrim, clipRange } from '../src/shared/canvas/trim';
@@ -52,4 +53,32 @@ test('trim handles cannot cross or exceed source; trimmed content can be restore
   assert.deepEqual(clipRange(0.05), { start: 0, end: 0.05 });
   assert.deepEqual(clipRange(4, { start: 9, end: 10 }), { start: 3.9, end: 4 });
   assert.equal(formatTime(59.98), '01:00.0');
+});
+
+test('left trims keep the right edge fixed; right trims keep the left edge fixed at a stable zoom', () => {
+  const durations = new Map([
+    ['a', 4],
+    ['b', 4],
+    ['c', 5],
+  ]);
+  const before = buildTimeline(assets, durations);
+  const leftTrim = buildTimeline(assets, durations, {
+    b: { start: 1, end: 4 },
+  });
+  const rightTrim = buildTimeline(assets, durations, {
+    b: { start: 1, end: 3 },
+  });
+  const bounds = (clips: ReturnType<typeof buildTimeline>, index: number) => {
+    const clip = clips[index];
+    assert.ok(clip);
+    const left = (timelineOrigin(clips) + clip.offset) * 100;
+    return { left, right: left + clip.length * 100 };
+  };
+  assert.equal(bounds(leftTrim, 1).left, bounds(before, 1).left + 100);
+  assert.equal(bounds(leftTrim, 1).right, bounds(before, 1).right);
+  assert.equal(bounds(rightTrim, 1).left, bounds(leftTrim, 1).left);
+  assert.equal(bounds(rightTrim, 1).right, bounds(leftTrim, 1).right - 100);
+  assert.equal(bounds(leftTrim, 0).right, bounds(leftTrim, 1).left);
+  assert.equal(bounds(leftTrim, 1).right, bounds(leftTrim, 2).left);
+  assert.equal(timelineOrigin(before), 0);
 });

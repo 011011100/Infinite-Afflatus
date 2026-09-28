@@ -81,7 +81,7 @@ export function SequenceEditor(props: EditorProps) {
 function EditorContent(
   props: EditorProps & { frames: Map<string, ThumbnailFrame> },
 ) {
-  const { assets, frames, blocked, saving } = props;
+  const { assets, frames, blocked } = props;
   const {
     clips,
     playback,
@@ -94,6 +94,8 @@ function EditorContent(
     gesturing,
     setGesturing,
     saveError,
+    pending,
+    reset,
     muted,
     setMuted,
     setSelectedId,
@@ -111,7 +113,7 @@ function EditorContent(
           variant="ghost"
           size="sm"
           onClick={close}
-          disabled={saving || gesturing}
+          disabled={pending || gesturing}
           aria-label="返回画布"
         >
           <ArrowLeft />
@@ -128,7 +130,7 @@ function EditorContent(
           <span role="status" className="mr-3 text-xs text-muted-foreground">
             {blocked
               ? '迁移中，暂不可编辑'
-              : saving
+              : pending
                 ? '正在保存…'
                 : gesturing
                   ? '裁剪中'
@@ -280,7 +282,8 @@ function EditorContent(
         time={time}
         playingIndex={playback.index}
         selected={selected}
-        disabled={disabled}
+        disabled={blocked}
+        reset={reset}
         onSelect={(index) => setSelectedId(clips[index]?.asset.id)}
         onSeek={seek}
         onPreview={preview}
