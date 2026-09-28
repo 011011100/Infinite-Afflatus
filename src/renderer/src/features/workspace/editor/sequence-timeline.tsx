@@ -53,6 +53,11 @@ export function SequenceTimeline({
   const [zoom, setZoom] = useState(1);
   const total = totalDuration(clips);
   const origin = timelineOrigin(clips);
+  // Shrinking scrollWidth at the right edge clamps scrollLeft. That movement
+  // would feed back into the captured drag delta and make the handle run away.
+  // Keep the session's furthest extent, including after release/save.
+  const extent = useRef(origin + total);
+  extent.current = Math.max(extent.current, origin + total);
   const scale =
     Math.max(8, Math.min(100, width / initial.current.duration)) * zoom;
   const gesture = useTrimGesture({
@@ -121,7 +126,7 @@ export function SequenceTimeline({
       </div>
       <div
         ref={scroll}
-        className="overflow-x-auto overscroll-x-contain px-8 pb-4"
+        className="overflow-x-auto overscroll-x-contain px-8 pb-4 [overflow-anchor:none]"
       >
         <div
           ref={track}
@@ -129,7 +134,7 @@ export function SequenceTimeline({
           style={{
             width: Math.max(
               width,
-              (origin + total) * scale,
+              extent.current * scale,
               initial.current.origin * scale + width,
             ),
           }}
@@ -213,7 +218,10 @@ export function SequenceTimeline({
                     seekAt(event.clientX);
                   }}
                 >
-                  <Filmstrip frame={frames.get(clip.asset.id)} />
+                  <Filmstrip
+                    frame={frames.get(clip.asset.id)}
+                    sourceOffset={clip.range.start * scale}
+                  />
                   <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/10 to-black/10" />
                   <span className="absolute inset-x-3 bottom-2 truncate text-[11px] text-white">
                     {String(index + 1).padStart(2, '0')} · {clip.asset.name}
@@ -246,11 +254,12 @@ export function SequenceTimeline({
                       aria-valuenow={clip.range[edge]}
                       aria-valuetext={formatTime(clip.range[edge])}
                       disabled={disabled}
+                      // Outside handles stay disjoint even for a 0.1s clip.
                       className={cn(
                         'absolute top-0 flex h-full w-3 touch-none items-center justify-center bg-primary text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary disabled:cursor-not-allowed',
                         edge === 'start'
-                          ? '-left-1 rounded-l-md cursor-w-resize'
-                          : '-right-1 rounded-r-md cursor-e-resize',
+                          ? '-left-3 rounded-l-md cursor-w-resize'
+                          : '-right-3 rounded-r-md cursor-e-resize',
                       )}
                       onKeyDown={(event) => {
                         if (
