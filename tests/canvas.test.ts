@@ -433,3 +433,106 @@ test('canvas writes honor the migration gate and resume against the current dire
     await f.dispose();
   }
 });
+
+test('trim metadata follows each asset through merges, middle splits and undo', () => {
+  const a = card(100, 3);
+  const [first, middle, last] = a.assetIds;
+  assert.ok(first && middle && last);
+  a.trims = {
+    [first]: { start: 1, end: 3 },
+    [middle]: { start: 2, end: 4 },
+    [last]: { start: 0, end: 2 },
+  };
+  const split = splitSelectedAsset(a, middle, randomUUID);
+  const result = applyCanvasPatch(document([a]), split);
+  result.cards.forEach((part) => {
+    assert.equal(Object.keys(part.trims ?? {}).length, 1);
+    assert.deepEqual(
+      part.trims?.[part.assetIds[0] ?? ''],
+      a.trims?.[part.assetIds[0] ?? ''],
+    );
+  });
+  const [left, center] = result.cards;
+  assert.ok(left && center);
+  const joined = joinCards(left, center, 'left').after[0];
+  assert.deepEqual(joined?.trims, {
+    [first]: a.trims[first],
+    [middle]: a.trims[middle],
+  });
+  assert.deepEqual(applyCanvasPatch(result, reversePatch(split)).cards, [a]);
+});
+
+test('trim edits reject stale ranges and invalid IPC data', () => {
+  const a = card(100);
+  const id = a.assetIds[0];
+  assert.ok(id);
+  const after = { ...a, trims: { [id]: { start: 1, end: 2 } } };
+  const edited = applyCanvasPatch(document([a]), {
+    before: [a],
+    after: [after],
+  });
+  assert.throws(
+    () => applyCanvasPatch(edited, { before: [a], after: [after] }),
+    /已发生变化/,
+  );
+  for (const range of [
+    { start: -1, end: 2 },
+    { start: 2, end: 2 },
+    { start: 3, end: 2 },
+    { start: NaN, end: 2 },
+    { start: 0, end: Infinity },
+  ]) {
+    assert.throws(
+      () =>
+        applyCanvasPatch(document([a]), {
+          before: [a],
+          after: [{ ...a, trims: { [id]: range } }],
+        }),
+      /裁剪/,
+    );
+  }
+  assert.throws(
+    () =>
+      applyCanvasPatch(document([a]), {
+        before: [a],
+        after: [{ ...a, trims: { [randomUUID()]: { start: 0, end: 1 } } }],
+      }),
+    /裁剪/,
+  );
+});
+
+test('trim autosave survives SQLite reopen, supports undo and leaves source bytes unchanged', async () => {
+  const f = await fixture();
+  try {
+    await f.add();
+    const initial = await f.library.projects.open(f.project.id);
+    const a = initial.canvas.cards[0];
+    const source = initial.assets[0];
+    assert.ok(a && source);
+    const sourcePath = join(f.root, f.project.folder, source.relativePath);
+    const bytes = await readFile(sourcePath);
+    const patch = {
+      before: [a],
+      after: [{ ...a, trims: { [source.id]: { start: 0.5, end: 2.5 } } }],
+    };
+    await f.library.projects.patchCanvas(f.project.id, patch);
+    await f.library.close();
+    const reopened = await Library.open(f.data, f.root);
+    try {
+      assert.deepEqual(
+        (await reopened.projects.open(f.project.id)).canvas.cards,
+        patch.after,
+      );
+      assert.deepEqual(await readFile(sourcePath), bytes);
+      const undone = await reopened.projects.patchCanvas(
+        f.project.id,
+        reversePatch(patch),
+      );
+      assert.deepEqual(undone.canvas.cards, [a]);
+    } finally {
+      await reopened.close();
+    }
+  } finally {
+    await f.dispose();
+  }
+});

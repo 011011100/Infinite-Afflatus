@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasPatch } from '../../../../shared/canvas/model';
-import { reversePatch } from '../../../../shared/canvas/operations';
+import {
+  isTrimPatch,
+  reversePatch,
+} from '../../../../shared/canvas/operations';
 import type { ProjectSnapshot } from '../../../../shared/models';
 
 /** One short transaction at a time; failed writes restore the authoritative project. */
@@ -88,6 +91,10 @@ export function useCanvasDocument(
     commit,
     undo,
     redo,
+    undoCardId: history.past.at(-1)?.after[0]?.id,
+    redoCardId: history.future.at(-1)?.before[0]?.id,
+    canUndoTrim: isTrimPatch(history.past.at(-1)),
+    canRedoTrim: isTrimPatch(history.future.at(-1)),
     canUndo: !!history.past.length,
     canRedo: !!history.future.length,
   };

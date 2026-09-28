@@ -1,10 +1,12 @@
 import type { Asset } from '../models';
+import type { ClipTrim } from './trim';
 
 export interface CanvasCard {
   id: string;
   position: { x: number; y: number };
   /** Playback order is explicit, independent of the card's canvas position. */
   assetIds: string[];
+  trims?: Record<string, ClipTrim>;
 }
 
 export interface CanvasDocument {
@@ -53,6 +55,28 @@ export function validateCards(value: unknown): asserts value is CanvasCard[] {
     ) {
       throw new Error('画布卡片数据无效');
     }
+    if (card.trims !== undefined) {
+      if (
+        !card.trims ||
+        typeof card.trims !== 'object' ||
+        Array.isArray(card.trims)
+      )
+        throw new Error('片段裁剪数据无效');
+      for (const [id, trim] of Object.entries(card.trims) as [
+        string,
+        ClipTrim,
+      ][]) {
+        if (
+          !card.assetIds.includes(id) ||
+          !trim ||
+          !Number.isFinite(trim.start) ||
+          !Number.isFinite(trim.end) ||
+          trim.start < 0 ||
+          trim.end <= trim.start
+        )
+          throw new Error('片段裁剪范围无效');
+      }
+    }
     ids.add(card.id);
     for (const id of card.assetIds) {
       if (!validId(id) || assets.has(id))
@@ -68,7 +92,12 @@ export function sameCard(a: CanvasCard, b: CanvasCard): boolean {
     a.position.x === b.position.x &&
     a.position.y === b.position.y &&
     a.assetIds.length === b.assetIds.length &&
-    a.assetIds.every((id, index) => id === b.assetIds[index])
+    a.assetIds.every(
+      (id, index) =>
+        id === b.assetIds[index] &&
+        a.trims?.[id]?.start === b.trims?.[id]?.start &&
+        a.trims?.[id]?.end === b.trims?.[id]?.end,
+    )
   );
 }
 

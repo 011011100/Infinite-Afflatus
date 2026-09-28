@@ -1,0 +1,172 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { isMac } from '@/lib/platform';
+import type {
+  CanvasCard,
+  CanvasPatch,
+} from '../../../../../shared/canvas/model';
+import type { ClipTrim } from '../../../../../shared/canvas/trim';
+import {
+  type Shortcuts,
+  shortcutAction,
+} from '../../../../../shared/interaction/shortcuts';
+import type { Asset } from '../../../../../shared/models';
+import type { ThumbnailFrame } from '../decode-thumbnail';
+import { useSequencePlayback } from '../playback/use-sequence-playback';
+import { buildTimeline, locateTime, totalDuration } from './timeline';
+
+export interface EditorProps {
+  card: CanvasCard;
+  assets: Asset[];
+  projectId: string;
+  projectName: string;
+  blocked: boolean;
+  saving: boolean;
+  shortcuts: Shortcuts;
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
+  commit: (patch: CanvasPatch) => Promise<boolean>;
+  onClose: () => void;
+}
+
+export function useSequenceEditor(
+  props: EditorProps & { frames: Map<string, ThumbnailFrame> },
+) {
+  const { card, assets, frames, blocked, saving } = props;
+  const [draft, setDraft] = useState<Record<string, ClipTrim> | null>(null);
+  const [selectedId, setSelectedId] = useState(assets[0]?.id);
+  const [gesturing, setGesturing] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
+  const localSaving = useRef(false);
+  const durations = useMemo(
+    () => new Map([...frames].map(([id, frame]) => [id, frame.duration ?? 0])),
+    [frames],
+  );
+  const clips = useMemo(
+    () => buildTimeline(assets, durations, draft ?? card.trims),
+    [assets, durations, draft, card.trims],
+  );
+  const playback = useSequencePlayback(props.projectId, clips);
+  const selected = Math.max(
+    0,
+    clips.findIndex((clip) => clip.asset.id === selectedId),
+  );
+  const active = clips[playback.index];
+  const editing = clips[selected];
+  const total = totalDuration(clips);
+  const time = active
+    ? active.offset +
+      Math.max(0, Math.min(active.length, playback.time - active.range.start))
+    : 0;
+  const disabled = blocked || saving || localSaving.current;
+  const close = () => {
+    if (saving || localSaving.current || gesturing) return;
+    playback.stop();
+    props.onClose();
+  };
+  const cancel = () => {
+    setDraft(null);
+    playback.pause();
+  };
+  const seek = (value: number) => {
+    const target = locateTime(clips, value);
+    playback.select(target.index, target.sourceTime);
+  };
+  const preview = (index: number, range: ClipTrim, edge: 'start' | 'end') => {
+    const clip = clips[index];
+    if (!clip) return;
+    setDraft({ ...card.trims, [clip.asset.id]: range });
+    // Show the last retained frame, not a frame just outside the outgoing edge.
+    playback.select(
+      index,
+      edge === 'start' ? range.start : Math.max(range.start, range.end - 0.035),
+    );
+  };
+  const save = async (index: number, range: ClipTrim) => {
+    if (blocked || saving || localSaving.current) {
+      cancel();
+      return;
+    }
+    const clip = clips[index];
+    if (!clip) return;
+    const original = card.trims?.[clip.asset.id] ?? {
+      start: 0,
+      end: clip.duration,
+    };
+    if (original.start === range.start && original.end === range.end) {
+      setDraft(null);
+      return;
+    }
+    localSaving.current = true;
+    setSaveError(null);
+    const saved = await props.commit({
+      before: [card],
+      after: [{ ...card, trims: { ...card.trims, [clip.asset.id]: range } }],
+    });
+    localSaving.current = false;
+    setDraft(null);
+    if (!saved) setSaveError('裁剪未保存，已恢复已保存的范围。请重试。');
+  };
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      if (event.key === 'Escape') {
+        if (gesturing) return;
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (
+        event.target instanceof Element &&
+        event.target.closest('input,textarea,select,[contenteditable="true"]')
+      )
+        return;
+      const action = shortcutAction(event, props.shortcuts, isMac);
+      if (!action || action === 'split') return;
+      if (
+        event.key === ' ' &&
+        event.target instanceof Element &&
+        event.target.closest('button') &&
+        !event.target.closest('[role="slider"]')
+      )
+        return;
+      event.preventDefault();
+      if (action === 'play' && !gesturing) playback.toggle();
+      if (!disabled && !gesturing) {
+        if (action === 'undo' && props.canUndo) {
+          playback.pause();
+          props.undo();
+        }
+        if (action === 'redo' && props.canRedo) {
+          playback.pause();
+          props.redo();
+        }
+      }
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  });
+  return {
+    clips,
+    playback,
+    selected,
+    active,
+    editing,
+    total,
+    time,
+    disabled,
+    gesturing,
+    setGesturing,
+    saveError,
+    muted,
+    setMuted,
+    setSelectedId,
+    close,
+    cancel,
+    seek,
+    preview,
+    save,
+  };
+}

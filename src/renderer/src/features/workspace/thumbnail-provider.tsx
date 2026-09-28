@@ -4,9 +4,8 @@ import { decodeThumbnail, type ThumbnailFrame } from './decode-thumbnail';
 import { mediaUrl } from './media';
 import { ThumbnailCache } from './thumbnail-cache';
 
-const ThumbnailContext = createContext<ThumbnailCache<ThumbnailFrame> | null>(
-  null,
-);
+export const ThumbnailContext =
+  createContext<ThumbnailCache<ThumbnailFrame> | null>(null);
 
 export function ThumbnailProvider({ children }: { children: ReactNode }) {
   const [cache] = useState(() => new ThumbnailCache<ThumbnailFrame>());

@@ -3,6 +3,7 @@ import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SnapTarget } from '../../../../shared/canvas/operations';
+import type { ClipTrim } from '../../../../shared/canvas/trim';
 import type { Asset } from '../../../../shared/models';
 import { VideoThumbnail } from './video-thumbnail';
 
@@ -11,6 +12,7 @@ export type VideoCardNode = Node<
     assets: Asset[];
     projectId: string;
     width: number;
+    trims: Record<string, ClipTrim> | undefined;
     activeAssetId: string | null;
     snapSide: SnapTarget['side'] | null;
     play: (id: string) => void;
@@ -48,6 +50,7 @@ export function VideoCard({
           <VideoThumbnail
             key={asset.id}
             asset={asset}
+            trim={data.trims?.[asset.id]}
             projectId={data.projectId}
             index={index}
             active={selected === true && data.activeAssetId === asset.id}

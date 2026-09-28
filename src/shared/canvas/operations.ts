@@ -42,7 +42,13 @@ export function joinCards(
     side === 'left'
       ? [...moving.assetIds, ...target.assetIds]
       : [...target.assetIds, ...moving.assetIds];
-  const combined = { ...target, assetIds };
+  const combined = {
+    ...target,
+    assetIds,
+    ...((moving.trims || target.trims) && {
+      trims: { ...moving.trims, ...target.trims },
+    }),
+  };
   // Keep the target's opposite edge stationary when adding to the left.
   if (side === 'left')
     combined.position = {
@@ -73,6 +79,11 @@ export function splitSelectedAsset(
       const part = {
         id: index === 0 ? card.id : createId(),
         assetIds,
+        ...(card.trims && {
+          trims: Object.fromEntries(
+            Object.entries(card.trims).filter(([id]) => assetIds.includes(id)),
+          ),
+        }),
         position: { x, y: card.position.y },
       };
       x += cardWidth(part) + 48;
@@ -83,4 +94,21 @@ export function splitSelectedAsset(
 
 export function reversePatch(patch: CanvasPatch): CanvasPatch {
   return { before: patch.after, after: patch.before };
+}
+
+/** Editor undo must not undo a canvas regroup while its sequence is open. */
+export function isTrimPatch(patch: CanvasPatch | undefined): boolean {
+  const before = patch?.before[0];
+  const after = patch?.after[0];
+  return (
+    !!before &&
+    !!after &&
+    patch?.before.length === 1 &&
+    patch.after.length === 1 &&
+    before.id === after.id &&
+    before.position.x === after.position.x &&
+    before.position.y === after.position.y &&
+    before.assetIds.length === after.assetIds.length &&
+    before.assetIds.every((id, index) => id === after.assetIds[index])
+  );
 }

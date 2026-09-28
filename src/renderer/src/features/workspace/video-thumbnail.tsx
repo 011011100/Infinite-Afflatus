@@ -1,6 +1,7 @@
 import { VideoOff } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { type ClipTrim, clipRange } from '../../../../shared/canvas/trim';
 import type { Asset } from '../../../../shared/models';
 import { formatDuration } from './media';
 import { useThumbnail } from './thumbnail-provider';
@@ -8,6 +9,7 @@ import { useLongPressSplit } from './use-long-press-split';
 
 export function VideoThumbnail({
   asset,
+  trim,
   projectId,
   index,
   active,
@@ -17,6 +19,7 @@ export function VideoThumbnail({
   split,
 }: {
   asset: Asset;
+  trim: ClipTrim | undefined;
   projectId: string;
   index: number;
   active: boolean;
@@ -79,7 +82,14 @@ export function VideoThumbnail({
           {String(index + 1).padStart(2, '0')} · {asset.name}
         </span>
         <span className="shrink-0 tabular-nums">
-          {frame?.duration == null ? '' : formatDuration(frame.duration)}
+          {frame?.duration == null
+            ? ''
+            : formatDuration(
+                trim
+                  ? clipRange(frame.duration, trim).end -
+                      clipRange(frame.duration, trim).start
+                  : frame.duration,
+              )}
         </span>
       </div>
       {active && grouped && (

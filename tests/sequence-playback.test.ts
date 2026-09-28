@@ -15,6 +15,8 @@ class Video extends EventTarget {
   controls = false;
   inert = false;
   src = '';
+  currentTime = 0;
+  seeking = false;
   error = null;
   plays = 0;
   playFailure: Error | undefined;
@@ -159,7 +161,7 @@ test('failed jumps keep the displayed frame, allow retry and recover controls', 
   assert.equal(state()?.index, 0);
   assert.ok(state()?.error);
   assert.equal(videos[0].style.opacity, '1');
-  assert.equal(videos[0].controls, true);
+  assert.equal(videos[0].controls, false);
   const retry = playback.select(1);
   loads[2]?.ready();
   await retry;
@@ -199,7 +201,7 @@ test('closing during loading prevents playback and state changes after dismissal
   assert.ok(videos.every((video) => video.paused && !video.src));
 });
 
-test('blocked autoplay leaves a ready frame and usable native play controls', async () => {
+test('blocked autoplay leaves a ready frame and usable external playback controls', async () => {
   const { videos, loads, playback, state } = setup();
   videos[0].playFailure = new DOMException('Not allowed', 'NotAllowedError');
   const first = playback.select(0);
@@ -207,7 +209,7 @@ test('blocked autoplay leaves a ready frame and usable native play controls', as
   await first;
   await flush();
   assert.match(state()?.error ?? '', /自动播放/);
-  assert.equal(videos[0].controls, true);
+  assert.equal(videos[0].controls, false);
   assert.equal(videos[0].style.opacity, '1');
   playback.dispose();
 });
@@ -226,5 +228,65 @@ test('jumping backwards re-prepares a previously played next clip from its start
   assert.equal(state()?.index, 1);
   assert.equal(loads.at(-1)?.source, 'orange');
   assert.equal(loads.filter((load) => load.source === 'orange').length, 2);
+  playback.dispose();
+});
+
+test('trimmed ranges seek before display, advance at out-point and finish at the final trimmed end', async () => {
+  const videos = [new Video(), new Video()] as const;
+  let state: PlaybackState | undefined;
+  const seeked: number[] = [];
+  const playback = new SequencePlayback(
+    videos as unknown as [HTMLVideoElement, HTMLVideoElement],
+    ['a', 'b'],
+    (next) => {
+      state = next;
+    },
+    async (video, source) => {
+      video.src = source;
+    },
+    async (video, time) => {
+      seeked.push(time);
+      video.currentTime = time;
+    },
+  );
+  playback.setRanges([
+    { start: 1, end: 2 },
+    { start: 2, end: 3 },
+  ]);
+  await playback.select(0);
+  await flush();
+  assert.equal(videos[0].currentTime, 1);
+  assert.ok(seeked.includes(2));
+  videos[0].currentTime = 2;
+  videos[0].dispatchEvent(new Event('timeupdate'));
+  await flush();
+  assert.equal(state?.index, 1);
+  assert.equal(videos[0].paused, true);
+  assert.equal(videos[1].currentTime, 2);
+  videos[1].currentTime = 3;
+  videos[1].dispatchEvent(new Event('timeupdate'));
+  assert.equal(state?.playing, false);
+  assert.equal(state?.time, 3);
+  assert.equal(videos[1].paused, true);
+  playback.toggle();
+  await flush();
+  assert.equal(state?.index, 0);
+  assert.equal(state?.playing, true);
+  playback.dispose();
+});
+
+test('scrubbing stays paused and a pause during a pending seek prevents later autoplay', async () => {
+  const { playback, videos, loads, state } = setup();
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  assert.equal(state()?.playing, false);
+  assert.equal(videos[0].plays, 0);
+  const next = playback.select(1);
+  playback.pause();
+  loads[1]?.ready();
+  await next;
+  assert.equal(state()?.playing, false);
+  assert.ok(videos.every((video) => video.paused));
   playback.dispose();
 });

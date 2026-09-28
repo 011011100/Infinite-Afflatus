@@ -16,9 +16,9 @@ import { DRAG_THRESHOLD } from '../../../../shared/interaction/long-press';
 import type { InteractionSettings } from '../../../../shared/interaction/settings';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
+import { SequenceEditor } from './editor/sequence-editor';
 import { HoldFeedbackProvider } from './hold-feedback';
 import { useCardMorph } from './motion/use-card-morph';
-import { SequencePlayer } from './sequence-player';
 import { ThumbnailProvider } from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
@@ -65,7 +65,7 @@ function CanvasContent({
     cardId: string;
     assetId: string | null;
   } | null>(null);
-  const [playing, setPlaying] = useState<Asset[] | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<
     Record<string, { width: number; height: number }>
   >({});
@@ -89,14 +89,10 @@ function CanvasContent({
       const card = cards.find((item) => item.id === id);
       if (card) {
         selectCard(id);
-        setPlaying(
-          card.assetIds
-            .map((assetId) => assets.get(assetId))
-            .filter((asset): asset is Asset => !!asset),
-        );
+        setPlaying(id);
       }
     },
-    [assets, cards, selectCard],
+    [cards, selectCard],
   );
   const selectedCard = cards.find((card) => card.id === selection?.cardId);
   const selectedAssetId = selection?.assetId;
@@ -143,7 +139,7 @@ function CanvasContent({
     disabled:
       blocked || inactive || document.saving || !!drag.drag || !!playing,
     cancel: () => {
-      if (!drag.cancel()) setSelection(null);
+      if (!playing && !drag.cancel()) setSelection(null);
     },
     actions: {
       play: selectedCard ? () => play(selectedCard.id) : null,
@@ -180,6 +176,7 @@ function CanvasContent({
             .filter((asset): asset is Asset => !!asset),
           projectId: snapshot.project.id,
           width: cardWidth(card),
+          trims: card.trims,
           activeAssetId:
             selection?.cardId === card.id ? selection.assetId : null,
           snapSide:
@@ -202,6 +199,14 @@ function CanvasContent({
       splitAsset,
       canHold,
     ],
+  );
+  const playingCard = cards.find((card) => card.id === playing);
+  const playingAssets = useMemo(
+    () =>
+      playingCard?.assetIds
+        .map((id) => assets.get(id))
+        .filter((asset): asset is Asset => !!asset) ?? [],
+    [playingCard?.assetIds, assets],
   );
   const snapTarget = cards.find(
     (card) => card.id === drag.drag?.snap?.targetId,
@@ -336,9 +341,23 @@ function CanvasContent({
           <p className="text-sm">导入一段视频，开始你的创作</p>
         </div>
       )}
-      {playing && (
-        <SequencePlayer
-          assets={playing}
+      {playingCard && (
+        <SequenceEditor
+          card={playingCard}
+          assets={playingAssets}
+          projectName={snapshot.project.name}
+          blocked={blocked}
+          saving={document.saving}
+          shortcuts={interactions.shortcuts}
+          canUndo={
+            document.canUndoTrim && document.undoCardId === playingCard.id
+          }
+          canRedo={
+            document.canRedoTrim && document.redoCardId === playingCard.id
+          }
+          undo={document.undo}
+          redo={document.redo}
+          commit={document.commit}
           projectId={snapshot.project.id}
           onClose={() => setPlaying(null)}
         />
