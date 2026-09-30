@@ -2,6 +2,7 @@ import type { PointerEventHandler } from 'react';
 import { cn } from '@/lib/utils';
 import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
 import { formatTime, type TimelineClip } from './timeline';
+import { useTrimBoundaryFeedback } from './use-trim-boundary-feedback';
 
 type Edge = 'start' | 'end';
 
@@ -11,6 +12,7 @@ export function TrimHandle({
   width,
   disabled,
   dragging,
+  pressure,
   onChange,
   onPointerDown,
   onLostPointerCapture,
@@ -20,6 +22,7 @@ export function TrimHandle({
   width: number;
   disabled: boolean;
   dragging: boolean;
+  pressure: number;
   onChange: (range: ClipTrim) => void;
   onPointerDown: PointerEventHandler<HTMLButtonElement>;
   onLostPointerCapture: PointerEventHandler<HTMLButtonElement>;
@@ -28,8 +31,10 @@ export function TrimHandle({
   // short clips draggable; each target stops at the midpoint, never overlapping.
   const slop = 8;
   const inset = Math.min(8, width / 4);
+  const feedback = useTrimBoundaryFeedback(pressure);
   return (
     <button
+      ref={feedback.root}
       type="button"
       role="slider"
       aria-label={edge === 'start' ? '片段起点' : '片段终点'}
@@ -46,7 +51,7 @@ export function TrimHandle({
       disabled={disabled}
       className={cn(
         'group/trim absolute inset-y-0 flex touch-none items-center bg-transparent outline-none transition-opacity duration-150 ease-out focus-visible:transition-none disabled:cursor-not-allowed motion-reduce:transition-none',
-        dragging
+        dragging || feedback.settling
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0 group-hover/clip:pointer-events-auto group-hover/clip:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
         edge === 'start' ? 'cursor-w-resize' : 'cursor-e-resize',
@@ -73,14 +78,39 @@ export function TrimHandle({
       onLostPointerCapture={onLostPointerCapture}
     >
       <span
+        ref={feedback.glow}
         aria-hidden="true"
-        className="pointer-events-none absolute h-6 rounded-full bg-white/90 shadow-[0_1px_4px_#0006] group-hover/trim:bg-white group-focus-visible/trim:ring-2 group-focus-visible/trim:ring-primary"
+        className={cn(
+          'pointer-events-none absolute inset-y-0 from-white/70 via-white/20 to-transparent opacity-0',
+          edge === 'start'
+            ? 'rounded-l-md bg-linear-to-r'
+            : 'rounded-r-md bg-linear-to-l',
+        )}
         style={{
-          width: Math.min(3, width / 2),
+          width: Math.min(20, width / 2),
+          [edge === 'start' ? 'left' : 'right']: slop,
+        }}
+      />
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 32"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute h-8 overflow-visible text-white/90 drop-shadow-[0_1px_2px_#0008] group-hover/trim:text-white group-focus-visible/trim:rounded-full group-focus-visible/trim:ring-2 group-focus-visible/trim:ring-primary"
+        style={{
+          width: Math.min(16, width / 2),
           [edge === 'start' ? 'left' : 'right']: slop + inset,
           transform: `translateX(${edge === 'start' ? '-50%' : '50%'})`,
         }}
-      />
+      >
+        <path
+          ref={feedback.grip}
+          d="M8 5 C8 11 8 21 8 27"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      </svg>
     </button>
   );
 }

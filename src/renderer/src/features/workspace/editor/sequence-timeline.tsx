@@ -235,6 +235,12 @@ export function SequenceTimeline({
                     width={clipWidth}
                     disabled={disabled}
                     dragging={gesture.draggingIndex === index}
+                    pressure={
+                      gesture.boundary?.index === index &&
+                      gesture.boundary.edge === edge
+                        ? gesture.boundary.pressure
+                        : 0
+                    }
                     onChange={(range) => {
                       onSelect(index);
                       onPreview(index, range, edge);

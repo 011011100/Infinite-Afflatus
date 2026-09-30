@@ -7,6 +7,11 @@ import {
 } from 'react';
 import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
 import type { TimelineClip } from './timeline';
+import {
+  advanceTrimDrag,
+  type TrimDrag,
+  trimBoundaryPressure,
+} from './trim-drag';
 
 type Edge = 'start' | 'end';
 interface Gesture {
@@ -19,6 +24,7 @@ interface Gesture {
   edge: Edge;
   clip: TimelineClip;
   value: ClipTrim;
+  drag: TrimDrag;
 }
 interface Options {
   clips: TimelineClip[];
@@ -60,13 +66,29 @@ export function useTrimGesture(options: Options) {
         current.x +
         latest.current.scrollLeft() -
         current.scroll;
-      current.value = changeTrim(
+      current.x = event.clientX;
+      current.scroll = latest.current.scrollLeft();
+      const previousPressure = trimBoundaryPressure(current.drag);
+      current.drag = advanceTrimDrag(
+        current.drag,
+        delta,
+        current.scale,
         current.clip.range,
         current.edge,
-        current.clip.range[current.edge] + delta / current.scale,
         current.clip.duration,
       );
-      latest.current.preview(current.index, current.value, current.edge);
+      const value = changeTrim(
+        current.clip.range,
+        current.edge,
+        current.drag.time,
+        current.clip.duration,
+      );
+      // Pulling against a boundary should not repeatedly seek/decode the video.
+      if (value[current.edge] !== current.value[current.edge]) {
+        current.value = value;
+        latest.current.preview(current.index, value, current.edge);
+      }
+      if (previousPressure !== trimBoundaryPressure(current.drag)) render();
     };
     const up = (event: PointerEvent) => {
       if (gesture.current?.pointer !== event.pointerId) return;
@@ -106,6 +128,13 @@ export function useTrimGesture(options: Options) {
   return {
     dragging: gesture.current !== null,
     draggingIndex: gesture.current?.index ?? null,
+    boundary: gesture.current
+      ? {
+          index: gesture.current.index,
+          edge: gesture.current.edge,
+          pressure: trimBoundaryPressure(gesture.current.drag),
+        }
+      : null,
     start: (
       event: ReactPointerEvent<HTMLElement>,
       index: number,
@@ -128,9 +157,12 @@ export function useTrimGesture(options: Options) {
         edge,
         clip,
         value: clip.range,
+        drag: { time: clip.range[edge], boundary: 0, pull: 0 },
       };
       render();
       latest.current.active(true);
+      // Preview once even when the first movement pushes an existing limit.
+      latest.current.preview(index, clip.range, edge);
     },
     lostCapture: (event: ReactPointerEvent<HTMLElement>) => {
       if (gesture.current?.pointer === event.pointerId) finish(true);
