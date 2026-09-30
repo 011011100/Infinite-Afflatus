@@ -31,6 +31,7 @@ import type { ShotWorkspace } from '../../../../shared/generation/workspace';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { GenerationGroupCard } from './generation-group';
 import { MaterialCard } from './material-node';
+import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
@@ -234,6 +235,7 @@ export function MaterialCanvas({
               onChange((current) => ({ ...current, viewport }))
             }
           >
+            <MaterialSelectionFrame dragging={selection.box !== null} />
             <Background
               variant={BackgroundVariant.Dots}
               gap={24}

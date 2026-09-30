@@ -25,9 +25,10 @@ export function GenerationGroupCard({
 }: NodeProps<GenerationGroupNode>) {
   return (
     <div
+      data-generation-group-frame
       className={cn(
-        'h-full rounded-2xl border border-primary/30 bg-primary/5 shadow-sm',
-        selected && 'ring-1 ring-primary/70',
+        'h-full rounded-2xl border-2 border-primary/60 bg-primary/5 shadow-sm',
+        selected && 'border-primary',
       )}
     >
       <header className="material-handle flex h-10 items-center gap-2 px-4 text-xs text-primary">
