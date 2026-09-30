@@ -106,7 +106,10 @@ export function App() {
           {state.error ? '项目库尚未打开' : '正在打开项目库…'}
         </main>
       ) : project ? (
-        <CanvasErrorBoundary key={project.project.id} onHome={state.home}>
+        <CanvasErrorBoundary
+          key={`canvas:${project.project.id}`}
+          onHome={state.home}
+        >
           <ProjectCanvas
             snapshot={project}
             blocked={library.writeBlocked}
@@ -133,7 +136,8 @@ export function App() {
       )}
       {generating && project && library && (
         <GenerationPage
-          key={project.project.id}
+          // Portals still share this React sibling list with the canvas.
+          key={`generation:${project.project.id}`}
           snapshot={project}
           jobs={library.jobs}
           blocked={library.writeBlocked}
