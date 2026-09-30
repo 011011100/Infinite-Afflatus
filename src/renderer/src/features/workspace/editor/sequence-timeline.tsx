@@ -10,6 +10,7 @@ import {
   timelineOrigin,
   totalDuration,
 } from './timeline';
+import { TimelineToolbar } from './timeline-toolbar';
 import { useTrimGesture } from './use-trim-gesture';
 
 type Edge = 'start' | 'end';
@@ -22,6 +23,8 @@ export function SequenceTimeline({
   selected,
   disabled,
   reset,
+  restoreDisabled,
+  onRestore,
   onSelect,
   onSeek,
   onPreview,
@@ -36,6 +39,8 @@ export function SequenceTimeline({
   selected: number;
   disabled: boolean;
   reset: number;
+  restoreDisabled: boolean;
+  onRestore: () => void;
   onSelect: (index: number) => void;
   onSeek: (time: number) => void;
   onPreview: (index: number, range: ClipTrim, edge: Edge) => void;
@@ -104,26 +109,15 @@ export function SequenceTimeline({
       className="shrink-0 border-t border-border bg-background pb-5"
       aria-label="组合时间轨道"
     >
-      <div className="flex h-11 items-center justify-between gap-3 px-8 text-xs text-muted-foreground">
-        <span>
-          {clips.length} 个片段 <span className="mx-2 text-border">/</span>{' '}
-          {formatTime(total)}
-        </span>
-        <label className="flex items-center gap-2">
-          轨道缩放
-          <input
-            aria-label="轨道缩放"
-            type="range"
-            min="0.5"
-            max="6"
-            step="0.1"
-            value={zoom}
-            disabled={dragging}
-            onChange={(event) => setZoom(Number(event.target.value))}
-            className="w-24 accent-primary"
-          />
-        </label>
-      </div>
+      <TimelineToolbar
+        count={clips.length}
+        duration={total}
+        zoom={zoom}
+        zoomDisabled={dragging}
+        onZoomChange={setZoom}
+        restoreDisabled={restoreDisabled}
+        onRestore={onRestore}
+      />
       <div
         ref={scroll}
         className="overflow-x-auto overscroll-x-contain px-8 pb-4 [overflow-anchor:none]"

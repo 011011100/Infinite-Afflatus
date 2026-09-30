@@ -249,33 +249,6 @@ function EditorContent(
           {muted ? <VolumeX /> : <Volume2 />}
         </Button>
       </div>
-      <div className="flex h-11 shrink-0 items-center gap-3 border-t border-border px-8 text-xs">
-        <span className="min-w-0 truncate font-medium">
-          {String(selected + 1).padStart(2, '0')} · {editing.asset.name}
-        </span>
-        <span className="whitespace-nowrap tabular-nums text-muted-foreground">
-          {formatTime(editing.range.start)} — {formatTime(editing.range.end)}
-        </span>
-        <span className="ml-auto whitespace-nowrap text-muted-foreground">
-          保留 {formatTime(editing.length)}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={
-            disabled ||
-            gesturing ||
-            (editing.range.start === 0 &&
-              editing.range.end === editing.duration)
-          }
-          onClick={() => {
-            playback.pause();
-            void save(selected, { start: 0, end: editing.duration });
-          }}
-        >
-          恢复原片
-        </Button>
-      </div>
       <SequenceTimeline
         clips={clips}
         frames={frames}
@@ -284,6 +257,15 @@ function EditorContent(
         selected={selected}
         disabled={blocked}
         reset={reset}
+        restoreDisabled={
+          disabled ||
+          gesturing ||
+          (editing.range.start === 0 && editing.range.end === editing.duration)
+        }
+        onRestore={() => {
+          playback.pause();
+          save(selected, { start: 0, end: editing.duration });
+        }}
         onSelect={(index) => setSelectedId(clips[index]?.asset.id)}
         onSeek={seek}
         onPreview={preview}
