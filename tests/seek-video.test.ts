@@ -55,3 +55,12 @@ test('a ready frame at the same position is reused without another seek', async 
   await seekVideo(video.asVideo(), 0, new AbortController().signal);
   assert.equal(video.seeking, false);
 });
+
+test('a seeked event at zero is rejected when the retained in-point was requested', async () => {
+  const video = new Seekable();
+  const waiting = seekVideo(video.asVideo(), 20, new AbortController().signal);
+  const rejected = assert.rejects(waiting, /指定时间/);
+  video.time = 0;
+  video.finish();
+  await rejected;
+});

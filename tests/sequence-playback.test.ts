@@ -17,6 +17,7 @@ class Video extends EventTarget {
   src = '';
   currentTime = 0;
   seeking = false;
+  readyState = 4;
   error = null;
   plays = 0;
   playFailure: Error | undefined;

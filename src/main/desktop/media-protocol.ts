@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { net, protocol } from 'electron';
+import { protocol } from 'electron';
+import { mediaFileResponse } from '../media/file-response';
 import { isId } from '../projects/project-service';
 import { safeFile } from '../storage/files';
 import type { Library } from '../storage/library';
@@ -42,10 +42,7 @@ export function serveProjectMedia(library: Library): void {
           ? await library.proxies.file(projectId, assetId)
           : await safeFile(root, asset.relativePath);
       if (!file) return new Response(null, { status: 404 });
-      return net.fetch(pathToFileURL(file).toString(), {
-        method: request.method,
-        headers: request.headers,
-      });
+      return await mediaFileResponse(file, request);
     } catch {
       return new Response(null, { status: 404 });
     }

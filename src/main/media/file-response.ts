@@ -1,0 +1,86 @@
+import { open } from 'node:fs/promises';
+import { extname } from 'node:path';
+import { Readable } from 'node:stream';
+
+type ByteRange = { start: number; end: number };
+
+/** Single byte ranges used by Chromium for metadata, playback and seeking. */
+function byteRange(header: string, size: number): ByteRange | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (!match[1] && !match[2]) || size === 0) return null;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  const end = match[2] ? Number(match[2]) : size - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start >= size ||
+    end < start
+  )
+    return null;
+  return { start, end: Math.min(end, size - 1) };
+}
+
+const contentTypes: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+};
+
+/** Serve an already-authorized file without buffering the whole video in memory. */
+export async function mediaFileResponse(
+  file: string,
+  request: Request,
+): Promise<Response> {
+  const handle = await open(file, 'r');
+  let streaming = false;
+  try {
+    const { size } = await handle.stat();
+    const headers = new Headers({
+      'Accept-Ranges': 'bytes',
+      'Content-Type':
+        contentTypes[extname(file).toLowerCase()] ?? 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    });
+    // HEAD describes the full resource; Range only applies to GET.
+    const requested =
+      request.method === 'GET' ? request.headers.get('range') : null;
+    const range = requested ? byteRange(requested, size) : null;
+    if (requested && !range) {
+      headers.set('Content-Range', `bytes */${size}`);
+      return new Response(null, { status: 416, headers });
+    }
+    headers.set(
+      'Content-Length',
+      String(range ? range.end - range.start + 1 : size),
+    );
+    if (range)
+      headers.set('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+    const status = range ? 206 : 200;
+    if (request.method === 'HEAD' || size === 0)
+      return new Response(null, { status, headers });
+
+    request.signal.throwIfAborted();
+    const stream = handle.createReadStream({
+      ...range,
+      autoClose: true,
+      signal: request.signal,
+    });
+    streaming = true;
+    // The web stream also closes the file when Chromium cancels an old seek.
+    const body = Readable.toWeb(stream, {
+      strategy: {
+        highWaterMark: 64 * 1024,
+        size: (chunk: Uint8Array) => chunk.byteLength,
+      },
+    }) as ReadableStream<Uint8Array>;
+    return new Response(body, { status, headers });
+  } finally {
+    if (!streaming) await handle.close();
+  }
+}
