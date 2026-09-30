@@ -215,8 +215,15 @@ export function SequenceTimeline({
                     }}
                     onPointerDown={(event) => {
                       if (disabled || event.button !== 0 || dragging) return;
+                      const rect = track.current?.getBoundingClientRect();
+                      if (!rect) return;
                       onSelect(index);
-                      gesture.start(event, index, edge);
+                      gesture.start(
+                        event,
+                        index,
+                        edge,
+                        rect.left + left + (edge === 'end' ? clipWidth : 0),
+                      );
                     }}
                     onLostPointerCapture={gesture.lostCapture}
                   />

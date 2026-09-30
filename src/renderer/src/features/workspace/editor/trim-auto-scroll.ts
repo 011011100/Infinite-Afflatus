@@ -1,6 +1,15 @@
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import { advanceTrimDrag, type TrimDrag } from './trim-drag';
 
+/** Follow a fast-moving trim edge immediately, independently of the idle speed. */
+export function trimFollowDelta(
+  edgeX: number,
+  left: number,
+  right: number,
+): number {
+  return edgeX - Math.max(left, Math.min(right, edgeX));
+}
+
 /** Symmetric hot zones; a stationary pointer continues scrolling after a drag. */
 export function edgeScrollSpeed(
   x: number,

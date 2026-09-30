@@ -7,7 +7,11 @@ import {
 } from 'react';
 import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
 import type { TimelineClip } from './timeline';
-import { edgeScrollSpeed, trimScrollDelta } from './trim-auto-scroll';
+import {
+  edgeScrollSpeed,
+  trimFollowDelta,
+  trimScrollDelta,
+} from './trim-auto-scroll';
 import {
   advanceTrimDrag,
   type TrimDrag,
@@ -22,6 +26,7 @@ interface Gesture {
   x: number;
   pointerX: number;
   initialX: number;
+  edgeX: number;
   moved: boolean;
   scroll: number;
   scale: number;
@@ -75,13 +80,11 @@ export function useTrimGesture(options: Options) {
     const advance = () => {
       const current = gesture.current;
       if (!current) return;
-      const delta =
-        current.pointerX -
-        current.x +
-        latest.current.scrollLeft() -
-        current.scroll;
+      const scroll = latest.current.scrollLeft();
+      const scrollDelta = scroll - current.scroll;
+      const delta = current.pointerX - current.x + scrollDelta;
       current.x = current.pointerX;
-      current.scroll = latest.current.scrollLeft();
+      current.scroll = scroll;
       const previousPressure = trimBoundaryPressure(current.drag);
       current.drag = advanceTrimDrag(
         current.drag,
@@ -97,6 +100,27 @@ export function useTrimGesture(options: Options) {
         current.drag.time,
         current.clip.duration,
       );
+      // Track the actual trimmed edge, not the cursor (which can leave the
+      // window or keep moving after reaching a source-media limit).
+      current.edgeX +=
+        (value[current.edge] - current.value[current.edge]) * current.scale -
+        scrollDelta;
+      const bounds = latest.current.bounds();
+      if (bounds) {
+        const follow = trimFollowDelta(
+          current.edgeX,
+          bounds.left + 16,
+          bounds.right - 16,
+        );
+        if (Math.abs(follow) > 0.001) {
+          latest.current.panBy(follow);
+          const followedScroll = latest.current.scrollLeft();
+          current.edgeX -= followedScroll - current.scroll;
+          // This scroll only reveals the already-applied trim. Consuming it
+          // again on the next frame would trim twice and push the edge away.
+          current.scroll = followedScroll;
+        }
+      }
       // Pulling against a boundary should not repeatedly seek/decode the video.
       if (value[current.edge] !== current.value[current.edge]) {
         current.value = value;
@@ -194,6 +218,7 @@ export function useTrimGesture(options: Options) {
       event: ReactPointerEvent<HTMLElement>,
       index: number,
       edge: Edge,
+      edgeX: number,
     ) => {
       if (latest.current.disabled || event.button !== 0 || gesture.current)
         return;
@@ -208,6 +233,7 @@ export function useTrimGesture(options: Options) {
         x: event.clientX,
         pointerX: event.clientX,
         initialX: event.clientX,
+        edgeX,
         moved: false,
         scroll: latest.current.scrollLeft(),
         scale: latest.current.scale,

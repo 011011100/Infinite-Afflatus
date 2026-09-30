@@ -2,12 +2,30 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   edgeScrollSpeed,
+  trimFollowDelta,
   trimScrollDelta,
 } from '../src/renderer/src/features/workspace/editor/trim-auto-scroll';
 import {
   advanceTrimDrag,
   type TrimDrag,
 } from '../src/renderer/src/features/workspace/editor/trim-drag';
+
+test('fast trim movements are revealed immediately on either side without a speed cap', () => {
+  for (const [left, right] of [
+    [16, 984],
+    [416, 984],
+    [16, 304],
+  ] as const) {
+    assert.equal(trimFollowDelta((left + right) / 2, left, right), 0);
+    for (const overflow of [1, 30, 300, 2000]) {
+      for (const edgeX of [left - overflow, right + overflow]) {
+        const pan = trimFollowDelta(edgeX, left, right);
+        assert.equal(Math.abs(pan), overflow);
+        assert.ok(edgeX - pan >= left && edgeX - pan <= right);
+      }
+    }
+  }
+});
 
 test('both edge zones accelerate symmetrically and stop in the interior', () => {
   assert.equal(edgeScrollSpeed(500, 20, 980), 0);
