@@ -18,7 +18,8 @@
     "check": "biome check . && pnpm typecheck",
     "format": "biome format --write .",
     "doctor:media": "node scripts/check-media-tools.mjs",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:text-drag": "electron tests/browser/text-block-drag.cjs"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

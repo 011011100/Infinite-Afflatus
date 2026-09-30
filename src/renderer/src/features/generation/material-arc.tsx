@@ -85,7 +85,6 @@ export function MaterialArc({
   return (
     <section className="material-arc" aria-label="参考素材">
       <div className="material-arc-heading">
-        <span>参考素材</span>
         <span className="text-muted-foreground">
           {nodes.length ? `${index + 1} / ${nodes.length}` : '0'}
         </span>

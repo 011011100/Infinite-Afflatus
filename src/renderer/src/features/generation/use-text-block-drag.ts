@@ -63,6 +63,11 @@ export function useTextBlockDrag(
       return;
     cancel();
     const block = event.currentTarget;
+    // This surface stays mounted while React moves the keyed blocks between slots.
+    // Capturing on the block itself loses capture as soon as its DOM order changes.
+    const capture = surface.current;
+    const scroller = list.current;
+    if (!capture || !scroller) return;
     const rect = block.getBoundingClientRect();
     const start = { x: event.clientX, y: event.clientY };
     let pointer = start;
@@ -71,6 +76,19 @@ export function useTextBlockDrag(
     let nextOrder = [...latest.current.ids];
     let frame = 0;
     let previous = performance.now();
+    const holdUntil = previous + LONG_PRESS_MS;
+    const initialScroll = scroller.scrollTop;
+    const center = block.offsetTop + block.offsetHeight / 2;
+    // Keep the original slot centers. Preview transforms and reordered DOM positions
+    // must not change the threshold under a stationary pointer.
+    const slots = [
+      ...scroller.querySelectorAll<HTMLElement>('[data-text-block]'),
+    ]
+      .filter((el) => el.dataset.textBlock !== id)
+      .map((el) => ({
+        id: el.dataset.textBlock ?? '',
+        center: el.offsetTop + el.offsetHeight / 2,
+      }));
     gesture.current.start(event.pointerId, start.x, start.y, previous);
     setHolding(id);
     const update = () => {
@@ -91,17 +109,11 @@ export function useTextBlockDrag(
         outside,
       });
       if (outside) return;
-      const others = [
-        ...scroller.querySelectorAll<HTMLElement>('[data-text-block]'),
-      ].filter((el) => el.dataset.textBlock !== id);
-      const before = others.find((el) => {
-        const box = el.getBoundingClientRect();
-        return pointer.y < box.top + box.height / 2;
-      });
-      const next = others.map((el) => el.dataset.textBlock ?? '');
-      const index = before
-        ? next.indexOf(before.dataset.textBlock ?? '')
-        : next.length;
+      const draggedCenter =
+        center + pointer.y - start.y + scroller.scrollTop - initialScroll;
+      const before = slots.findIndex((slot) => draggedCenter < slot.center);
+      const next = slots.map((slot) => slot.id);
+      const index = before === -1 ? next.length : before;
       next.splice(index, 0, id);
       if (next.join('|') !== nextOrder.join('|')) {
         nextOrder = next;
@@ -133,15 +145,25 @@ export function useTextBlockDrag(
       }
       frame = requestAnimationFrame(tick);
     };
-    const timer = setTimeout(() => {
-      if (!gesture.current.lift(performance.now())) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const lift = () => {
+      if (!gesture.current.active) return;
+      if (!gesture.current.lift(performance.now())) {
+        // Timers can fire fractionally before the threshold; keep the hold alive.
+        timer = setTimeout(
+          lift,
+          Math.max(1, Math.ceil(holdUntil - performance.now())),
+        );
+        return;
+      }
       active = true;
       setHolding(null);
-      block.setPointerCapture(event.pointerId);
+      capture.setPointerCapture(event.pointerId);
       setOrder(nextOrder);
       update();
       frame = requestAnimationFrame(tick);
-    }, LONG_PRESS_MS);
+    };
+    timer = setTimeout(lift, LONG_PRESS_MS);
     const move = (next: PointerEvent) => {
       if (next.pointerId !== event.pointerId) return;
       pointer = { x: next.clientX, y: next.clientY };
@@ -189,7 +211,7 @@ export function useTextBlockDrag(
     window.addEventListener('blur', cancel);
     window.addEventListener('resize', cancel);
     window.addEventListener('keydown', key, true);
-    block.addEventListener('lostpointercapture', cancel);
+    capture.addEventListener('lostpointercapture', cancel);
     cleanup.current = () => {
       clearTimeout(timer);
       cancelAnimationFrame(frame);
@@ -199,9 +221,9 @@ export function useTextBlockDrag(
       window.removeEventListener('blur', cancel);
       window.removeEventListener('resize', cancel);
       window.removeEventListener('keydown', key, true);
-      block.removeEventListener('lostpointercapture', cancel);
-      if (block.hasPointerCapture(event.pointerId))
-        block.releasePointerCapture(event.pointerId);
+      capture.removeEventListener('lostpointercapture', cancel);
+      if (capture.hasPointerCapture(event.pointerId))
+        capture.releasePointerCapture(event.pointerId);
     };
   };
   return { lifted, order, holding, begin, cancel };
