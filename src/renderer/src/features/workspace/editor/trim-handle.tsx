@@ -10,6 +10,7 @@ export function TrimHandle({
   edge,
   width,
   disabled,
+  dragging,
   onChange,
   onPointerDown,
   onLostPointerCapture,
@@ -18,6 +19,7 @@ export function TrimHandle({
   edge: Edge;
   width: number;
   disabled: boolean;
+  dragging: boolean;
   onChange: (range: ClipTrim) => void;
   onPointerDown: PointerEventHandler<HTMLButtonElement>;
   onLostPointerCapture: PointerEventHandler<HTMLButtonElement>;
@@ -43,7 +45,10 @@ export function TrimHandle({
       aria-valuetext={formatTime(clip.range[edge])}
       disabled={disabled}
       className={cn(
-        'group/trim absolute inset-y-0 flex touch-none items-center bg-transparent outline-none disabled:cursor-not-allowed',
+        'group/trim absolute inset-y-0 flex touch-none items-center bg-transparent outline-none transition-opacity duration-150 ease-out focus-visible:transition-none disabled:cursor-not-allowed motion-reduce:transition-none',
+        dragging
+          ? 'pointer-events-auto opacity-100'
+          : 'pointer-events-none opacity-0 group-hover/clip:pointer-events-auto group-hover/clip:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
         edge === 'start' ? 'cursor-w-resize' : 'cursor-e-resize',
       )}
       style={{

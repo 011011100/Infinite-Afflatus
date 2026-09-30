@@ -197,10 +197,11 @@ export function SequenceTimeline({
                 key={clip.asset.id}
                 data-timeline-clip={clip.asset.id}
                 className={cn(
-                  'absolute top-10 h-16 rounded-md',
+                  'group/clip absolute top-10 h-16 rounded-md hover:z-20 focus-within:z-20',
                   selected === index
                     ? 'z-10 ring-2 ring-primary'
                     : 'ring-1 ring-border',
+                  gesture.draggingIndex === index && 'z-30',
                 )}
                 style={{ left, width: clipWidth }}
               >
@@ -226,24 +227,27 @@ export function SequenceTimeline({
                     />
                   )}
                 </button>
-                {selected === index &&
-                  (['start', 'end'] as const).map((edge) => (
-                    <TrimHandle
-                      key={edge}
-                      clip={clip}
-                      edge={edge}
-                      width={clipWidth}
-                      disabled={disabled}
-                      onChange={(range) => {
-                        onPreview(index, range, edge);
-                        onCommit(index, range);
-                      }}
-                      onPointerDown={(event) =>
-                        gesture.start(event, index, edge)
-                      }
-                      onLostPointerCapture={gesture.lostCapture}
-                    />
-                  ))}
+                {(['start', 'end'] as const).map((edge) => (
+                  <TrimHandle
+                    key={edge}
+                    clip={clip}
+                    edge={edge}
+                    width={clipWidth}
+                    disabled={disabled}
+                    dragging={gesture.draggingIndex === index}
+                    onChange={(range) => {
+                      onSelect(index);
+                      onPreview(index, range, edge);
+                      onCommit(index, range);
+                    }}
+                    onPointerDown={(event) => {
+                      if (disabled || event.button !== 0 || dragging) return;
+                      onSelect(index);
+                      gesture.start(event, index, edge);
+                    }}
+                    onLostPointerCapture={gesture.lostCapture}
+                  />
+                ))}
               </div>
             );
           })}

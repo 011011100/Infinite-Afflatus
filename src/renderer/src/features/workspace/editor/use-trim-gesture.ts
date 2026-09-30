@@ -36,14 +36,14 @@ export function useTrimGesture(options: Options) {
   const latest = useRef(options);
   latest.current = options;
   const gesture = useRef<Gesture | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const finish = useRef((cancel: boolean) => {
     const current = gesture.current;
     if (!current) return;
     gesture.current = null;
     if (current.target.hasPointerCapture(current.pointer))
       current.target.releasePointerCapture(current.pointer);
-    setDragging(false);
+    setDraggingIndex(null);
     latest.current.active(false);
     if (cancel) latest.current.cancel();
     else latest.current.commit(current.index, current.value);
@@ -101,7 +101,8 @@ export function useTrimGesture(options: Options) {
     if (options.disabled || options.reset) finish(true);
   }, [options.disabled, options.reset, finish]);
   return {
-    dragging,
+    dragging: draggingIndex !== null,
+    draggingIndex,
     start: (
       event: ReactPointerEvent<HTMLElement>,
       index: number,
@@ -125,7 +126,7 @@ export function useTrimGesture(options: Options) {
         clip,
         value: clip.range,
       };
-      setDragging(true);
+      setDraggingIndex(index);
       latest.current.active(true);
     },
     lostCapture: (event: ReactPointerEvent<HTMLElement>) => {
