@@ -157,6 +157,8 @@ export class MigrationService {
           '/assets',
           '/assets/videos',
           '/assets/images',
+          '/assets/audio',
+          '/assets/text',
           '/cache',
         ]) {
           const path = `${project.folder}${part}`;

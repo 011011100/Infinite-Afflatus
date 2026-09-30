@@ -18,6 +18,7 @@ export interface GeneratedResult {
   resultKey: string;
   name: string;
   kind: SaveJob['kind'];
+  usage?: SaveJob['usage'];
   extension: string;
 }
 

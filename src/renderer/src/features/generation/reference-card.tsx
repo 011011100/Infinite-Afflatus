@@ -1,0 +1,171 @@
+import { FileText, Film, ImageIcon, Music2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
+import type { Asset } from '../../../../shared/models';
+import { mediaUrl } from '../workspace/media';
+import { message } from './use-generation-draft';
+
+export const referenceLabels = {
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+  text: '文本',
+};
+export const referenceIcons = {
+  image: ImageIcon,
+  video: Film,
+  audio: Music2,
+  text: FileText,
+};
+
+export function ReferenceCard({
+  projectId,
+  asset,
+  label,
+  onRemove,
+  onInsert,
+}: {
+  projectId: string;
+  asset: Asset;
+  label: string;
+  onRemove: () => void;
+  onInsert: (text: string) => void;
+}) {
+  const Icon = referenceIcons[asset.kind];
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const url = mediaUrl(projectId, asset.id);
+  useEffect(() => {
+    if (asset.kind !== 'text') return;
+    let active = true;
+    void window.desktop
+      .readReferenceText(projectId, asset.id)
+      .then((value) => {
+        if (active) setText(value);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(message(reason));
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId, asset.id, asset.kind]);
+
+  return (
+    <article className="generation-reference group rounded-xl border bg-card shadow-sm">
+      <div className="flex items-center gap-2 px-3 py-2.5 text-xs">
+        <Icon className="size-3.5 text-muted-foreground" />
+        <span className="font-medium">{label}</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          aria-label={`移除${label}`}
+          title="从当前草稿移除"
+          onClick={onRemove}
+        >
+          <X />
+        </Button>
+      </div>
+      <div className="mx-2 overflow-hidden rounded-lg bg-secondary">
+        {asset.kind === 'image' && (
+          <img
+            src={url}
+            alt={asset.name}
+            loading="lazy"
+            className="max-h-56 min-h-24 w-full object-contain"
+            onError={() => setError('图片无法预览，请检查文件')}
+          />
+        )}
+        {/* User-provided reference media has no app-authored caption track. */}
+        {asset.kind === 'video' && (
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            playsInline
+            className="max-h-56 min-h-32 w-full bg-foreground"
+            onError={() => setError('视频无法预览，请检查格式')}
+          >
+            <track kind="captions" />
+          </video>
+        )}
+        {asset.kind === 'audio' && (
+          <div className="flex flex-col items-center gap-4 py-5">
+            <Music2 className="size-9 text-primary/70" />
+            <audio
+              src={url}
+              controls
+              preload="metadata"
+              className="h-9 w-full"
+              onError={() => setError('音频无法预览，请检查格式')}
+            >
+              <track kind="captions" />
+            </audio>
+          </div>
+        )}
+        {asset.kind === 'text' && (
+          <button
+            type="button"
+            className="w-full p-4 text-left text-xs leading-6 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            onClick={() => setExpanded(true)}
+            aria-label={`查看${label}`}
+          >
+            <span className="line-clamp-5 whitespace-pre-wrap break-words">
+              {text === null ? '读取文本…' : text || '空文本文件'}
+            </span>
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="px-3 pt-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2.5">
+        <p
+          className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+          title={asset.name}
+        >
+          {asset.name}
+        </p>
+        {asset.kind === 'text' && (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!text}
+            onClick={() => text && onInsert(text)}
+          >
+            插入正文
+          </Button>
+        )}
+      </div>
+      {expanded && (
+        <Modal
+          title={asset.name}
+          onClose={() => setExpanded(false)}
+          error={error}
+        >
+          <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-7">
+            {text}
+          </pre>
+          <div className="mt-5 flex justify-end">
+            <Button
+              disabled={!text}
+              onClick={() => {
+                if (text) {
+                  onInsert(text);
+                  setExpanded(false);
+                }
+              }}
+            >
+              插入正文
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </article>
+  );
+}

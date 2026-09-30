@@ -1,4 +1,8 @@
 import type { CanvasPatch } from './canvas/model';
+import type {
+  GenerationDraft,
+  ReferenceImportResult,
+} from './generation/draft';
 import type { InteractionSettings } from './interaction/settings';
 import type {
   LibraryState,
@@ -8,6 +12,10 @@ import type {
 } from './models';
 
 export const IPC_CHANNELS = {
+  getGenerationDraft: 'generation:draft',
+  saveGenerationDraft: 'generation:save-draft',
+  importReferences: 'generation:import-references',
+  readReferenceText: 'generation:read-text',
   appInfo: 'app:info',
   saveInteractions: 'settings:interactions',
   state: 'library:state',
@@ -39,6 +47,13 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  getGenerationDraft: (projectId: string) => Promise<GenerationDraft>;
+  saveGenerationDraft: (
+    projectId: string,
+    draft: GenerationDraft,
+  ) => Promise<GenerationDraft>;
+  importReferences: (projectId: string) => Promise<ReferenceImportResult>;
+  readReferenceText: (projectId: string, assetId: string) => Promise<string>;
   getAppInfo: () => Promise<AppInfo>;
   saveInteractions: (settings: InteractionSettings) => Promise<void>;
   getLibrary: () => Promise<LibraryState>;

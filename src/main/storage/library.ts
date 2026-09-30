@@ -2,6 +2,7 @@ import { lstat, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { GenerationService } from '../generation/generation-service';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { ProjectService } from '../projects/project-service';
@@ -15,6 +16,7 @@ import { WriteGate } from './write-gate';
 /** Main-process composition root. Feature modules depend on narrow services, never on Electron. */
 export class Library {
   readonly projects: ProjectService;
+  readonly generation: GenerationService;
   readonly interactions: InteractionSettingsStore;
   readonly staging: Staging;
   readonly saves: SaveQueue;
@@ -34,6 +36,7 @@ export class Library {
   ) {
     this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
+    this.generation = new GenerationService(this.projects, store, this.gate);
     this.proxies = new ProxyService(this.projects, this.gate, store, userData);
     this.staging = new Staging(
       join(userData, 'staging'),

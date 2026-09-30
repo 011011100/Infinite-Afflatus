@@ -20,7 +20,8 @@ export interface Asset {
   relativePath: string;
   size: number;
   sha256: string;
-  kind: 'video' | 'image';
+  kind: 'video' | 'image' | 'audio' | 'text';
+  usage?: 'reference';
 }
 
 export interface ProjectSnapshot {
@@ -38,6 +39,7 @@ export interface SaveJob {
   resultKey: string;
   name: string;
   kind: Asset['kind'];
+  usage?: Asset['usage'];
   extension: string;
   status: SaveStatus;
   size: number;

@@ -66,7 +66,12 @@ export class SaveQueue {
     const database = await this.projects.databasePath(job.projectId);
     const projectRoot = dirname(database);
     const existingAsset = snapshot.assets.find((asset) => asset.id === job.id);
-    const category = job.kind === 'video' ? 'videos' : 'images';
+    const category = {
+      video: 'videos',
+      image: 'images',
+      audio: 'audio',
+      text: 'text',
+    }[job.kind];
     let relativePath =
       existingAsset?.relativePath ??
       job.outputRelativePath ??
@@ -108,10 +113,7 @@ export class SaveQueue {
       if (!sameContent(await fingerprint(this.staging.path(job.id)), job))
         throw new Error('暂存结果校验失败');
       // These directories are created with the project; verify parents before writing.
-      for (const part of [
-        'assets',
-        `assets/${job.kind === 'video' ? 'videos' : 'images'}`,
-      ]) {
+      for (const part of ['assets', `assets/${category}`]) {
         const directory = inside(projectRoot, part);
         await mkdir(directory).catch((error: NodeJS.ErrnoException) => {
           if (error.code !== 'EEXIST') throw error;
@@ -137,6 +139,7 @@ export class SaveQueue {
       size: job.size,
       sha256: job.sha256,
       kind: job.kind,
+      ...(job.usage ? { usage: job.usage } : {}),
     };
     this.store.putProject(recordAsset(database, job.resultKey, asset));
     job.status = 'saved';

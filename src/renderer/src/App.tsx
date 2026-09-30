@@ -1,8 +1,9 @@
-import { ArrowLeft, Settings2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Settings2, Sparkles, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { GenerationPage } from '@/features/generation/generation-page';
 import { ProjectHome } from '@/features/projects/project-home';
 import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
@@ -15,6 +16,7 @@ export function App() {
   useInputMethod();
   const state = useLibrary();
   const [settings, setSettings] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
   const { library, project, busy, run } = state;
   return (
@@ -47,6 +49,12 @@ export function App() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {project && (
+            <Button onClick={() => setGenerating(true)}>
+              <Sparkles />
+              生成视频
+            </Button>
+          )}
           {project && (
             <Button
               variant="outline"
@@ -103,7 +111,7 @@ export function App() {
             snapshot={project}
             blocked={library.writeBlocked}
             interactions={library.interactions}
-            inactive={settings || newName !== null}
+            inactive={settings || newName !== null || generating}
             report={state.report}
           />
         </CanvasErrorBoundary>
@@ -121,6 +129,15 @@ export function App() {
           error={state.error}
           run={run}
           onClose={() => setSettings(false)}
+        />
+      )}
+      {generating && project && library && (
+        <GenerationPage
+          key={project.project.id}
+          snapshot={project}
+          jobs={library.jobs}
+          blocked={library.writeBlocked}
+          onClose={() => setGenerating(false)}
         />
       )}
       {newName !== null && project && (

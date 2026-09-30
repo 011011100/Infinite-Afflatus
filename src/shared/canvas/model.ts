@@ -115,7 +115,9 @@ export function reconcileCanvas(
     throw new Error('画布版本不受支持');
   validateCards(canvas.cards);
   const videos = new Set(
-    assets.filter((asset) => asset.kind === 'video').map((asset) => asset.id),
+    assets
+      .filter((asset) => asset.kind === 'video' && asset.usage !== 'reference')
+      .map((asset) => asset.id),
   );
   const placed = new Set(canvas.cards.flatMap((card) => card.assetIds));
   if ([...placed].some((id) => !videos.has(id)))

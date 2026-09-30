@@ -5,6 +5,10 @@ import {
   type CanvasPatch,
   reconcileCanvas,
 } from '../../shared/canvas/model';
+import {
+  emptyGenerationDraft,
+  type GenerationDraft,
+} from '../../shared/generation/draft';
 import type {
   Asset,
   ProjectSnapshot,
@@ -81,6 +85,35 @@ function setValue(db: DatabaseSync, key: string, data: unknown): void {
 
 export function readProject(file: string): ProjectSnapshot {
   return withProject(file, false, snapshot);
+}
+
+function generationDraft(db: DatabaseSync): GenerationDraft {
+  const row = db
+    .prepare("SELECT value FROM metadata WHERE key = 'generation-draft'")
+    .get();
+  return row
+    ? (JSON.parse(String(row.value)) as GenerationDraft)
+    : emptyGenerationDraft();
+}
+
+export function readGenerationDraft(file: string): GenerationDraft {
+  return withProject(file, false, generationDraft);
+}
+
+export function writeGenerationDraft(
+  file: string,
+  draft: GenerationDraft,
+): { draft: GenerationDraft; project: ProjectSummary } {
+  return withProject(file, true, (db) => {
+    if (generationDraft(db).revision !== draft.revision)
+      throw new Error('生成草稿已在其他页面更新，请重新打开后编辑');
+    const saved = { ...draft, revision: draft.revision + 1 };
+    const project = value<ProjectSummary>(db, 'project');
+    project.updatedAt = new Date().toISOString();
+    setValue(db, 'generation-draft', saved);
+    setValue(db, 'project', project);
+    return { draft: saved, project };
+  });
 }
 
 /** Optional derived-media metadata keeps existing version-1 projects readable. */
