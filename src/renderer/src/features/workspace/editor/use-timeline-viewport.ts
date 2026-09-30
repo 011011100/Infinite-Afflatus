@@ -1,6 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { boundScroll, timelineLayout } from './timeline-layout';
 
+export interface TrimScrollReserve {
+  before: number;
+  after: number;
+}
+
 /** Keep a session-local coordinate origin, separate from source-media timestamps. */
 export function useTimelineViewport(
   duration: number,
@@ -10,12 +15,14 @@ export function useTimelineViewport(
   const scroll = useRef<HTMLDivElement>(null);
   const initialDuration = useRef(duration);
   const base = useRef(trimOrigin);
+  const heldBase = useRef<number | null>(null);
   const previous = useRef<{
     base: number;
     scale: number;
     origin: number;
   } | null>(null);
   const [viewport, setViewport] = useState(900);
+  const [visibleLeft, setVisibleLeft] = useState(0);
   const [heldWidth, setHeldWidth] = useState<number | null>(null);
   base.current = Math.min(base.current, trimOrigin);
   const origin = trimOrigin - base.current;
@@ -45,14 +52,14 @@ export function useTimelineViewport(
 
   const constrainScroll = () => {
     const element = scroll.current;
-    if (!element || heldWidth !== null) return;
-    const bounded = boundScroll(
-      element.scrollLeft,
-      layout.minScroll,
-      layout.maxScroll,
-    );
+    if (!element) return;
+    const bounded =
+      heldWidth !== null
+        ? element.scrollLeft
+        : boundScroll(element.scrollLeft, layout.minScroll, layout.maxScroll);
     if (Math.abs(element.scrollLeft - bounded) > 0.5)
       element.scrollLeft = bounded;
+    setVisibleLeft(element.scrollLeft);
   };
   useLayoutEffect(() => {
     const element = scroll.current;
@@ -74,6 +81,7 @@ export function useTimelineViewport(
         layout.minScroll,
         layout.maxScroll,
       );
+    setVisibleLeft(element.scrollLeft);
   }, [origin, layout.scale, layout.minScroll, layout.maxScroll, heldWidth]);
 
   const reveal = (time: number) => {
@@ -92,8 +100,40 @@ export function useTimelineViewport(
     origin,
     scale: layout.scale,
     trackWidth: layout.width,
+    visibleLeft,
+    visibleWidth: viewport,
     constrainScroll,
     reveal,
-    hold: (active: boolean) => setHeldWidth(active ? layout.width : null),
+    // Rebasing adds matching pixels to scrollLeft. It must not count as a drag.
+    position: () =>
+      (scroll.current?.scrollLeft ?? 0) +
+      (previous.current?.base ?? base.current) * layout.scale,
+    bounds: () => scroll.current?.getBoundingClientRect(),
+    panBy: (delta: number) => {
+      const element = scroll.current;
+      if (element)
+        element.scrollLeft = boundScroll(
+          element.scrollLeft + delta,
+          0,
+          layout.maxScroll,
+        );
+    },
+    hold: (active: boolean, reserve?: TrimScrollReserve, cancelled = false) => {
+      if (active) {
+        heldBase.current = base.current;
+        base.current -= reserve?.before ?? 0;
+        setHeldWidth(
+          layout.width +
+            ((reserve?.before ?? 0) + (reserve?.after ?? 0)) * layout.scale,
+        );
+      } else {
+        if (heldBase.current !== null)
+          base.current = cancelled
+            ? heldBase.current
+            : Math.min(heldBase.current, trimOrigin);
+        heldBase.current = null;
+        setHeldWidth(null);
+      }
+    },
   };
 }

@@ -239,6 +239,7 @@ function EditorContent(
         }}
       />
       <SequenceTimeline
+        projectId={props.projectId}
         clips={clips}
         frames={frames}
         time={time}

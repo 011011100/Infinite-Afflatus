@@ -4,6 +4,7 @@ import { type KeyboardEvent, useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import type { ThumbnailFrame } from '../decode-thumbnail';
+import { mediaUrl } from '../media';
 import { Filmstrip } from './filmstrip';
 import {
   formatTime,
@@ -13,6 +14,7 @@ import {
 } from './timeline';
 import { TimelineRuler } from './timeline-ruler';
 import { TrimHandle } from './trim-handle';
+import { useFilmstripCache } from './use-filmstrip-cache';
 import { useRulerSeek } from './use-ruler-seek';
 import { useTimelineViewport } from './use-timeline-viewport';
 import { useTrimGesture } from './use-trim-gesture';
@@ -20,6 +22,7 @@ import { useTrimGesture } from './use-trim-gesture';
 type Edge = 'start' | 'end';
 
 export function SequenceTimeline({
+  projectId,
   clips,
   frames,
   time,
@@ -36,6 +39,7 @@ export function SequenceTimeline({
   onCancel,
   onGesture,
 }: {
+  projectId: string;
   clips: TimelineClip[];
   frames: Map<string, ThumbnailFrame>;
   time: number;
@@ -53,6 +57,7 @@ export function SequenceTimeline({
   onGesture: (active: boolean) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
+  const filmstripCache = useFilmstripCache();
   const total = totalDuration(clips);
   const viewport = useTimelineViewport(total, timelineOrigin(clips), zoom);
   const { scroll, origin, scale, trackWidth } = viewport;
@@ -61,12 +66,14 @@ export function SequenceTimeline({
     scale,
     disabled,
     reset,
-    scrollLeft: () => scroll.current?.scrollLeft ?? 0,
+    scrollLeft: viewport.position,
+    bounds: viewport.bounds,
+    panBy: viewport.panBy,
     preview: onPreview,
     commit: onCommit,
     cancel: onCancel,
-    active: (active) => {
-      viewport.hold(active);
+    active: (active, reserve, cancelled) => {
+      viewport.hold(active, reserve, cancelled);
       onGesture(active);
     },
   });
@@ -136,6 +143,7 @@ export function SequenceTimeline({
           {clips.map((clip, index) => {
             const left = (origin + clip.offset) * scale;
             const clipWidth = Math.max(2, clip.length * scale - 2);
+            const frame = frames.get(clip.asset.id)?.image;
             return (
               <div
                 key={clip.asset.id}
@@ -158,8 +166,14 @@ export function SequenceTimeline({
                   }}
                 >
                   <Filmstrip
-                    frame={frames.get(clip.asset.id)}
-                    sourceOffset={clip.range.start * scale}
+                    cache={filmstripCache}
+                    source={mediaUrl(projectId, clip.asset.id)}
+                    start={clip.range.start}
+                    end={clip.range.end}
+                    scale={scale}
+                    aspect={frame ? frame.width / frame.height : 16 / 9}
+                    visibleLeft={viewport.visibleLeft - left}
+                    visibleWidth={viewport.visibleWidth}
                   />
                   {playingIndex === index && (
                     <span

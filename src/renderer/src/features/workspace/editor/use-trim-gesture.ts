@@ -7,17 +7,22 @@ import {
 } from 'react';
 import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
 import type { TimelineClip } from './timeline';
+import { edgeScrollSpeed, trimScrollDelta } from './trim-auto-scroll';
 import {
   advanceTrimDrag,
   type TrimDrag,
   trimBoundaryPressure,
 } from './trim-drag';
+import type { TrimScrollReserve } from './use-timeline-viewport';
 
 type Edge = 'start' | 'end';
 interface Gesture {
   pointer: number;
   target: HTMLElement;
   x: number;
+  pointerX: number;
+  initialX: number;
+  moved: boolean;
   scroll: number;
   scale: number;
   index: number;
@@ -32,10 +37,16 @@ interface Options {
   disabled: boolean;
   reset: number;
   scrollLeft: () => number;
+  bounds: () => { left: number; right: number } | undefined;
+  panBy: (delta: number) => void;
   preview: (index: number, range: ClipTrim, edge: Edge) => void;
   commit: (index: number, range: ClipTrim) => void;
   cancel: () => void;
-  active: (active: boolean) => void;
+  active: (
+    active: boolean,
+    reserve?: TrimScrollReserve,
+    cancelled?: boolean,
+  ) => void;
 }
 
 /** A pointer owns its edge until release; acknowledgements never replace its baseline. */
@@ -43,6 +54,7 @@ export function useTrimGesture(options: Options) {
   const latest = useRef(options);
   latest.current = options;
   const gesture = useRef<Gesture | null>(null);
+  const animation = useRef(0);
   // The captured pointer is the source of truth. A separate state value can
   // survive Fast Refresh with an old type and falsely lock further gestures.
   const [, render] = useReducer((revision: number) => revision + 1, 0);
@@ -50,23 +62,25 @@ export function useTrimGesture(options: Options) {
     const current = gesture.current;
     if (!current) return;
     gesture.current = null;
+    cancelAnimationFrame(animation.current);
+    animation.current = 0;
     if (current.target.hasPointerCapture(current.pointer))
       current.target.releasePointerCapture(current.pointer);
     render();
-    latest.current.active(false);
+    latest.current.active(false, undefined, cancel);
     if (cancel) latest.current.cancel();
     else latest.current.commit(current.index, current.value);
   }, []);
   useLayoutEffect(() => {
-    const move = (event: PointerEvent) => {
+    const advance = () => {
       const current = gesture.current;
-      if (!current || event.pointerId !== current.pointer) return;
+      if (!current) return;
       const delta =
-        event.clientX -
+        current.pointerX -
         current.x +
         latest.current.scrollLeft() -
         current.scroll;
-      current.x = event.clientX;
+      current.x = current.pointerX;
       current.scroll = latest.current.scrollLeft();
       const previousPressure = trimBoundaryPressure(current.drag);
       current.drag = advanceTrimDrag(
@@ -89,6 +103,47 @@ export function useTrimGesture(options: Options) {
         latest.current.preview(current.index, value, current.edge);
       }
       if (previousPressure !== trimBoundaryPressure(current.drag)) render();
+    };
+    let lastFrame = 0;
+    const tick = (now: number) => {
+      animation.current = 0;
+      const current = gesture.current;
+      if (!current) return;
+      const elapsed = Math.min(32, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      const bounds = latest.current.bounds();
+      if (bounds && current.moved) {
+        const delta =
+          (edgeScrollSpeed(
+            current.pointerX,
+            bounds.left + 16,
+            bounds.right - 16,
+          ) *
+            elapsed) /
+          1000;
+        const allowed = trimScrollDelta(
+          current.drag,
+          delta,
+          current.scale,
+          current.clip.range,
+          current.edge,
+          current.clip.duration,
+        );
+        if (Math.abs(allowed) > 0.001) latest.current.panBy(allowed);
+        advance();
+      }
+      animation.current = requestAnimationFrame(tick);
+    };
+    const move = (event: PointerEvent) => {
+      const current = gesture.current;
+      if (!current || event.pointerId !== current.pointer) return;
+      current.pointerX = event.clientX;
+      current.moved ||= Math.abs(event.clientX - current.initialX) >= 3;
+      advance();
+      if (current.moved && !animation.current) {
+        lastFrame = performance.now();
+        animation.current = requestAnimationFrame(tick);
+      }
     };
     const up = (event: PointerEvent) => {
       if (gesture.current?.pointer !== event.pointerId) return;
@@ -151,6 +206,9 @@ export function useTrimGesture(options: Options) {
         pointer: event.pointerId,
         target: event.currentTarget,
         x: event.clientX,
+        pointerX: event.clientX,
+        initialX: event.clientX,
+        moved: false,
         scroll: latest.current.scrollLeft(),
         scale: latest.current.scale,
         index,
@@ -160,7 +218,10 @@ export function useTrimGesture(options: Options) {
         drag: { time: clip.range[edge], boundary: 0, pull: 0 },
       };
       render();
-      latest.current.active(true);
+      latest.current.active(true, {
+        before: edge === 'start' ? clip.range.start : 0,
+        after: edge === 'end' ? clip.duration - clip.range.end : 0,
+      });
       // Preview once even when the first movement pushes an existing limit.
       latest.current.preview(index, clip.range, edge);
     },
