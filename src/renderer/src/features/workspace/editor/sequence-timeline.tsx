@@ -218,10 +218,6 @@ export function SequenceTimeline({
                     frame={frames.get(clip.asset.id)}
                     sourceOffset={clip.range.start * scale}
                   />
-                  <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/10 to-black/10" />
-                  <span className="absolute inset-x-3 bottom-2 truncate text-[11px] text-white">
-                    {String(index + 1).padStart(2, '0')} · {clip.asset.name}
-                  </span>
                   {playingIndex === index && (
                     <span
                       role="img"
