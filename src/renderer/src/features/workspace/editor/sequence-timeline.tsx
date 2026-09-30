@@ -5,11 +5,11 @@ import type { ThumbnailFrame } from '../decode-thumbnail';
 import { Filmstrip } from './filmstrip';
 import {
   formatTime,
-  rulerStep,
   type TimelineClip,
   timelineOrigin,
   totalDuration,
 } from './timeline';
+import { TimelineRuler } from './timeline-ruler';
 import { TrimHandle } from './trim-handle';
 import { useTrimGesture } from './use-trim-gesture';
 
@@ -62,6 +62,11 @@ export function SequenceTimeline({
   extent.current = Math.max(extent.current, origin + total);
   const scale =
     Math.max(8, Math.min(100, width / initial.current.duration)) * zoom;
+  const trackWidth = Math.max(
+    width,
+    extent.current * scale,
+    initial.current.origin * scale + width,
+  );
   const gesture = useTrimGesture({
     clips,
     scale,
@@ -91,11 +96,6 @@ export function SequenceTimeline({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const step = rulerStep(scale);
-  const ticks = Array.from(
-    { length: Math.floor(total / step) + 1 },
-    (_, index) => index * step,
-  );
   const seekAt = (x: number) => {
     const rect = track.current?.getBoundingClientRect();
     if (rect)
@@ -110,13 +110,7 @@ export function SequenceTimeline({
         <div
           ref={track}
           className="relative h-32 touch-none select-none"
-          style={{
-            width: Math.max(
-              width,
-              extent.current * scale,
-              initial.current.origin * scale + width,
-            ),
-          }}
+          style={{ width: trackWidth }}
         >
           <div
             role="slider"
@@ -161,17 +155,11 @@ export function SequenceTimeline({
               }
             }}
           >
-            {ticks.map((tick) => (
-              <span
-                key={tick}
-                className="pointer-events-none absolute bottom-0 h-6 border-l border-border text-[10px] tabular-nums text-muted-foreground"
-                style={{ left: (origin + tick) * scale }}
-              >
-                <span className="relative -top-1 ml-1.5">
-                  {tick < 60 ? `${tick}s` : formatTime(tick)}
-                </span>
-              </span>
-            ))}
+            <TimelineRuler
+              duration={Math.max(total, trackWidth / scale - origin)}
+              origin={origin}
+              scale={scale}
+            />
           </div>
           {clips.map((clip, index) => {
             const left = (origin + clip.offset) * scale;
