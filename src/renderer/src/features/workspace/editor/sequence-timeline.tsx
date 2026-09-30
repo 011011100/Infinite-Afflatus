@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
+import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { Filmstrip } from './filmstrip';
 import {
@@ -11,6 +11,7 @@ import {
   totalDuration,
 } from './timeline';
 import { TimelineToolbar } from './timeline-toolbar';
+import { TrimHandle } from './trim-handle';
 import { useTrimGesture } from './use-trim-gesture';
 
 type Edge = 'start' | 'end';
@@ -190,6 +191,7 @@ export function SequenceTimeline({
           </div>
           {clips.map((clip, index) => {
             const left = (origin + clip.offset) * scale;
+            const clipWidth = Math.max(2, clip.length * scale - 2);
             return (
               <div
                 key={clip.asset.id}
@@ -200,7 +202,7 @@ export function SequenceTimeline({
                     ? 'z-10 ring-2 ring-primary'
                     : 'ring-1 ring-border',
                 )}
-                style={{ left, width: Math.max(2, clip.length * scale - 2) }}
+                style={{ left, width: clipWidth }}
               >
                 <button
                   type="button"
@@ -230,47 +232,13 @@ export function SequenceTimeline({
                 </button>
                 {selected === index &&
                   (['start', 'end'] as const).map((edge) => (
-                    <button
+                    <TrimHandle
                       key={edge}
-                      type="button"
-                      role="slider"
-                      aria-label={edge === 'start' ? '片段起点' : '片段终点'}
-                      aria-valuemin={
-                        edge === 'start'
-                          ? 0
-                          : clip.range.start + Math.min(0.1, clip.duration)
-                      }
-                      aria-valuemax={
-                        edge === 'end'
-                          ? clip.duration
-                          : clip.range.end - Math.min(0.1, clip.duration)
-                      }
-                      aria-valuenow={clip.range[edge]}
-                      aria-valuetext={formatTime(clip.range[edge])}
+                      clip={clip}
+                      edge={edge}
+                      width={clipWidth}
                       disabled={disabled}
-                      // Outside handles stay disjoint even for a 0.1s clip.
-                      className={cn(
-                        'absolute top-0 flex h-full w-3 touch-none items-center justify-center bg-primary text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary disabled:cursor-not-allowed',
-                        edge === 'start'
-                          ? '-left-3 rounded-l-md cursor-w-resize'
-                          : '-right-3 rounded-r-md cursor-e-resize',
-                      )}
-                      onKeyDown={(event) => {
-                        if (
-                          event.key !== 'ArrowLeft' &&
-                          event.key !== 'ArrowRight'
-                        )
-                          return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const range = changeTrim(
-                          clip.range,
-                          edge,
-                          clip.range[edge] +
-                            (event.key === 'ArrowLeft' ? -1 : 1) *
-                              (event.shiftKey ? 1 : 0.1),
-                          clip.duration,
-                        );
+                      onChange={(range) => {
                         onPreview(index, range, edge);
                         onCommit(index, range);
                       }}
@@ -278,9 +246,7 @@ export function SequenceTimeline({
                         gesture.start(event, index, edge)
                       }
                       onLostPointerCapture={gesture.lostCapture}
-                    >
-                      <span className="h-5 w-0.5 rounded-full bg-current/90" />
-                    </button>
+                    />
                   ))}
               </div>
             );
