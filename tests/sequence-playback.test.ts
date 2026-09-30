@@ -37,7 +37,13 @@ class Video extends EventTarget {
   }
 }
 
-function setup() {
+function setup(
+  seek?: (
+    video: HTMLVideoElement,
+    time: number,
+    signal: AbortSignal,
+  ) => Promise<void>,
+) {
   const videos = [new Video(), new Video()] as const;
   const loads: {
     video: HTMLVideoElement;
@@ -67,6 +73,7 @@ function setup() {
         });
       });
     },
+    seek,
   );
   return { videos, loads, playback, state: () => state };
 }
@@ -214,20 +221,27 @@ test('blocked autoplay leaves a ready frame and usable external playback control
   playback.dispose();
 });
 
-test('jumping backwards re-prepares a previously played next clip from its start', async () => {
-  const { loads, playback, state } = setup();
+test('jumping backwards reuses a previously played next clip without reloading its source', async () => {
+  const { loads, playback, state, videos } = setup(async (video, time) => {
+    video.currentTime = time;
+  });
   const first = playback.select(0);
   loads[0]?.ready();
   await first;
   const orange = playback.select(2);
   loads.at(-1)?.ready();
   await orange;
+  videos[1].currentTime = 2.5;
   const green = playback.select(1);
   loads.at(-1)?.ready();
   await green;
   assert.equal(state()?.index, 1);
-  assert.equal(loads.at(-1)?.source, 'orange');
-  assert.equal(loads.filter((load) => load.source === 'orange').length, 2);
+  assert.equal(loads.filter((load) => load.source === 'orange').length, 1);
+  const count = loads.length;
+  await playback.select(2, undefined, false);
+  assert.equal(state()?.index, 2);
+  assert.equal(state()?.time, 0);
+  assert.equal(loads.length, count);
   playback.dispose();
 });
 
@@ -288,5 +302,156 @@ test('scrubbing stays paused and a pause during a pending seek prevents later au
   await next;
   assert.equal(state()?.playing, false);
   assert.ok(videos.every((video) => video.paused));
+  playback.dispose();
+});
+
+test('a burst of scrub targets finishes the current decode then seeks only the latest position', async () => {
+  const decodes: { time: number; signal: AbortSignal; finish: () => void }[] =
+    [];
+  const { playback, loads, state, videos } = setup((video, time, signal) => {
+    if (time === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      decodes.push({
+        time,
+        signal,
+        finish: () => {
+          video.currentTime = time;
+          resolve();
+        },
+      });
+    });
+  });
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  playback.seek(0, 1);
+  await flush();
+  for (let index = 2; index <= 80; index++) playback.seek(0, index / 10);
+  assert.equal(decodes.length, 1);
+  assert.equal(decodes[0]?.signal.aborted, false);
+  assert.deepEqual(state()?.target, { index: 0, time: 8 });
+  decodes[0]?.finish();
+  await flush();
+  assert.deepEqual(
+    decodes.map((decode) => decode.time),
+    [1, 8],
+  );
+  assert.equal(state()?.time, 1);
+  assert.equal(state()?.target?.time, 8);
+  decodes[1]?.finish();
+  await flush();
+  assert.equal(state()?.time, 8);
+  assert.equal(state()?.target, null);
+  assert.equal(loads.length, 1);
+  assert.ok(videos.every((video) => video.paused));
+  playback.dispose();
+});
+
+test('paused scrubbing back and forth retains both clips and their requested times', async () => {
+  const { playback, loads, state } = setup(async (video, time) => {
+    video.currentTime = time;
+  });
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  playback.seek(1, 2);
+  loads[1]?.ready();
+  await flush();
+  for (let index = 0; index < 12; index++) {
+    playback.seek(index % 2, 1 + index / 10);
+    await flush();
+    assert.equal(state()?.index, index % 2);
+    assert.equal(state()?.time, 1 + index / 10);
+  }
+  assert.equal(loads.length, 2);
+  assert.equal(state()?.target, null);
+  playback.dispose();
+});
+
+test('changing clips supersedes a slow scrub load and late completion cannot clear the latest target', async () => {
+  const { playback, loads, state } = setup(async (video, time) => {
+    video.currentTime = time;
+  });
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  playback.seek(1, 1);
+  playback.seek(1, 2);
+  playback.seek(2, 3);
+  assert.equal(loads[1]?.signal.aborted, true);
+  loads[1]?.ready();
+  await flush();
+  assert.deepEqual(state()?.target, { index: 2, time: 3 });
+  assert.equal(state()?.index, 0);
+  loads[2]?.ready();
+  await flush();
+  assert.equal(state()?.index, 2);
+  assert.equal(state()?.time, 3);
+  assert.equal(state()?.target, null);
+  playback.dispose();
+});
+
+test('play uses the latest queued time and closing prevents a queued seek from restarting', async () => {
+  const { playback, loads, state, videos } = setup(async (video, time) => {
+    video.currentTime = time;
+  });
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  playback.seek(1, 1);
+  playback.seek(1, 2);
+  playback.toggle();
+  loads[1]?.ready();
+  await flush();
+  assert.equal(state()?.time, 2);
+  assert.equal(state()?.playing, true);
+  assert.equal(state()?.target, null);
+  playback.seek(2, 3);
+  playback.seek(2, 4);
+  playback.stop();
+  const before = state();
+  loads.at(-1)?.ready();
+  await flush();
+  assert.equal(state(), before);
+  assert.ok(videos.every((video) => video.paused));
+  playback.dispose();
+});
+
+test('release immediately supersedes an obsolete decode without replaying queued positions', async () => {
+  const decodes: { time: number; signal: AbortSignal; finish: () => void }[] =
+    [];
+  const { playback, loads, state } = setup((video, time, signal) => {
+    if (time === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      decodes.push({
+        time,
+        signal,
+        finish: () => {
+          if (!signal.aborted) video.currentTime = time;
+          resolve();
+        },
+      });
+    });
+  });
+  const first = playback.select(0, 0, false);
+  loads[0]?.ready();
+  await first;
+  playback.seek(0, 1);
+  await flush();
+  playback.seek(0, 2);
+  playback.seek(0, 3, true);
+  await flush();
+  assert.equal(decodes[0]?.signal.aborted, true);
+  assert.deepEqual(
+    decodes.map((decode) => decode.time),
+    [1, 3],
+  );
+  decodes[1]?.finish();
+  await flush();
+  decodes[0]?.finish();
+  await flush();
+  assert.equal(state()?.time, 3);
+  assert.equal(state()?.target, null);
+  assert.equal(decodes.length, 2);
   playback.dispose();
 });

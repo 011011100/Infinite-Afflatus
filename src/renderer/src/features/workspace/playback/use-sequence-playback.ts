@@ -16,6 +16,7 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
     error: null,
     time: 0,
     playing: false,
+    target: null,
   });
   useEffect(() => {
     if (!first.current || !second.current) return;
@@ -44,6 +45,8 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
     select: (index: number, time?: number, autoplay = false) => {
       void controller.current?.select(index, time, autoplay);
     },
+    seek: (index: number, time: number, final = false) =>
+      controller.current?.seek(index, time, final),
     toggle: () => controller.current?.toggle(),
     pause: () => controller.current?.pause(),
     mute: (value: boolean) => controller.current?.setMuted(value),

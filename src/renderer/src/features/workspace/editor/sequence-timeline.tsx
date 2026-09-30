@@ -11,6 +11,7 @@ import {
 } from './timeline';
 import { TimelineRuler } from './timeline-ruler';
 import { TrimHandle } from './trim-handle';
+import { useRulerSeek } from './use-ruler-seek';
 import { useTrimGesture } from './use-trim-gesture';
 
 type Edge = 'start' | 'end';
@@ -40,7 +41,7 @@ export function SequenceTimeline({
   reset: number;
   zoom: number;
   onSelect: (index: number) => void;
-  onSeek: (time: number) => void;
+  onSeek: (time: number, final?: boolean) => void;
   onPreview: (index: number, range: ClipTrim, edge: Edge) => void;
   onCommit: (index: number, range: ClipTrim) => void;
   onCancel: () => void;
@@ -96,11 +97,15 @@ export function SequenceTimeline({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const seekAt = (x: number) => {
+  const seekAt = (x: number, final = true) => {
     const rect = track.current?.getBoundingClientRect();
     if (rect)
-      onSeek(Math.max(0, Math.min(total, (x - rect.left) / scale - origin)));
+      onSeek(
+        Math.max(0, Math.min(total, (x - rect.left) / scale - origin)),
+        final,
+      );
   };
+  const rulerSeek = useRulerSeek(seekAt);
   return (
     <section className="shrink-0 bg-background pb-5" aria-label="组合时间轨道">
       <div
@@ -139,21 +144,7 @@ export function SequenceTimeline({
                 onSeek(event.key === 'Home' ? 0 : total);
               }
             }}
-            onPointerDown={(event) => {
-              if (event.button !== 0) return;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              seekAt(event.clientX);
-            }}
-            onPointerMove={(event) => {
-              if (event.currentTarget.hasPointerCapture(event.pointerId))
-                seekAt(event.clientX);
-            }}
-            onPointerUp={(event) => {
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                seekAt(event.clientX);
-                event.currentTarget.releasePointerCapture(event.pointerId);
-              }
-            }}
+            {...rulerSeek}
           >
             <TimelineRuler
               duration={Math.max(total, trackWidth / scale - origin)}

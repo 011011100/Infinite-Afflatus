@@ -1,5 +1,6 @@
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import { prepareVideo } from './prepare-video';
+import { SeekScheduler, type SeekTarget } from './seek-scheduler';
 import { seekVideo } from './seek-video';
 
 export type PlaybackState = {
@@ -8,14 +9,13 @@ export type PlaybackState = {
   error: string | null;
   time: number;
   playing: boolean;
+  target: SeekTarget | null;
 };
 
 type Slot = 0 | 1;
 
 type Buffer = {
   index: number;
-  used: boolean;
-  start: number;
   abort: AbortController;
   ready: Promise<boolean>;
 };
@@ -35,6 +35,7 @@ export class SequencePlayback {
     error: null,
     time: 0,
     playing: false,
+    target: null,
   };
   private ranges: ClipTrim[] = [];
   private jump = new AbortController();
@@ -42,6 +43,10 @@ export class SequencePlayback {
   private wantsPlay = false;
   private preferences = { volume: 1, muted: false, rate: 1 };
   private removeListeners: (() => void)[] = [];
+  private seeks = new SeekScheduler(
+    ({ index, time }) => this.selectFrame(index, time, false),
+    () => this.update({ target: null }),
+  );
 
   constructor(
     private videos: [HTMLVideoElement, HTMLVideoElement],
@@ -90,7 +95,11 @@ export class SequencePlayback {
 
   setRanges(ranges: ClipTrim[]): void {
     this.ranges = ranges;
-    if (this.active !== null && this.state.pending === null) {
+    if (
+      this.active !== null &&
+      this.state.pending === null &&
+      !this.seeks.target
+    ) {
       const range = ranges[this.state.index];
       const time = this.videos[this.active].currentTime;
       if (range && (time < range.start || time > range.end))
@@ -99,7 +108,7 @@ export class SequencePlayback {
           Math.max(range.start, Math.min(time, range.end)),
           false,
         );
-      else this.preloadNext();
+      else if (this.wantsPlay) this.preloadNext();
     }
   }
 
@@ -115,6 +124,11 @@ export class SequencePlayback {
   toggle(): void {
     if (this.wantsPlay) {
       this.pause();
+      return;
+    }
+    const target = this.seeks.target;
+    if (target) {
+      void this.select(target.index, target.time, true);
       return;
     }
     const range = this.ranges[this.state.index];
@@ -162,7 +176,25 @@ export class SequencePlayback {
       this.load(this.active === 0 ? 1 : 0, this.state.index + 1);
   }
 
-  async select(index: number, time?: number, autoplay = true): Promise<void> {
+  /** Pointer/trim previews share a decoder-paced, latest-target-only queue. */
+  seek(index: number, time: number, final = false): void {
+    if (this.closed || !this.sources[index] || !Number.isFinite(time)) return;
+    this.update({ target: { index, time } });
+    this.seeks.request({ index, time }, final);
+  }
+
+  select(index: number, time?: number, autoplay = true): Promise<void> {
+    if (this.closed || !this.sources[index]) return Promise.resolve();
+    this.seeks.cancel();
+    this.update({ target: null });
+    return this.selectFrame(index, time, autoplay);
+  }
+
+  private async selectFrame(
+    index: number,
+    time: number | undefined,
+    autoplay: boolean,
+  ): Promise<void> {
     if (this.closed || !this.sources[index]) return;
     const version = ++this.version;
     this.jump.abort();
@@ -188,12 +220,15 @@ export class SequencePlayback {
         : this.active === 0
           ? 1
           : 0;
-    const buffer = this.load(slot, index);
+    const destination =
+      time ??
+      (slot !== this.active ? (this.ranges[index]?.start ?? 0) : undefined);
+    const buffer = this.load(slot, index, destination);
     let ready = await buffer.ready;
     if (this.closed || version !== this.version) return;
-    if (ready && time !== undefined) {
+    if (ready && destination !== undefined) {
       try {
-        await this.seekFrame(this.videos[slot], time, signal);
+        await this.seekFrame(this.videos[slot], destination, signal);
       } catch {
         ready = false;
       }
@@ -206,7 +241,6 @@ export class SequencePlayback {
     }
 
     const video = this.videos[slot];
-    buffer.used = true;
     const previous = this.active;
     this.active = slot;
     video.volume = this.preferences.volume;
@@ -225,34 +259,27 @@ export class SequencePlayback {
       playing: this.wantsPlay,
     });
     if (this.wantsPlay) this.play(video, version);
-    // Only the next clip is prepared; the old slot is now safely out of view.
-    this.preloadNext();
+    // While scrubbing, keep the previous clip warm for immediate reversals.
+    // Sequential playback alone prepares the next clip in the other slot.
+    if (this.wantsPlay) this.preloadNext();
   }
 
-  private load(slot: Slot, index: number): Buffer {
+  private load(slot: Slot, index: number, time?: number): Buffer {
     const source = this.sources[index];
     if (!source) throw new RangeError('Unknown video index');
     const existing = this.buffers[slot];
-    if (
-      existing?.index === index &&
-      !existing.abort.signal.aborted &&
-      (slot === this.active ||
-        existing.start === (this.ranges[index]?.start ?? 0)) &&
-      (slot === this.active || !existing.used)
-    )
+    if (existing?.index === index && !existing.abort.signal.aborted)
       return existing;
     existing?.abort.abort();
     const abort = new AbortController();
     const buffer: Buffer = {
       index,
-      used: false,
-      start: this.ranges[index]?.start ?? 0,
       abort,
       ready: this.prepare(this.videos[slot], source, abort.signal)
         .then(() =>
           this.seekFrame(
             this.videos[slot],
-            this.ranges[index]?.start ?? 0,
+            time ?? this.ranges[index]?.start ?? 0,
             abort.signal,
           ),
         )
@@ -294,6 +321,7 @@ export class SequencePlayback {
 
   /** Release both decoders and pending work when leaving the editor. */
   stop(): void {
+    this.seeks.cancel();
     this.closed = true;
     this.wantsPlay = false;
     clearTimeout(this.clock);

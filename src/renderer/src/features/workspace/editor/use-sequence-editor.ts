@@ -88,9 +88,16 @@ export function useSequenceEditor(
   const active = clips[playback.index];
   const editing = clips[selected];
   const total = totalDuration(clips);
-  const time = active
-    ? active.offset +
-      Math.max(0, Math.min(active.length, playback.time - active.range.start))
+  const cursor = clips[playback.target?.index ?? playback.index];
+  const time = cursor
+    ? cursor.offset +
+      Math.max(
+        0,
+        Math.min(
+          cursor.length,
+          (playback.target?.time ?? playback.time) - cursor.range.start,
+        ),
+      )
     : 0;
   const pending = saving || edits.pending;
   const disabled = blocked || pending;
@@ -103,16 +110,16 @@ export function useSequenceEditor(
     setDraft(null);
     playback.pause();
   };
-  const seek = (value: number) => {
+  const seek = (value: number, final = true) => {
     const target = locateTime(clips, value);
-    playback.select(target.index, target.sourceTime);
+    playback.seek(target.index, target.sourceTime, final);
   };
   const preview = (index: number, range: ClipTrim, edge: 'start' | 'end') => {
     const clip = clips[index];
     if (!clip) return;
     setDraft({ assetId: clip.asset.id, range });
     // Show the last retained frame, not a frame just outside the outgoing edge.
-    playback.select(
+    playback.seek(
       index,
       edge === 'start' ? range.start : Math.max(range.start, range.end - 0.035),
     );
