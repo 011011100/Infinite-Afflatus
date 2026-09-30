@@ -1,8 +1,9 @@
 import {
   type PointerEvent as ReactPointerEvent,
+  useCallback,
   useLayoutEffect,
+  useReducer,
   useRef,
-  useState,
 } from 'react';
 import { type ClipTrim, changeTrim } from '../../../../../shared/canvas/trim';
 import type { TimelineClip } from './timeline';
@@ -36,18 +37,20 @@ export function useTrimGesture(options: Options) {
   const latest = useRef(options);
   latest.current = options;
   const gesture = useRef<Gesture | null>(null);
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const finish = useRef((cancel: boolean) => {
+  // The captured pointer is the source of truth. A separate state value can
+  // survive Fast Refresh with an old type and falsely lock further gestures.
+  const [, render] = useReducer((revision: number) => revision + 1, 0);
+  const finish = useCallback((cancel: boolean) => {
     const current = gesture.current;
     if (!current) return;
     gesture.current = null;
     if (current.target.hasPointerCapture(current.pointer))
       current.target.releasePointerCapture(current.pointer);
-    setDraggingIndex(null);
+    render();
     latest.current.active(false);
     if (cancel) latest.current.cancel();
     else latest.current.commit(current.index, current.value);
-  }).current;
+  }, []);
   useLayoutEffect(() => {
     const move = (event: PointerEvent) => {
       const current = gesture.current;
@@ -101,8 +104,8 @@ export function useTrimGesture(options: Options) {
     if (options.disabled || options.reset) finish(true);
   }, [options.disabled, options.reset, finish]);
   return {
-    dragging: draggingIndex !== null,
-    draggingIndex,
+    dragging: gesture.current !== null,
+    draggingIndex: gesture.current?.index ?? null,
     start: (
       event: ReactPointerEvent<HTMLElement>,
       index: number,
@@ -126,7 +129,7 @@ export function useTrimGesture(options: Options) {
         clip,
         value: clip.range,
       };
-      setDraggingIndex(index);
+      render();
       latest.current.active(true);
     },
     lostCapture: (event: ReactPointerEvent<HTMLElement>) => {
