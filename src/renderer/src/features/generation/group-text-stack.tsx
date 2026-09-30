@@ -6,11 +6,15 @@ import {
   Type,
   Ungroup,
 } from 'lucide-react';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { MaterialNode } from '../../../../shared/generation/workspace';
 import { GroupTextInput } from './group-text-input';
+import {
+  TextBlockDropFeedback,
+  TextBlockHoldFeedback,
+} from './text-block-drag-feedback';
 import { TextBlockPreview } from './text-block-preview';
 import { useTextBlockDrag } from './use-text-block-drag';
 
@@ -24,6 +28,7 @@ export function GroupTextStack({
   add,
   reorder,
   detach,
+  onViewCanvas,
 }: {
   nodes: MaterialNode[];
   projectId: string;
@@ -34,12 +39,27 @@ export function GroupTextStack({
   add: (text?: string) => void;
   reorder: (ids: string[]) => void;
   detach: (id: string, at?: { x: number; y: number }) => void;
+  onViewCanvas: () => void;
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const previous = useRef(new Map<string, number>());
   const ids = nodes.map((node) => node.id);
-  const drag = useTextBlockDrag(surface, list, ids, disabled, reorder, detach);
+  const [returned, setReturned] = useState(0);
+  const [detachedId, setDetachedId] = useState<string | null>(null);
+  const moveToCanvas = (id: string, at?: { x: number; y: number }) => {
+    detach(id, at);
+    setDetachedId(id);
+    setReturned((count) => count + 1);
+  };
+  const drag = useTextBlockDrag(
+    surface,
+    list,
+    ids,
+    disabled,
+    reorder,
+    moveToCanvas,
+  );
   const order = drag.order ?? ids;
   const orderKey = order.join('|');
   useLayoutEffect(() => {
@@ -88,6 +108,7 @@ export function GroupTextStack({
         ref={surface}
         className="group-text-stack"
         data-dragging={!!drag.lifted}
+        data-drag-outside={!!drag.lifted?.outside}
       >
         <header className="group-text-heading">
           <span className="flex items-center gap-2 text-sm font-medium">
@@ -169,7 +190,7 @@ export function GroupTextStack({
                         aria-label={`移出文本块 ${index + 1}`}
                         title="移回画布"
                         disabled={disabled}
-                        onClick={() => detach(id)}
+                        onClick={() => moveToCanvas(id)}
                       >
                         <Ungroup />
                       </Button>
@@ -199,22 +220,26 @@ export function GroupTextStack({
           )}
         </div>
         <footer className="group-text-footer" aria-live="polite">
-          {drag.lifted
-            ? drag.lifted.outside
-              ? '松手移回画布'
-              : '松手放到这里'
-            : full
-              ? '组合已达 32 个素材'
-              : `${nodes.length || 1} 个文本块`}
+          {full ? '组合已达 32 个素材' : `${nodes.length || 1} 个文本块`}
         </footer>
       </div>
       <TextBlockPreview
         lifted={drag.lifted}
+        detachedId={detachedId}
         text={
           liftedNode?.type === 'text'
             ? liftedNode.text || '空文本块'
             : (liftedNode?.textOverride ?? '文本文件')
         }
+      />
+      <TextBlockHoldFeedback
+        hold={drag.holdFeedback}
+        liftedId={drag.lifted?.id}
+      />
+      <TextBlockDropFeedback
+        lifted={drag.lifted}
+        returned={returned}
+        onViewCanvas={onViewCanvas}
       />
     </>
   );

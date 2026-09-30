@@ -6,9 +6,17 @@ import {
   useState,
 } from 'react';
 import { BlockDrag } from '../../../../shared/interaction/block-drag';
-import { LONG_PRESS_MS } from '../../../../shared/interaction/long-press';
+import {
+  HOLD_HINT_DELAY_MS,
+  LONG_PRESS_MS,
+} from '../../../../shared/interaction/long-press';
 
 type Point = { x: number; y: number };
+export interface HeldBlock extends Point {
+  id: string;
+  startedAt: number;
+  duration: number;
+}
 export interface LiftedBlock {
   id: string;
   x: number;
@@ -32,12 +40,14 @@ export function useTextBlockDrag(
   const [lifted, setLifted] = useState<LiftedBlock | null>(null);
   const [order, setOrder] = useState<string[] | null>(null);
   const [holding, setHolding] = useState<string | null>(null);
+  const [holdFeedback, setHoldFeedback] = useState<HeldBlock | null>(null);
   const cancel = () => {
     gesture.current.cancel();
     cleanup.current();
     setLifted(null);
     setOrder(null);
     setHolding(null);
+    setHoldFeedback(null);
   };
   const cancelRef = useRef(cancel);
   cancelRef.current = cancel;
@@ -91,6 +101,15 @@ export function useTextBlockDrag(
       }));
     gesture.current.start(event.pointerId, start.x, start.y, previous);
     setHolding(id);
+    const hint = setTimeout(() => {
+      setHoldFeedback({
+        id,
+        startedAt: holdUntil - LONG_PRESS_MS,
+        duration: Math.max(1, holdUntil - performance.now()),
+        x: rect.left + rect.width / 2,
+        y: rect.top + Math.min(rect.height, 220) / 2,
+      });
+    }, HOLD_HINT_DELAY_MS);
     const update = () => {
       const bounds = surface.current?.getBoundingClientRect();
       const scroller = list.current;
@@ -158,6 +177,7 @@ export function useTextBlockDrag(
       }
       active = true;
       setHolding(null);
+      setHoldFeedback(null);
       capture.setPointerCapture(event.pointerId);
       setOrder(nextOrder);
       update();
@@ -214,6 +234,7 @@ export function useTextBlockDrag(
     capture.addEventListener('lostpointercapture', cancel);
     cleanup.current = () => {
       clearTimeout(timer);
+      clearTimeout(hint);
       cancelAnimationFrame(frame);
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', release, true);
@@ -226,5 +247,5 @@ export function useTextBlockDrag(
         capture.releasePointerCapture(event.pointerId);
     };
   };
-  return { lifted, order, holding, begin, cancel };
+  return { lifted, order, holding, holdFeedback, begin, cancel };
 }

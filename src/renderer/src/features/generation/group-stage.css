@@ -68,6 +68,9 @@
   outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent);
   outline-offset: 6px;
 }
+.group-text-stack[data-drag-outside="true"] {
+  outline-color: var(--primary);
+}
 .group-text-heading {
   display: flex;
   align-items: center;
@@ -173,6 +176,15 @@
   border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
   box-shadow: 0 24px 60px rgb(20 35 65 / 0.2);
   transform: scale(1.025) rotate(-0.6deg);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.group-text-lift[data-outside="true"] {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent),
+    0 24px 60px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 .material-arc {
   position: relative;

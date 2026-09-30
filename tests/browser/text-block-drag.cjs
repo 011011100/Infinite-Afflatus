@@ -1,6 +1,6 @@
 // Run against an existing pnpm dev server; never opens a user project or starts a server.
 const assert = require('node:assert/strict');
-const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = require('node:fs');
 const { join, resolve, basename } = require('node:path');
 const { app, BrowserWindow } = require('electron');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,11 +16,37 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: 1300,
     height: 900,
+    title: '文本拖动回归（隔离测试）',
     show: false,
     webPreferences: { backgroundThrottling: false },
   });
   const wc = win.webContents;
+  // Hidden macOS windows stop compositor frames during holds. Capture keeps the
+  // real CSS animations advancing without displaying or focusing a second app.
+  let painting = false;
+  let ready = false;
+  let failed = false;
+  const paint = setInterval(async () => {
+    if (!ready || painting || wc.isDestroyed()) return;
+    painting = true;
+    try {
+      await wc.capturePage();
+    } catch {
+      // Navigation or closing can dispose the compositor surface mid-capture.
+    } finally {
+      painting = false;
+    }
+  }, 32);
   const run = (expression) => wc.executeJavaScript(expression);
+  const screenshot = async (name) => {
+    const directory = process.env.AFFLATUS_TEST_SCREENSHOTS;
+    if (!directory) return;
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, `${name}.png`),
+      (await wc.capturePage()).toPNG(),
+    );
+  };
   const state = () =>
     run(`JSON.parse(document.querySelector('#saved-state').textContent)`);
   const order = () =>
@@ -45,6 +71,7 @@ app.whenReady().then(async () => {
       ...(type === 'mouseMove' ? { modifiers: ['leftButtonDown'] } : {}),
     });
   const load = async (count = 3) => {
+    ready = false;
     await win.loadURL(
       `http://127.0.0.1:5173/${basename(scratch)}/index.html?count=${count}`,
     );
@@ -52,6 +79,7 @@ app.whenReady().then(async () => {
       if (await run(`!!document.querySelector('[data-text-block]')`)) break;
       await sleep(100);
     }
+    ready = true;
     await sleep(400); // Allow the real foreground entry animation to finish.
     assert.equal((await order()).length, count);
     await run(
@@ -100,9 +128,43 @@ app.whenReady().then(async () => {
       ),
       false,
     );
+    let p = await grab('text-1', false);
+    await sleep(60);
+    assert.equal(
+      await run(`!!document.querySelector('.text-block-hold')`),
+      false,
+    );
+    await sleep(220);
+    const progress = () =>
+      run(
+        `parseFloat(getComputedStyle(document.querySelector('.text-block-hold .hold-progress')).strokeDashoffset)`,
+      );
+    const earlyProgress = await progress();
+    assert.ok(
+      earlyProgress > 0 && earlyProgress < 100,
+      'hold shows a partially filled ring',
+    );
+    assert.equal(await dragging(), false);
+    await screenshot('hold-progress');
+    await sleep(150);
+    assert.ok(
+      (await progress()) < earlyProgress - 10,
+      'ring fills while the pointer stays down',
+    );
+    await release(p);
+    assert.equal(
+      await run(`!!document.querySelector('.text-block-hold')`),
+      false,
+    );
+    assert.equal(await dragging(), false);
+    assert.deepEqual(await savedOrder(), original);
+    console.log(
+      'PASS delayed hold ring advances and cancellation fades it out without lifting',
+    );
+
     const first = await rect('[data-text-block="text-1"]');
     const second = await rect('[data-text-block="text-2"]');
-    let p = await grab('text-1');
+    p = await grab('text-1');
     let to = { x: p.x, y: p.y + second.y - first.y + 12 };
     await move(p, to);
     const expected = ['text-2', 'text-1', 'text-3'];
@@ -166,6 +228,46 @@ app.whenReady().then(async () => {
     const surface = await rect('.group-text-stack');
     to = { x: surface.x - 50, y: p.y };
     await move(p, to);
+    assert.equal(
+      await run(`document.querySelector('.group-text-lift').dataset.outside`),
+      'true',
+    );
+    assert.equal(
+      await run(
+        `document.querySelector('.text-block-drop-feedback').dataset.outside`,
+      ),
+      'true',
+    );
+    await screenshot('drop-outside');
+    await move(to, p);
+    assert.equal(
+      await run(
+        `document.querySelector('.text-block-drop-feedback').dataset.outside`,
+      ),
+      'false',
+    );
+    await release(p);
+    assert.deepEqual(await savedOrder(), original);
+    p = await grab('text-2');
+    to = { x: surface.x - 50, y: p.y };
+    await move(p, to);
+    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await release(to);
+    assert.deepEqual(await savedOrder(), original);
+    assert.equal(
+      await run(
+        `document.querySelector('.text-block-drop-feedback').dataset.open`,
+      ),
+      'false',
+    );
+    console.log(
+      'PASS moving outside then back and Escape both cancel detachment',
+    );
+
+    p = await grab('text-2');
+    to = { x: surface.x - 50, y: p.y };
+    await move(p, to);
     await release(to);
     assert.equal(
       (await state()).find((n) => n.id === 'text-2').groupId,
@@ -176,9 +278,19 @@ app.whenReady().then(async () => {
       '独立文本 2',
     );
     assert.deepEqual(await savedOrder(), ['text-1', 'text-3']);
-    wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-    wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-    await sleep(260);
+    assert.equal(
+      await run(
+        `document.querySelector('.text-block-drop-feedback').dataset.complete`,
+      ),
+      'true',
+    );
+    assert.equal(await run(`document.querySelector('dialog').open`), true);
+    await screenshot('returned-to-canvas');
+    const view = await rect('.text-block-drop-feedback button');
+    to = { x: view.x + view.width / 2, y: view.y + view.height / 2 };
+    send('mouseDown', to);
+    await release(to);
+    assert.equal(await run(`!!document.querySelector('dialog[open]')`), false);
     const reopen = await rect('#reopen');
     to = { x: reopen.x + reopen.width / 2, y: reopen.y + reopen.height / 2 };
     send('mouseDown', to);
@@ -186,7 +298,7 @@ app.whenReady().then(async () => {
     await sleep(400);
     assert.deepEqual(await order(), ['text-1', 'text-3']);
     console.log(
-      'PASS drag out preserves the detached block and reopen keeps remaining members',
+      'PASS drag out shows confirmation, View closes editor, detached content and remaining members persist',
     );
 
     await load(8);
@@ -209,10 +321,18 @@ app.whenReady().then(async () => {
       'PASS long-list autoscroll and drop commit without losing the drag',
     );
   } catch (error) {
+    failed = true;
     console.error(error);
-    process.exitCode = 1;
+    await screenshot('failure');
+    console.error(
+      await run(
+        `({holding:document.querySelector('[data-holding="true"]')?.dataset.textBlock, dragging:document.querySelector('.group-text-stack')?.dataset.dragging, outside:document.querySelector('.group-text-lift')?.dataset.outside})`,
+      ),
+    );
   } finally {
+    clearInterval(paint);
     win.destroy();
-    app.quit();
+    rmSync(scratch, { recursive: true, force: true });
+    app.exit(failed ? 1 : 0);
   }
 });

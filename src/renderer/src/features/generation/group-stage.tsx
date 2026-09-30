@@ -151,6 +151,7 @@ export function GroupStage({
                 );
             }}
             detach={detach}
+            onViewCanvas={requestClose}
           />
         </div>
         <fieldset

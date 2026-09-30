@@ -1,4 +1,4 @@
-import { GripVertical } from 'lucide-react';
+import { Check, GripVertical, Ungroup } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { LiftedBlock } from './use-text-block-drag';
 
@@ -6,9 +6,11 @@ import type { LiftedBlock } from './use-text-block-drag';
 export function TextBlockPreview({
   lifted,
   text,
+  detachedId,
 }: {
   lifted: LiftedBlock | null;
   text: string;
+  detachedId: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef<{ block: LiftedBlock; text: string } | null>(null);
@@ -45,14 +47,16 @@ export function TextBlockPreview({
       const transform =
         !reduced && target
           ? `translate(${target.x - prior.block.x}px, ${target.y - prior.block.y}px)`
-          : 'none';
+          : !reduced && detachedId === prior.block.id
+            ? 'scale(.84)'
+            : 'none';
       animation = element.animate(
         [
           { opacity: 1, transform: getComputedStyle(element).transform },
           { opacity: 0, transform },
         ],
         {
-          duration: reduced ? 0 : 150,
+          duration: reduced ? 0 : 180,
           easing: 'cubic-bezier(.2,.8,.2,1)',
           fill: 'forwards',
         },
@@ -67,7 +71,7 @@ export function TextBlockPreview({
       active = false;
       animation.cancel();
     };
-  }, [id]);
+  }, [id, detachedId]);
   const view = lifted ? { block: lifted, text } : hidden ? null : last.current;
   if (!view) return null;
   return (
@@ -75,6 +79,7 @@ export function TextBlockPreview({
       ref={ref}
       aria-hidden="true"
       className="group-text-lift"
+      data-outside={view.block.outside}
       style={{
         left: view.block.x,
         top: view.block.y,
@@ -83,8 +88,18 @@ export function TextBlockPreview({
       }}
     >
       <div className="flex items-center gap-2 text-xs text-primary">
-        <GripVertical className="size-4" />
-        {view.block.outside ? '松手移回画布' : '调整顺序'}
+        {!lifted && detachedId === view.block.id ? (
+          <Check className="size-4" />
+        ) : view.block.outside ? (
+          <Ungroup className="size-4" />
+        ) : (
+          <GripVertical className="size-4" />
+        )}
+        {!lifted && detachedId === view.block.id
+          ? '已移回画布'
+          : view.block.outside
+            ? '松手移回画布'
+            : '调整顺序'}
       </div>
       <p className="mt-3 line-clamp-5 whitespace-pre-wrap break-words text-sm leading-7">
         {view.text}

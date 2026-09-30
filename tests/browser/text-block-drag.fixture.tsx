@@ -27,7 +27,9 @@ function Check() {
   const group = shot.groups[0];
   return (
     <>
-      <output id="saved-state">{JSON.stringify(shot.nodes)}</output>
+      <output id="saved-state" hidden>
+        {JSON.stringify(shot.nodes)}
+      </output>
       <button type="button" id="reopen" onClick={() => setOpen(true)}>
         打开
       </button>

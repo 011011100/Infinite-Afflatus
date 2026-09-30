@@ -16,7 +16,7 @@
     transform: scale(0.88);
   }
 }
-@keyframes hold-split-progress {
+@keyframes hold-progress {
   from {
     stroke-dashoffset: 100;
   }
@@ -24,32 +24,32 @@
     stroke-dashoffset: 0;
   }
 }
-.hold-split-indicator {
+.hold-indicator {
   transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.hold-split-progress {
-  animation: hold-split-progress linear forwards;
+.hold-progress {
+  animation: hold-progress linear forwards;
 }
-.hold-feedback[data-open="false"] .hold-split-progress {
+.hold-feedback[data-open="false"] .hold-progress {
   animation-play-state: paused;
 }
-.hold-split-indicator[data-ready="true"] {
+.hold-indicator[data-ready="true"] {
   transform: scale(1.06);
 }
-.hold-split-indicator[data-ready="true"] .hold-split-progress {
+.hold-indicator[data-ready="true"] .hold-progress {
   animation: none;
   stroke-dashoffset: 0;
 }
 @media (prefers-reduced-motion: reduce) {
   .hold-feedback,
-  .hold-split-indicator {
+  .hold-indicator {
     transition: none;
     transform: none;
   }
-  .hold-split-indicator[data-ready="true"] {
+  .hold-indicator[data-ready="true"] {
     transform: none;
   }
-  .hold-split-progress {
+  .hold-progress {
     animation-timing-function: steps(4, end);
   }
 }
