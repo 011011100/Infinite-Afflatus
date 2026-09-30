@@ -10,7 +10,6 @@ import {
   timelineOrigin,
   totalDuration,
 } from './timeline';
-import { TimelineToolbar } from './timeline-toolbar';
 import { TrimHandle } from './trim-handle';
 import { useTrimGesture } from './use-trim-gesture';
 
@@ -24,8 +23,7 @@ export function SequenceTimeline({
   selected,
   disabled,
   reset,
-  restoreDisabled,
-  onRestore,
+  zoom,
   onSelect,
   onSeek,
   onPreview,
@@ -40,8 +38,7 @@ export function SequenceTimeline({
   selected: number;
   disabled: boolean;
   reset: number;
-  restoreDisabled: boolean;
-  onRestore: () => void;
+  zoom: number;
   onSelect: (index: number) => void;
   onSeek: (time: number) => void;
   onPreview: (index: number, range: ClipTrim, edge: Edge) => void;
@@ -56,7 +53,6 @@ export function SequenceTimeline({
     origin: timelineOrigin(clips),
   });
   const [width, setWidth] = useState(900);
-  const [zoom, setZoom] = useState(1);
   const total = totalDuration(clips);
   const origin = timelineOrigin(clips);
   // Shrinking scrollWidth at the right edge clamps scrollLeft. That movement
@@ -106,19 +102,7 @@ export function SequenceTimeline({
       onSeek(Math.max(0, Math.min(total, (x - rect.left) / scale - origin)));
   };
   return (
-    <section
-      className="shrink-0 border-t border-border bg-background pb-5"
-      aria-label="组合时间轨道"
-    >
-      <TimelineToolbar
-        count={clips.length}
-        duration={total}
-        zoom={zoom}
-        zoomDisabled={dragging}
-        onZoomChange={setZoom}
-        restoreDisabled={restoreDisabled}
-        onRestore={onRestore}
-      />
+    <section className="shrink-0 bg-background pb-5" aria-label="组合时间轨道">
       <div
         ref={scroll}
         className="overflow-x-auto overscroll-x-contain px-8 pb-4 [overflow-anchor:none]"

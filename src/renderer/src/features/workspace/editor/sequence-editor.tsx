@@ -1,19 +1,10 @@
-import {
-  ArrowLeft,
-  LoaderCircle,
-  Pause,
-  Play,
-  Redo2,
-  Undo2,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { ArrowLeft, LoaderCircle, Redo2, Undo2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import type { ThumbnailFrame } from '../decode-thumbnail';
+import { SequenceControls } from './sequence-controls';
 import { SequenceTimeline } from './sequence-timeline';
-import { formatTime } from './timeline';
 import { type EditorProps, useSequenceEditor } from './use-sequence-editor';
 import { useSequenceFrames } from './use-sequence-frames';
 
@@ -82,6 +73,7 @@ function EditorContent(
   props: EditorProps & { frames: Map<string, ThumbnailFrame> },
 ) {
   const { assets, frames, blocked } = props;
+  const [zoom, setZoom] = useState(1);
   const {
     clips,
     playback,
@@ -209,54 +201,21 @@ function EditorContent(
           </div>
         )}
       </section>
-      <div className="flex h-16 shrink-0 items-center gap-4 px-8">
-        <Button
-          size="icon"
-          aria-label={playback.playing ? '暂停' : '播放'}
-          disabled={gesturing}
-          onClick={playback.toggle}
-        >
-          {playback.playing ? (
-            <Pause fill="currentColor" />
-          ) : (
-            <Play fill="currentColor" />
-          )}
-        </Button>
-        <span
-          role="timer"
-          className="whitespace-nowrap font-mono text-sm tabular-nums"
-          aria-label="组合播放时间"
-        >
-          {formatTime(time)}{' '}
-          <span className="text-muted-foreground">/ {formatTime(total)}</span>
-        </span>
-        <span
-          className="mx-auto min-w-0 truncate text-xs text-muted-foreground"
-          aria-live="off"
-        >
-          {String(playback.index + 1).padStart(2, '0')} / {clips.length}{' '}
-          <span className="ml-2 text-foreground">{active.asset.name}</span>
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={muted ? '取消静音' : '静音'}
-          onClick={() => {
-            playback.mute(!muted);
-            setMuted(!muted);
-          }}
-        >
-          {muted ? <VolumeX /> : <Volume2 />}
-        </Button>
-      </div>
-      <SequenceTimeline
-        clips={clips}
-        frames={frames}
+      <SequenceControls
         time={time}
-        playingIndex={playback.index}
-        selected={selected}
-        disabled={blocked}
-        reset={reset}
+        duration={total}
+        index={playback.index}
+        count={clips.length}
+        playing={playback.playing}
+        muted={muted}
+        gesturing={gesturing}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        onTogglePlayback={playback.toggle}
+        onToggleMute={() => {
+          playback.mute(!muted);
+          setMuted(!muted);
+        }}
         restoreDisabled={
           disabled ||
           gesturing ||
@@ -266,6 +225,16 @@ function EditorContent(
           playback.pause();
           save(selected, { start: 0, end: editing.duration });
         }}
+      />
+      <SequenceTimeline
+        clips={clips}
+        frames={frames}
+        time={time}
+        playingIndex={playback.index}
+        selected={selected}
+        disabled={blocked}
+        reset={reset}
+        zoom={zoom}
         onSelect={(index) => setSelectedId(clips[index]?.asset.id)}
         onSeek={seek}
         onPreview={preview}
