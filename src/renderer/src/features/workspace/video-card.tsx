@@ -1,5 +1,5 @@
 import type { Node, NodeProps } from '@xyflow/react';
-import { Play } from 'lucide-react';
+import { Play, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SnapTarget } from '../../../../shared/canvas/operations';
@@ -16,6 +16,8 @@ export type VideoCardNode = Node<
     activeAssetId: string | null;
     snapSide: SnapTarget['side'] | null;
     play: (id: string) => void;
+    openMaterials: (assetId: string) => void;
+    canOpenMaterials: boolean;
     canHold: boolean;
     splitAsset: (cardId: string, assetId: string) => void;
     selectAsset: (cardId: string, assetId: string) => void;
@@ -65,6 +67,23 @@ export function VideoCard({
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           {grouped ? `组合 · ${data.assets.length} 段` : data.assets[0]?.name}
         </span>
+        {(!grouped || data.activeAssetId) && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="nodrag nopan shrink-0"
+            aria-label="编辑镜头素材"
+            title="镜头素材画布"
+            disabled={!data.canOpenMaterials}
+            onClick={(event) => {
+              event.stopPropagation();
+              const assetId = data.activeAssetId ?? data.assets[0]?.id;
+              if (assetId) data.openMaterials(assetId);
+            }}
+          >
+            <Sparkles />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

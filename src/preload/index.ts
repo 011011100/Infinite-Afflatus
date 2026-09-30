@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  getGenerationWorkspace: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getGenerationWorkspace, id),
+  saveGenerationWorkspace: (id, workspace) =>
+    ipcRenderer.invoke(IPC_CHANNELS.saveGenerationWorkspace, id, workspace),
   getGenerationDraft: (id) =>
     ipcRenderer.invoke(IPC_CHANNELS.getGenerationDraft, id),
   saveGenerationDraft: (id, draft) =>

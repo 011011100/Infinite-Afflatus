@@ -25,7 +25,7 @@
 - `styles.css` 引入 Tailwind、动画工具、shadcn 样式和 React Flow 样式，定义浅色主题。
 - `lib/utils.ts` 提供统一的 `cn` 类名合并入口。
 
-目前只加入实际使用的 Button 和 Tooltip。弹窗、表单、裁剪控件在相应页面实现时再加入。当前没有暗色模式切换，也没有确定镜头编辑最终采用子画布还是浮层。
+共用 Button、Tooltip、Modal、Input、Select 与 ContextMenu 统一放在 `components/ui`。视频和素材节点、生成组属于业务组件；右键菜单复用 Base UI 键盘导航和焦点管理。播放与时间裁剪使用全窗口页，生成素材使用镜头内部子画布；当前没有暗色模式切换。
 
 ## 维护规则
 

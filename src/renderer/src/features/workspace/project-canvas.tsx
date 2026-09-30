@@ -7,8 +7,13 @@ import {
   type ReactFlowInstance,
   ViewportPortal,
 } from '@xyflow/react';
+import { Plus, RotateCw } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
+import { Button } from '@/components/ui/button';
+import { MaterialCanvas } from '@/features/generation/material-canvas';
+import { ShotCard, type ShotCardNode } from '@/features/generation/shot-card';
+import { useShotWorkspace } from '@/features/generation/use-shot-workspace';
 import { isMac } from '@/lib/platform';
 import { CARD_HEIGHT, cardWidth } from '../../../../shared/canvas/model';
 import { splitSelectedAsset } from '../../../../shared/canvas/operations';
@@ -26,7 +31,8 @@ import { useCardDrag } from './use-card-drag';
 import { VideoCard, type VideoCardNode } from './video-card';
 
 const edges: Edge[] = [];
-const nodeTypes = { video: VideoCard };
+const nodeTypes = { video: VideoCard, shot: ShotCard };
+type WorkspaceNode = VideoCardNode | ShotCardNode;
 type ProjectCanvasProps = {
   snapshot: ProjectSnapshot;
   blocked: boolean;
@@ -52,8 +58,15 @@ function CanvasContent({
   inactive,
   report,
 }: ProjectCanvasProps) {
+  const shots = useShotWorkspace(snapshot.project.id, blocked);
+  const [shotPositions, setShotPositions] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
   const root = useRef<HTMLElement | null>(null);
-  const prepareTransition = useCardMorph(root, blocked || inactive);
+  const prepareTransition = useCardMorph(
+    root,
+    blocked || inactive || !!shots.activeId,
+  );
   const document = useCanvasDocument(
     snapshot,
     blocked,
@@ -69,7 +82,7 @@ function CanvasContent({
   const [measurements, setMeasurements] = useState<
     Record<string, { width: number; height: number }>
   >({});
-  const flow = useRef<ReactFlowInstance<VideoCardNode> | null>(null);
+  const flow = useRef<ReactFlowInstance<WorkspaceNode> | null>(null);
   const assets = useMemo(
     () => new Map(document.snapshot.assets.map((asset) => [asset.id, asset])),
     [document.snapshot.assets],
@@ -103,7 +116,14 @@ function CanvasContent({
     selectedCard.assetIds.includes(selectedAssetId);
   const splitAsset = useCallback(
     (cardId: string, assetId: string) => {
-      if (blocked || inactive || playing || document.saving || drag.drag)
+      if (
+        blocked ||
+        inactive ||
+        shots.activeId ||
+        playing ||
+        document.saving ||
+        drag.drag
+      )
         return;
       const card = cards.find((item) => item.id === cardId);
       if (!card || card.assetIds.length < 2 || !card.assetIds.includes(assetId))
@@ -123,6 +143,7 @@ function CanvasContent({
     [
       blocked,
       inactive,
+      shots.activeId,
       playing,
       document.saving,
       document.commit,
@@ -137,7 +158,12 @@ function CanvasContent({
   useCanvasShortcuts({
     shortcuts: interactions.shortcuts,
     disabled:
-      blocked || inactive || document.saving || !!drag.drag || !!playing,
+      blocked ||
+      inactive ||
+      !!shots.activeId ||
+      document.saving ||
+      !!drag.drag ||
+      !!playing,
     cancel: () => {
       if (!playing && !drag.cancel()) setSelection(null);
     },
@@ -152,14 +178,15 @@ function CanvasContent({
     interactions.longPressSplit &&
     !blocked &&
     !inactive &&
+    !shots.activeId &&
     !document.saving &&
     !playing;
 
-  const nodes = useMemo<VideoCardNode[]>(
-    () =>
-      cards.map((card) => ({
+  const nodes = useMemo<WorkspaceNode[]>(
+    () => [
+      ...cards.map((card) => ({
         id: card.id,
-        type: 'video',
+        type: 'video' as const,
         position:
           drag.drag?.original.id === card.id
             ? drag.drag.position
@@ -185,8 +212,28 @@ function CanvasContent({
           selectAsset,
           splitAsset,
           canHold,
+          openMaterials: (assetId: string) => {
+            const asset = assets.get(assetId);
+            if (asset) shots.create(card.position, asset);
+          },
+          canOpenMaterials: shots.loaded && !blocked,
         },
       })),
+      ...shots.shots
+        .filter((shot) => !shot.sourceAssetId)
+        .map((shot) => ({
+          id: `shot:${shot.id}`,
+          type: 'shot' as const,
+          position: shotPositions[shot.id] ?? shot.position,
+          selected: selection?.cardId === `shot:${shot.id}`,
+          measured: { width: 288, height: CARD_HEIGHT },
+          data: {
+            name: shot.name,
+            count: shot.nodes.length,
+            open: () => shots.open(shot.id),
+          },
+        })),
+    ],
     [
       cards,
       drag.drag,
@@ -198,6 +245,12 @@ function CanvasContent({
       measurements,
       splitAsset,
       canHold,
+      shots.shots,
+      shots.create,
+      shots.open,
+      shots.loaded,
+      blocked,
+      shotPositions,
     ],
   );
   const playingCard = cards.find((card) => card.id === playing);
@@ -250,6 +303,17 @@ function CanvasContent({
         zoomOnPinch={!blocked}
         onNodesChange={(changes) => {
           for (const change of changes) {
+            if (
+              change.type === 'position' &&
+              change.position &&
+              change.id.startsWith('shot:')
+            ) {
+              const position = change.position;
+              setShotPositions((current) => ({
+                ...current,
+                [change.id.slice(5)]: position,
+              }));
+            }
             if (change.type === 'select' && change.selected)
               selectCard(change.id);
             if (change.type === 'dimensions' && change.dimensions) {
@@ -266,14 +330,25 @@ function CanvasContent({
         onPaneClick={() => setSelection(null)}
         onNodeDoubleClick={(event, node) => {
           event.preventDefault();
-          if (!inactive && !drag.drag && !document.saving) play(node.id);
+          if (inactive || drag.drag || document.saving) return;
+          if (node.type === 'shot') shots.open(node.id.slice(5));
+          else play(node.id);
         }}
-        onNodeDragStart={(_event, node) => drag.start(node.id)}
+        onNodeDragStart={(_event, node) => {
+          if (node.type === 'video') drag.start(node.id);
+        }}
         onNodeDrag={(_event, node) =>
+          node.type === 'video' &&
           drag.move(node.position, flow.current?.getZoom() ?? 1)
         }
         onNodeDragStop={(_event, node) => {
-          void drag.stop(node.position, flow.current?.getZoom() ?? 1);
+          if (node.type === 'shot') {
+            shots.updateShot(node.id.slice(5), (shot) => ({
+              ...shot,
+              position: node.position,
+            }));
+            setShotPositions({});
+          } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
         }}
         onMoveEnd={(_event, viewport) => {
           if (!blocked)
@@ -296,6 +371,47 @@ function CanvasContent({
           color="var(--canvas-dot)"
         />
         {!blocked && <CanvasControls />}
+        <Panel position="top-left">
+          <Button
+            variant="outline"
+            className="bg-background shadow-sm"
+            disabled={blocked || !shots.loaded}
+            onClick={() => {
+              const bottom = Math.max(
+                60,
+                ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
+                ...shots.shots
+                  .filter((shot) => !shot.sourceAssetId)
+                  .map((shot) => shot.position.y + CARD_HEIGHT + 48),
+              );
+              shots.create({ x: 100, y: bottom });
+              void flow.current?.setCenter(244, bottom + CARD_HEIGHT / 2, {
+                zoom: 1,
+              });
+            }}
+          >
+            <Plus />
+            新建镜头
+          </Button>
+        </Panel>
+        {shots.error && (
+          <Panel position="top-right">
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-lg bg-warning p-3 text-xs text-warning-foreground"
+            >
+              {shots.error}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="重试镜头数据"
+                onClick={() => void shots.retry()}
+              >
+                <RotateCw />
+              </Button>
+            </div>
+          </Panel>
+        )}
         <Panel position="bottom-center">
           <CanvasActions
             disabled={blocked || document.saving || !!drag.drag}
@@ -338,8 +454,23 @@ function CanvasContent({
       {!nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-muted-foreground select-none">
           <h1 className="mb-2.5 text-xl font-medium">从一个镜头开始</h1>
-          <p className="text-sm">导入一段视频，开始你的创作</p>
+          <p className="text-sm">新建镜头，或导入一段视频</p>
         </div>
+      )}
+      {shots.activeShot && (
+        <MaterialCanvas
+          key={`materials:${shots.activeShot.id}`}
+          shot={shots.activeShot}
+          snapshot={document.snapshot}
+          blocked={blocked}
+          saving={shots.saving}
+          error={shots.error}
+          onChange={(update) => {
+            if (shots.activeId) shots.updateShot(shots.activeId, update);
+          }}
+          onClose={shots.close}
+          retry={shots.retry}
+        />
       )}
       {playingCard && (
         <SequenceEditor

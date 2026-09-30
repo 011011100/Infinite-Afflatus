@@ -30,6 +30,25 @@ export function registerGenerationIpc(
     return value;
   };
   ipcMain.handle(
+    IPC_CHANNELS.getGenerationWorkspace,
+    (event, projectId: unknown) => {
+      trustedWindow(event);
+      return library.generation.readWorkspace(id(projectId));
+    },
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.saveGenerationWorkspace,
+    async (event, projectId: unknown, workspace: unknown) => {
+      trustedWindow(event);
+      const saved = await library.generation.saveWorkspace(
+        id(projectId),
+        workspace,
+      );
+      library.emit();
+      return saved;
+    },
+  );
+  ipcMain.handle(
     IPC_CHANNELS.getGenerationDraft,
     (event, projectId: unknown) => {
       trustedWindow(event);

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { validateGenerationDraft } from '../../shared/generation/draft';
+import { validateWorkspace } from '../../shared/generation/workspace';
 import {
   readGenerationDraft,
   writeGenerationDraft,
@@ -9,6 +10,7 @@ import type { ProjectService } from '../projects/project-service';
 import type { AppStore } from '../storage/app-store';
 import { safeFile } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
+import { readWorkspace, writeWorkspace } from './workspace-database';
 
 export class GenerationService {
   constructor(
@@ -16,6 +18,48 @@ export class GenerationService {
     private readonly store: AppStore,
     private readonly gate: WriteGate,
   ) {}
+
+  async readWorkspace(projectId: string) {
+    return readWorkspace(await this.projects.databasePath(projectId));
+  }
+
+  async saveWorkspace(projectId: string, input: unknown) {
+    const workspace = validateWorkspace(input);
+    return this.gate.run(async () => {
+      const snapshot = await this.projects.open(projectId);
+      const available = new Set(snapshot.assets.map((asset) => asset.id));
+      for (const job of this.store.jobs()) {
+        if (
+          job.projectId === projectId &&
+          job.usage === 'reference' &&
+          job.sha256
+        )
+          available.add(job.id);
+      }
+      for (const shot of workspace.shots) {
+        if (
+          shot.sourceAssetId &&
+          !snapshot.assets.some(
+            (asset) =>
+              asset.id === shot.sourceAssetId && asset.kind === 'video',
+          )
+        )
+          throw new Error('镜头视频不属于当前项目');
+        if (
+          shot.nodes.some(
+            (node) => node.type === 'asset' && !available.has(node.assetId),
+          )
+        )
+          throw new Error('素材不属于当前项目');
+      }
+      const result = writeWorkspace(
+        await this.projects.databasePath(projectId),
+        workspace,
+      );
+      this.store.putProject(result.project);
+      return result.workspace;
+    });
+  }
 
   async read(projectId: string) {
     return validateGenerationDraft(

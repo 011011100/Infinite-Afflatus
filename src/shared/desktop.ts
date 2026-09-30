@@ -3,6 +3,7 @@ import type {
   GenerationDraft,
   ReferenceImportResult,
 } from './generation/draft';
+import type { GenerationWorkspace } from './generation/workspace';
 import type { InteractionSettings } from './interaction/settings';
 import type {
   LibraryState,
@@ -12,6 +13,8 @@ import type {
 } from './models';
 
 export const IPC_CHANNELS = {
+  getGenerationWorkspace: 'generation:workspace',
+  saveGenerationWorkspace: 'generation:save-workspace',
   getGenerationDraft: 'generation:draft',
   saveGenerationDraft: 'generation:save-draft',
   importReferences: 'generation:import-references',
@@ -47,6 +50,11 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  getGenerationWorkspace: (projectId: string) => Promise<GenerationWorkspace>;
+  saveGenerationWorkspace: (
+    projectId: string,
+    workspace: GenerationWorkspace,
+  ) => Promise<GenerationWorkspace>;
   getGenerationDraft: (projectId: string) => Promise<GenerationDraft>;
   saveGenerationDraft: (
     projectId: string,

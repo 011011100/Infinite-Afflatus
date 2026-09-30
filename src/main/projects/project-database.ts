@@ -41,7 +41,7 @@ export function createProjectDatabase(
   }
 }
 
-function withProject<T>(
+export function withProject<T>(
   file: string,
   write: boolean,
   operation: (db: DatabaseSync) => T,

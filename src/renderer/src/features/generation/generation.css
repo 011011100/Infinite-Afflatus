@@ -1,48 +1,25 @@
-.generation-layout {
-  grid-template-columns: minmax(200px, 248px) minmax(260px, 1fr) 264px;
+.material-card .generation-reference {
+  overflow: hidden;
 }
-
-.generation-page {
-  animation: generation-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+.generation-group-settings {
+  animation: generation-settings-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: left top;
 }
-
-.generation-reference {
-  animation: generation-card-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+.generation-group-settings .generation-settings {
+  max-height: 620px;
 }
-
-@keyframes generation-enter {
+@keyframes generation-settings-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateX(-4px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0) scale(1);
   }
 }
-
-@keyframes generation-card-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@media (width < 1100px) {
-  .generation-layout {
-    grid-template-columns: 212px minmax(240px, 1fr) 240px;
-    gap: 16px;
-    padding: 20px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .generation-page,
-  .generation-reference {
+  .generation-group-settings {
     animation: none;
   }
 }

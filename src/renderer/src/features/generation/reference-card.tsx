@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { Asset } from '../../../../shared/models';
 import { mediaUrl } from '../workspace/media';
-import { message } from './use-generation-draft';
+import { message } from './errors';
 
 export const referenceLabels = {
   image: '图片',
@@ -24,13 +24,13 @@ export function ReferenceCard({
   asset,
   label,
   onRemove,
-  onInsert,
+  disabled = false,
 }: {
   projectId: string;
   asset: Asset;
   label: string;
   onRemove: () => void;
-  onInsert: (text: string) => void;
+  disabled?: boolean;
 }) {
   const Icon = referenceIcons[asset.kind];
   const [text, setText] = useState<string | null>(null);
@@ -54,28 +54,29 @@ export function ReferenceCard({
   }, [projectId, asset.id, asset.kind]);
 
   return (
-    <article className="generation-reference group rounded-xl border bg-card shadow-sm">
-      <div className="flex items-center gap-2 px-3 py-2.5 text-xs">
+    <article className="generation-reference group h-full rounded-xl bg-card">
+      <div className="material-handle flex items-center gap-2 px-3 py-2.5 text-xs">
         <Icon className="size-3.5 text-muted-foreground" />
         <span className="font-medium">{label}</span>
         <Button
           variant="ghost"
           size="icon-xs"
-          className="ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          disabled={disabled}
+          className="nodrag nopan ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
           aria-label={`移除${label}`}
-          title="从当前草稿移除"
+          title="从素材画布移除"
           onClick={onRemove}
         >
           <X />
         </Button>
       </div>
-      <div className="mx-2 overflow-hidden rounded-lg bg-secondary">
+      <div className="nodrag nopan nowheel mx-2 h-[156px] overflow-hidden rounded-lg bg-secondary">
         {asset.kind === 'image' && (
           <img
             src={url}
             alt={asset.name}
             loading="lazy"
-            className="max-h-56 min-h-24 w-full object-contain"
+            className="h-full w-full object-contain"
             onError={() => setError('图片无法预览，请检查文件')}
           />
         )}
@@ -86,7 +87,7 @@ export function ReferenceCard({
             controls
             preload="metadata"
             playsInline
-            className="max-h-56 min-h-32 w-full bg-foreground"
+            className="h-full w-full bg-foreground"
             onError={() => setError('视频无法预览，请检查格式')}
           >
             <track kind="captions" />
@@ -131,16 +132,6 @@ export function ReferenceCard({
         >
           {asset.name}
         </p>
-        {asset.kind === 'text' && (
-          <Button
-            size="xs"
-            variant="ghost"
-            disabled={!text}
-            onClick={() => text && onInsert(text)}
-          >
-            插入正文
-          </Button>
-        )}
       </div>
       {expanded && (
         <Modal
@@ -151,19 +142,6 @@ export function ReferenceCard({
           <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-7">
             {text}
           </pre>
-          <div className="mt-5 flex justify-end">
-            <Button
-              disabled={!text}
-              onClick={() => {
-                if (text) {
-                  onInsert(text);
-                  setExpanded(false);
-                }
-              }}
-            >
-              插入正文
-            </Button>
-          </div>
         </Modal>
       )}
     </article>
