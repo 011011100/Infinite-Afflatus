@@ -167,7 +167,7 @@ export function useMaterialFlow(
     update((current) => groupMaterials(current, selected, id, activeGroup));
     setPositions({});
     setSelected([id]);
-    setActiveGroup(id);
+    setActiveGroup(null);
   };
   return {
     nodes,
