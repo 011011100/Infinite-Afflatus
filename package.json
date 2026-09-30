@@ -19,6 +19,7 @@
     "format": "biome format --write .",
     "doctor:media": "node scripts/check-media-tools.mjs",
     "test": "node --import tsx --test tests/*.test.ts",
+    "test:motion": "electron tests/browser/surface-motion.cjs",
     "test:text-drag": "electron tests/browser/text-block-drag.cjs"
   },
   "dependencies": {

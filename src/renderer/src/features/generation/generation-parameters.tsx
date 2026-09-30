@@ -1,5 +1,6 @@
 import { Sparkles, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select } from '@/components/ui/select';
 import {
   GENERATION_RATIOS,
@@ -73,28 +74,21 @@ export function GenerationSettings({
         </div>
         <fieldset className="space-y-2">
           <legend className="mb-2 text-xs text-muted-foreground">分辨率</legend>
-          <div className="flex gap-1 rounded-lg bg-secondary p-1">
-            {(['480p', '720p', '1080p'] as const).map((resolution) => (
-              <Button
-                key={resolution}
-                size="sm"
-                className={`flex-1 px-1 text-xs ${value.resolution === resolution ? 'bg-background text-primary shadow-sm hover:bg-background' : ''}`}
-                variant="ghost"
-                aria-pressed={value.resolution === resolution}
-                disabled={
-                  resolution === '1080p' && value.model === 'seedance-2.0-fast'
-                }
-                title={
-                  resolution === '1080p' && value.model === 'seedance-2.0-fast'
-                    ? 'Fast 不支持 1080p'
-                    : undefined
-                }
-                onClick={() => onChange({ ...value, resolution })}
-              >
-                {resolution}
-              </Button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="分辨率"
+            value={value.resolution}
+            options={(['480p', '720p', '1080p'] as const).map((resolution) => ({
+              value: resolution,
+              label: resolution,
+              disabled:
+                resolution === '1080p' && value.model === 'seedance-2.0-fast',
+              title:
+                resolution === '1080p' && value.model === 'seedance-2.0-fast'
+                  ? 'Fast 不支持 1080p'
+                  : undefined,
+            }))}
+            onChange={(resolution) => onChange({ ...value, resolution })}
+          />
         </fieldset>
         <div className="space-y-2">
           <label

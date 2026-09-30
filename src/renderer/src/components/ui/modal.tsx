@@ -12,7 +12,7 @@ export function Modal({
   error,
 }: {
   title: string;
-  children: ReactNode;
+  children: ReactNode | ((requestClose: () => void) => ReactNode);
   onClose: () => void;
   onCloseStart?: () => void;
   wide?: boolean;
@@ -54,7 +54,7 @@ export function Modal({
             {error}
           </p>
         )}
-        {children}
+        {typeof children === 'function' ? children(requestClose) : children}
       </div>
     </dialog>
   );

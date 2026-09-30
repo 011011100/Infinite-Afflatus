@@ -15,6 +15,8 @@ export function useModalMotion(
     const modal = ref.current;
     if (!modal) return;
     modal.dataset.instant = String(instantMotion());
+    closing.current = false;
+    modal.inert = false;
     modal.showModal();
     // Establish the initial scale/opacity before applying the open state.
     void modal.offsetWidth;
@@ -31,6 +33,7 @@ export function useModalMotion(
     const modal = ref.current;
     if (!modal || closing.current) return;
     closing.current = true;
+    modal.inert = true;
     onCloseStart?.();
     // Stop media immediately even when the surface is still fading out.
     modal

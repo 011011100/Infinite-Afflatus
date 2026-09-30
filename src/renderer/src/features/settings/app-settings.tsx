@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useRef, useState } from 'react';
 import { Modal } from '@/components/ui/modal';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useContentMotion } from '@/components/ui/use-surface-motion';
 import type { LibraryState } from '../../../../shared/models';
 import { InteractionSettings } from './interaction-settings';
 import { StorageSettings } from './storage-settings';
@@ -17,29 +18,29 @@ export function AppSettings({
   error: string | null;
 }) {
   const [page, setPage] = useState<'interactions' | 'storage'>('interactions');
+  const content = useRef<HTMLDivElement>(null);
+  useContentMotion(content, page);
   return (
     <Modal title="设置" onClose={onClose} error={error}>
       <nav className="mb-6 flex gap-2 border-b pb-4" aria-label="设置分类">
-        <Button
-          variant={page === 'interactions' ? 'secondary' : 'ghost'}
-          aria-pressed={page === 'interactions'}
-          onClick={() => setPage('interactions')}
-        >
-          交互与快捷键
-        </Button>
-        <Button
-          variant={page === 'storage' ? 'secondary' : 'ghost'}
-          aria-pressed={page === 'storage'}
-          onClick={() => setPage('storage')}
-        >
-          保存与存储
-        </Button>
+        <SegmentedControl
+          className="w-72"
+          label="设置分类"
+          value={page}
+          options={[
+            { value: 'interactions', label: '交互与快捷键' },
+            { value: 'storage', label: '保存与存储' },
+          ]}
+          onChange={setPage}
+        />
       </nav>
-      <div hidden={page !== 'interactions'}>
-        <InteractionSettings settings={library.interactions} run={run} />
-      </div>
-      <div hidden={page !== 'storage'}>
-        <StorageSettings library={library} run={run} />
+      <div ref={content}>
+        <div hidden={page !== 'interactions'}>
+          <InteractionSettings settings={library.interactions} run={run} />
+        </div>
+        <div hidden={page !== 'storage'}>
+          <StorageSettings library={library} run={run} />
+        </div>
       </div>
     </Modal>
   );

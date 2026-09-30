@@ -16,6 +16,12 @@
 .group-stage::backdrop {
   background: rgb(20 35 65 / 0.12);
   backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity var(--modal-close-dur) var(--modal-ease);
+}
+.group-stage[data-open="true"]::backdrop {
+  opacity: 1;
+  transition-duration: var(--modal-open-dur);
 }
 .group-stage-toolbar {
   position: absolute;
@@ -25,7 +31,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  opacity: 0;
+  transition: opacity var(--modal-close-dur) var(--modal-ease);
 }
+.group-stage[data-open="true"] .group-stage-toolbar {
+  opacity: 1;
+  transition-duration: var(--modal-open-dur);
+}
+.group-stage[data-instant="true"]::backdrop,
+.group-stage[data-instant="true"] .group-stage-toolbar {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .group-stage::backdrop,
+  .group-stage-toolbar {
+    transition: none;
+  }
+}
+
 .group-stage-error {
   position: absolute;
   top: 68px;

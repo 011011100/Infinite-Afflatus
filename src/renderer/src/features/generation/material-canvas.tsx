@@ -26,6 +26,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { usePageMotion } from '@/components/ui/use-surface-motion';
 import { isMac } from '@/lib/platform';
 import type { ShotWorkspace } from '../../../../shared/generation/workspace';
 import type { ProjectSnapshot } from '../../../../shared/models';
@@ -54,6 +55,7 @@ export function MaterialCanvas({
   error,
   onChange,
   onClose,
+  beforeClose,
   retry,
 }: {
   shot: ShotWorkspace;
@@ -63,14 +65,15 @@ export function MaterialCanvas({
   saving: boolean;
   error: string | null;
   onChange: (change: (shot: ShotWorkspace) => ShotWorkspace) => void;
-  onClose: () => Promise<void>;
+  onClose: () => void;
+  beforeClose: () => Promise<boolean>;
   retry: () => Promise<boolean>;
 }) {
   const flow = useRef<ReactFlowInstance<MaterialCanvasNode> | null>(null);
   const page = useRef<HTMLElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const { closing, requestClose } = usePageMotion(page, onClose, beforeClose);
   const model = useMaterialFlow(
     shot,
     snapshot.assets,
@@ -113,10 +116,8 @@ export function MaterialCanvas({
   }, []);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
-    if (closing || importing) return;
-    setClosing(true);
-    await onClose();
-    setClosing(false);
+    if (importing) return;
+    await requestClose();
   };
   const selectedGroup = shot.groups.find((group) =>
     model.selected.includes(group.id),

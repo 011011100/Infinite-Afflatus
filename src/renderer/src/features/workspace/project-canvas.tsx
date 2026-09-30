@@ -469,7 +469,8 @@ function CanvasContent({
           onChange={(update) => {
             if (shots.activeId) shots.updateShot(shots.activeId, update);
           }}
-          onClose={shots.close}
+          beforeClose={shots.flush}
+          onClose={shots.dismiss}
           retry={shots.retry}
         />
       )}

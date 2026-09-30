@@ -38,7 +38,10 @@ export interface EditorProps {
 }
 
 export function useSequenceEditor(
-  props: EditorProps & { frames: Map<string, ThumbnailFrame> },
+  props: EditorProps & {
+    frames: Map<string, ThumbnailFrame>;
+    closing?: boolean;
+  },
 ) {
   const { card, assets, frames, blocked, saving } = props;
   const [draft, setDraft] = useState<{
@@ -81,6 +84,11 @@ export function useSequenceEditor(
     [assets, durations, draft, edits.card.trims],
   );
   const playback = useSequencePlayback(props.projectId, clips);
+  const stop = playback.stop;
+  useEffect(() => {
+    // Metadata may finish loading during the exit; a late-mounted player must stay stopped.
+    if (props.closing) stop();
+  }, [props.closing, stop]);
   const selected = Math.max(
     0,
     clips.findIndex((clip) => clip.asset.id === selectedId),
@@ -102,7 +110,7 @@ export function useSequenceEditor(
   const pending = saving || edits.pending;
   const disabled = blocked || pending;
   const close = () => {
-    if (pending || gesturing) return;
+    if (pending || gesturing || props.closing) return;
     playback.stop();
     props.onClose();
   };
@@ -142,7 +150,13 @@ export function useSequenceEditor(
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      if (
+        props.closing ||
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing
+      )
+        return;
       if (event.key === 'Escape') {
         if (gesturing) return;
         event.preventDefault();

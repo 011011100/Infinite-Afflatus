@@ -64,6 +64,8 @@ pnpm doctor:media
 
 已有 `pnpm dev` 运行时，可以执行 `pnpm test:text-drag` 回归悬浮编辑的文本块拖动。脚本复用 5173 服务，在隔离 Electron 窗口中加载真实组件与合成文本，用原生鼠标按下／移动／松开事件验证排序、取消、移出和边缘滚动；不会启动第二个开发服务或打开用户项目。临时页面在退出时清理。
 
+`pnpm test:motion` 同样复用现有服务，用真实 MaterialCanvas、Modal、AppSettings 和 Base UI 菜单检查：保存失败留在原页、重复关闭、进出动画衔接、保存中卸载、焦点归还、设置草稿保留及减少动态效果。只使用合成状态，不连接 IPC 或用户项目。`AFFLATUS_TEST_SCREENSHOTS=/private/tmp/afflatus-motion pnpm test:motion` 可保留验证截图；这是隔离 Electron 组件验证，不等同于完整桌面 IPC、Windows 或正式安装包验证。
+
 `pnpm start` 打开已经构建的桌面应用，不等同于生成安装包。当前没有安装包签名、自动更新或跨平台发布命令。
 
 需要指定媒体工具位置时，设置进程环境变量 `FFMPEG_PATH` 和 `FFPROBE_PATH`，值为可执行文件完整路径，不包含参数。检测脚本直接读取环境变量，不自动加载 `.env`。

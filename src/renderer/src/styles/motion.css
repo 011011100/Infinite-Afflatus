@@ -97,3 +97,35 @@
     transition: none;
   }
 }
+
+/* Menus remain anchored to Base UI's pointer/trigger origin. */
+.t-context-menu {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity var(--modal-open-dur) var(--modal-ease),
+    transform var(--modal-open-dur) var(--modal-ease);
+}
+.t-context-menu[data-starting-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+.t-context-menu[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.99);
+  transition-duration: var(--modal-close-dur);
+  pointer-events: none;
+}
+.t-segmented-indicator {
+  transition: transform var(--modal-open-dur) var(--modal-ease);
+}
+.t-context-menu.t-motion-instant,
+.t-context-menu[data-instant],
+.t-segmented[data-instant="true"] .t-segmented-indicator {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-context-menu,
+  .t-segmented-indicator {
+    transition: none;
+  }
+}

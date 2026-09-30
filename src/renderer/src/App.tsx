@@ -1,8 +1,9 @@
 import { ArrowLeft, Settings2, Upload, X } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { useContentMotion } from '@/components/ui/use-surface-motion';
 import { ProjectHome } from '@/features/projects/project-home';
 import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
@@ -17,6 +18,11 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
   const { library, project, busy, run } = state;
+  const content = useRef<HTMLDivElement>(null);
+  useContentMotion(
+    content,
+    !library ? 'loading' : (project?.project.id ?? 'home'),
+  );
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-background px-6 select-none">
@@ -93,31 +99,33 @@ export function App() {
           run={run}
         />
       )}
-      {!library ? (
-        <main className="grid flex-1 place-items-center text-sm text-muted-foreground">
-          {state.error ? '项目库尚未打开' : '正在打开项目库…'}
-        </main>
-      ) : project ? (
-        <CanvasErrorBoundary
-          key={`canvas:${project.project.id}`}
-          onHome={state.home}
-        >
-          <ProjectCanvas
-            snapshot={project}
-            blocked={library.writeBlocked}
-            interactions={library.interactions}
-            inactive={settings || newName !== null}
-            report={state.report}
+      <div ref={content} className="flex min-h-0 flex-1 flex-col">
+        {!library ? (
+          <main className="grid flex-1 place-items-center text-sm text-muted-foreground">
+            {state.error ? '项目库尚未打开' : '正在打开项目库…'}
+          </main>
+        ) : project ? (
+          <CanvasErrorBoundary
+            key={`canvas:${project.project.id}`}
+            onHome={state.home}
+          >
+            <ProjectCanvas
+              snapshot={project}
+              blocked={library.writeBlocked}
+              interactions={library.interactions}
+              inactive={settings || newName !== null}
+              report={state.report}
+            />
+          </CanvasErrorBoundary>
+        ) : (
+          <ProjectHome
+            projects={library.projects}
+            disabled={busy || library.writeBlocked}
+            onCreate={state.create}
+            onOpen={state.open}
           />
-        </CanvasErrorBoundary>
-      ) : (
-        <ProjectHome
-          projects={library.projects}
-          disabled={busy || library.writeBlocked}
-          onCreate={state.create}
-          onOpen={state.open}
-        />
-      )}
+        )}
+      </div>
       {settings && library && (
         <AppSettings
           library={library}
@@ -132,37 +140,38 @@ export function App() {
           onClose={() => setNewName(null)}
           error={state.error}
         >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void run(async () => {
-                await window.desktop.renameProject(project.project.id, newName);
-                setNewName(null);
-              });
-            }}
-          >
-            <Input
-              aria-label="项目名称"
-              value={newName}
-              maxLength={100}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-            <div className="mt-5 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setNewName(null)}
-              >
-                取消
-              </Button>
-              <Button
-                type="submit"
-                disabled={busy || !newName.trim() || library?.writeBlocked}
-              >
-                保存
-              </Button>
-            </div>
-          </form>
+          {(requestClose) => (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(async () => {
+                  await window.desktop.renameProject(
+                    project.project.id,
+                    newName,
+                  );
+                  requestClose();
+                });
+              }}
+            >
+              <Input
+                aria-label="项目名称"
+                value={newName}
+                maxLength={100}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+              <div className="mt-5 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={requestClose}>
+                  取消
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={busy || !newName.trim() || library?.writeBlocked}
+                >
+                  保存
+                </Button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
     </div>

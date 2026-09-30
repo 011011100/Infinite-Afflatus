@@ -145,8 +145,6 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
         return false;
       }
     },
-    close: async () => {
-      if (await flush()) setActiveId(null);
-    },
+    dismiss: () => setActiveId(null),
   };
 }

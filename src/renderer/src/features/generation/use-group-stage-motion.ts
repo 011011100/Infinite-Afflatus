@@ -1,4 +1,5 @@
 import { type RefObject, useLayoutEffect, useRef } from 'react';
+import { instantMotion } from '@/lib/input-method';
 
 type Origin = { x: number; y: number; width: number; height: number };
 export function useGroupStageMotion(
@@ -23,21 +24,29 @@ export function useGroupStageMotion(
     if (!dialog) return;
     alive.current = true;
     closing.current = false;
+    dialog.inert = false;
+    dialog.dataset.open = 'false';
+    const instant = instantMotion();
+    dialog.dataset.instant = String(instant);
     dialog.showModal();
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    void dialog.offsetWidth;
+    const frame = requestAnimationFrame(() => {
+      if (!closing.current) dialog.dataset.open = 'true';
+    });
     animations.current = [
       ...dialog.querySelectorAll<HTMLElement>('[data-stage-panel]'),
     ].map((panel) =>
       panel.animate(
         [
-          { opacity: 0, transform: reduced ? 'none' : poseRef.current(panel) },
+          { opacity: 0, transform: instant ? 'none' : poseRef.current(panel) },
           { opacity: 1, transform: 'none' },
         ],
-        { duration: reduced ? 100 : 340, easing: 'cubic-bezier(.2,.8,.2,1)' },
+        { duration: instant ? 0 : 340, easing: 'cubic-bezier(.22,1,.36,1)' },
       ),
     );
     return () => {
       alive.current = false;
+      cancelAnimationFrame(frame);
       animations.current.forEach((animation) => {
         animation.cancel();
       });
@@ -48,6 +57,9 @@ export function useGroupStageMotion(
     const dialog = ref.current;
     if (!dialog || closing.current) return;
     closing.current = true;
+    dialog.inert = true;
+    dialog.dataset.open = 'false';
+    dialog.dataset.instant = String(instantMotion());
     dialog
       .querySelectorAll<HTMLMediaElement>('video,audio')
       .forEach((media) => {
@@ -63,16 +75,16 @@ export function useGroupStageMotion(
     animations.current.forEach((animation) => {
       animation.cancel();
     });
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (instantMotion()) {
+      callbacks.current.onClose();
+      return;
+    }
     animations.current = panels.map((panel, i) =>
       panel.animate(
-        [
-          start[i] ?? {},
-          { opacity: 0, transform: reduced ? 'none' : poseRef.current(panel) },
-        ],
+        [start[i] ?? {}, { opacity: 0, transform: poseRef.current(panel) }],
         {
-          duration: reduced ? 80 : 200,
-          easing: 'cubic-bezier(.4,0,.8,.2)',
+          duration: 150,
+          easing: 'cubic-bezier(.22,1,.36,1)',
           fill: 'forwards',
         },
       ),

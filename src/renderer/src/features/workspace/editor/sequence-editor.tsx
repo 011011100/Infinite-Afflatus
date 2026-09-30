@@ -2,6 +2,7 @@ import { ArrowLeft, LoaderCircle, Redo2, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { usePageMotion } from '@/components/ui/use-surface-motion';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { SequenceControls } from './sequence-controls';
 import { SequenceTimeline } from './sequence-timeline';
@@ -14,6 +15,7 @@ export function SequenceEditor(props: EditorProps) {
     props.assets,
   );
   const page = useRef<HTMLDivElement>(null);
+  const { closing, requestClose } = usePageMotion(page, props.onClose);
   useEffect(() => {
     const root = document.getElementById('root');
     const focus = document.activeElement;
@@ -33,16 +35,21 @@ export function SequenceEditor(props: EditorProps) {
       onKeyDown={(event) => {
         if (!frames && event.key === 'Escape') {
           event.preventDefault();
-          props.onClose();
+          void requestClose();
         }
       }}
     >
       {frames ? (
-        <EditorContent {...props} frames={frames} />
+        <EditorContent
+          {...props}
+          frames={frames}
+          closing={closing}
+          onClose={() => void requestClose()}
+        />
       ) : (
         <>
           <header className="flex h-14 shrink-0 items-center border-b px-5">
-            <Button variant="ghost" onClick={props.onClose}>
+            <Button variant="ghost" onClick={() => void requestClose()}>
               <ArrowLeft />
               返回画布
             </Button>
@@ -70,7 +77,10 @@ export function SequenceEditor(props: EditorProps) {
 }
 
 function EditorContent(
-  props: EditorProps & { frames: Map<string, ThumbnailFrame> },
+  props: EditorProps & {
+    frames: Map<string, ThumbnailFrame>;
+    closing: boolean;
+  },
 ) {
   const { assets, frames, blocked } = props;
   const [zoom, setZoom] = useState(1);
