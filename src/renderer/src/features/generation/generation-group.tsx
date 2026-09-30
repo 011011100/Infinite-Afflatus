@@ -1,10 +1,8 @@
 import type { Node, NodeProps } from '@xyflow/react';
-import { SlidersHorizontal, Sparkles, Ungroup, X } from 'lucide-react';
+import { Expand, Sparkles, Ungroup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { GenerationParameters } from '../../../../shared/generation/draft';
 import type { GenerationGroup } from '../../../../shared/generation/workspace';
-import { GenerationSettings } from './generation-parameters';
 
 export type GenerationGroupNode = Node<
   {
@@ -14,7 +12,6 @@ export type GenerationGroupNode = Node<
     blocked: boolean;
     toggle: (id: string | null) => void;
     ungroup: (id: string) => void;
-    change: (id: string, parameters: GenerationParameters) => void;
   },
   'generationGroup'
 >;
@@ -49,32 +46,13 @@ export function GenerationGroupCard({
             size="sm"
             variant="ghost"
             aria-expanded={data.open}
-            onClick={() => data.toggle(data.open ? null : id)}
+            onClick={() => data.toggle(id)}
           >
-            <SlidersHorizontal />
-            参数
+            <Expand />
+            展开编辑
           </Button>
         </div>
       </header>
-      {data.open && (
-        <div className="nodrag nopan nowheel generation-group-settings absolute left-full top-0 ml-5 w-[276px]">
-          <Button
-            className="absolute right-3 top-3 z-10"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="收起生成参数"
-            onClick={() => data.toggle(null)}
-          >
-            <X />
-          </Button>
-          <fieldset disabled={data.blocked}>
-            <GenerationSettings
-              value={data.group.parameters}
-              onChange={(parameters) => data.change(id, parameters)}
-            />
-          </fieldset>
-        </div>
-      )}
     </div>
   );
 }

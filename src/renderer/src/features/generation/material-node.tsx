@@ -97,6 +97,7 @@ export function MaterialCard({
         <ReferenceCard
           projectId={data.projectId}
           asset={data.asset}
+          textOverride={material.textOverride}
           label={referenceLabels[data.asset.kind]}
           onRemove={() => data.remove(id)}
           disabled={data.blocked}

@@ -1,6 +1,5 @@
 import type { NodeChange, NodePositionChange } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
-import type { GenerationParameters } from '../../../../shared/generation/draft';
 import {
   detachMaterial,
   materialSelection,
@@ -51,11 +50,11 @@ export function useMaterialFlow(
     setActiveGroup(null);
     setSelected([]);
   };
-  const detach = (id: string) => {
+  const detach = (id: string, center?: Point) => {
     if (blocked) return;
     const material = shot.nodes.find((node) => node.id === id);
     if (!material?.groupId) return;
-    update((current) => detachMaterial(current, id));
+    update((current) => detachMaterial(current, id, center));
     setPositions({});
     setSelected([id]);
     setDetached({ id, groupId: material.groupId });
@@ -67,13 +66,6 @@ export function useMaterialFlow(
     )
       setActiveGroup(null);
   };
-  const parameters = (id: string, value: GenerationParameters) =>
-    update((current) => ({
-      ...current,
-      groups: current.groups.map((group) =>
-        group.id === id ? { ...group, parameters: value } : group,
-      ),
-    }));
   const nodes: MaterialCanvasNode[] = [
     ...shot.groups.map((group) => ({
       id: group.id,
@@ -90,7 +82,6 @@ export function useMaterialFlow(
         blocked,
         toggle: setActiveGroup,
         ungroup,
-        change: parameters,
       },
     })),
     ...shot.nodes.map((material) => ({

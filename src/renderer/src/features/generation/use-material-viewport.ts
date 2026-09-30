@@ -1,6 +1,5 @@
 import type { ReactFlowInstance } from '@xyflow/react';
-import { type RefObject, useEffect, useRef } from 'react';
-import type { ShotWorkspace } from '../../../../shared/generation/workspace';
+import { type RefObject, useEffect } from 'react';
 import type { MaterialCanvasNode } from './use-material-flow';
 
 const duration = () =>
@@ -9,31 +8,13 @@ const duration = () =>
 export function useMaterialViewport(
   flow: RefObject<ReactFlowInstance<MaterialCanvasNode> | null>,
   area: RefObject<HTMLDivElement | null>,
-  shot: ShotWorkspace,
   activeGroup: string | null,
   detached: { id: string; groupId?: string } | null,
 ) {
-  const framedGroup = useRef<string | null>(null);
-  useEffect(() => {
-    if (framedGroup.current === activeGroup) return;
-    framedGroup.current = activeGroup;
-    const group = shot.groups.find((item) => item.id === activeGroup);
-    if (group)
-      void flow.current?.fitBounds(
-        {
-          x: group.position.x,
-          y: group.position.y - 72,
-          width: group.width + 296,
-          height: Math.max(group.height, 620) + 72,
-        },
-        { padding: 0.12, duration: duration() },
-      );
-  }, [activeGroup, shot.groups, flow]);
-
   useEffect(() => {
     const instance = flow.current;
     const surface = area.current;
-    if (!detached || !instance || !surface) return;
+    if (activeGroup || !detached || !instance || !surface) return;
     const viewport = instance.getViewport();
     const card = instance.getNodesBounds([detached.id]);
     const left = card.x * viewport.zoom + viewport.x;
@@ -55,5 +36,5 @@ export function useMaterialViewport(
       maxZoom: Math.min(1, viewport.zoom),
       duration: duration(),
     });
-  }, [detached, flow, area]);
+  }, [detached, flow, area, activeGroup]);
 }

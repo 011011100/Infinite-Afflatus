@@ -6,6 +6,10 @@ import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { Library } from '../src/main/storage/library';
 import { emptyGenerationDraft } from '../src/shared/generation/draft';
+import {
+  editMaterialText,
+  reorderGroupMembers,
+} from '../src/shared/generation/group-editing';
 import { detachMaterial } from '../src/shared/generation/material-groups';
 import { materialPosition } from '../src/shared/generation/material-layout';
 import {
@@ -222,6 +226,8 @@ test('merged groups and detached materials survive SQLite reopen with their cont
     shots: [shot],
   });
   shot = groupMaterials(shot, ['first', 'second'], 'merged', 'first');
+  shot = reorderGroupMembers(shot, 'merged', ['three', 'two', 'one']);
+  shot = editMaterialText(shot, 'three', '重排后的文本');
   saved = await f.library.generation.saveWorkspace(project.id, {
     ...saved,
     shots: [shot],
@@ -242,6 +248,14 @@ test('merged groups and detached materials survive SQLite reopen with their cont
       saved,
     );
     assert.equal(saved.shots[0]?.groups[0]?.parameters.duration, 12);
+    assert.deepEqual(
+      saved.shots[0]?.nodes.map((node) => node.id),
+      ['three', 'two', 'one'],
+    );
+    assert.equal(
+      saved.shots[0]?.nodes[0]?.type === 'text' && saved.shots[0].nodes[0].text,
+      '重排后的文本',
+    );
     assert.equal(
       saved.shots[0]?.nodes.find((node) => node.id === 'two')?.groupId,
       undefined,

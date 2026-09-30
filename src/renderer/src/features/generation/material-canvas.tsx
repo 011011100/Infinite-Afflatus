@@ -30,6 +30,7 @@ import { isMac } from '@/lib/platform';
 import type { ShotWorkspace } from '../../../../shared/generation/workspace';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { GenerationGroupCard } from './generation-group';
+import { GroupStage } from './group-stage';
 import { MaterialCard } from './material-node';
 import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferencePicker } from './reference-picker';
@@ -110,7 +111,7 @@ export function MaterialCanvas({
         focused.focus({ preventScroll: true });
     };
   }, []);
-  useMaterialViewport(flow, area, shot, model.activeGroup, model.detached);
+  useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
     if (closing || importing) return;
     setClosing(true);
@@ -126,6 +127,9 @@ export function MaterialCanvas({
       : undefined;
   const groupLabel = model.grouping.groups.length ? '合并成组' : '生成视频';
   const disabled = blocked || importing || closing;
+  const editingGroup = shot.groups.find(
+    (group) => group.id === model.activeGroup,
+  );
   return createPortal(
     <section
       ref={page}
@@ -336,7 +340,7 @@ export function MaterialCanvas({
               <ContextMenuItem
                 onClick={() => model.setActiveGroup(selectedGroup.id)}
               >
-                生成参数
+                展开编辑
               </ContextMenuItem>
               <ContextMenuItem
                 disabled={disabled}
@@ -368,6 +372,37 @@ export function MaterialCanvas({
           remaining={24}
           onAdd={addAssets}
           onClose={() => setPicker(false)}
+        />
+      )}
+      {editingGroup && (
+        <GroupStage
+          key={editingGroup.id}
+          shot={shot}
+          group={editingGroup}
+          assets={snapshot.assets}
+          projectId={snapshot.project.id}
+          disabled={disabled}
+          saving={saving}
+          error={error}
+          update={onChange}
+          onClose={() => model.setActiveGroup(null)}
+          detach={(id, at) =>
+            model.detach(
+              id,
+              at ? flow.current?.screenToFlowPosition(at) : undefined,
+            )
+          }
+          origin={() => {
+            const point =
+              flow.current?.flowToScreenPosition(editingGroup.position) ??
+              editingGroup.position;
+            const zoom = flow.current?.getZoom() ?? 1;
+            return {
+              ...point,
+              width: editingGroup.width * zoom,
+              height: editingGroup.height * zoom,
+            };
+          }}
         />
       )}
     </section>,

@@ -165,6 +165,13 @@ export function validateWorkspace(value: unknown): GenerationWorkspace {
         throw new Error('文本卡片最多 10000 个字符');
       if (node.type === 'asset' && !validId(node.assetId))
         throw new Error('素材引用无效');
+      if (
+        node.type === 'asset' &&
+        node.textOverride !== undefined &&
+        (typeof node.textOverride !== 'string' ||
+          node.textOverride.length > 10000)
+      )
+        throw new Error('文本卡片最多 10000 个字符');
       ids.add(node.id);
     }
   }

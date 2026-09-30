@@ -1,5 +1,5 @@
 import { FileText, Film, ImageIcon, Music2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import type { Asset } from '../../../../shared/models';
@@ -25,12 +25,18 @@ export function ReferenceCard({
   label,
   onRemove,
   disabled = false,
+  textOverride,
+  removeLabel = '从素材画布移除',
+  removeIcon,
 }: {
   projectId: string;
   asset: Asset;
   label: string;
   onRemove: () => void;
   disabled?: boolean;
+  textOverride?: string | undefined;
+  removeLabel?: string;
+  removeIcon?: ReactNode;
 }) {
   const Icon = referenceIcons[asset.kind];
   const [text, setText] = useState<string | null>(null);
@@ -63,11 +69,13 @@ export function ReferenceCard({
           size="icon-xs"
           disabled={disabled}
           className="nodrag nopan ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-          aria-label={`移除${label}`}
-          title="从素材画布移除"
+          aria-label={
+            removeLabel === '从素材画布移除' ? `移除${label}` : removeLabel
+          }
+          title={removeLabel}
           onClick={onRemove}
         >
-          <X />
+          {removeIcon ?? <X />}
         </Button>
       </div>
       <div className="nodrag nopan nowheel mx-2 h-[156px] overflow-hidden rounded-lg bg-secondary">
@@ -115,7 +123,8 @@ export function ReferenceCard({
             aria-label={`查看${label}`}
           >
             <span className="line-clamp-5 whitespace-pre-wrap break-words">
-              {text === null ? '读取文本…' : text || '空文本文件'}
+              {textOverride ??
+                (text === null ? '读取文本…' : text || '空文本文件')}
             </span>
           </button>
         )}
@@ -140,7 +149,7 @@ export function ReferenceCard({
           error={error}
         >
           <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-7">
-            {text}
+            {textOverride ?? text}
           </pre>
         </Modal>
       )}

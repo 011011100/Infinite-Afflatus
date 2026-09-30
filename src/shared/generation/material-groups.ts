@@ -5,6 +5,7 @@ import {
   MATERIAL_HEIGHT,
   MATERIAL_WIDTH,
   type MaterialNode,
+  type Point,
   type ShotWorkspace,
 } from './workspace-types';
 
@@ -100,18 +101,24 @@ export function groupMaterials(
 }
 
 /** Detach one material, keeping other members and parameters exactly where they were. */
-export function detachMaterial(shot: ShotWorkspace, id: string): ShotWorkspace {
+export function detachMaterial(
+  shot: ShotWorkspace,
+  id: string,
+  center?: Point,
+): ShotWorkspace {
   const node = shot.nodes.find((item) => item.id === id);
   const parent = shot.groups.find((group) => group.id === node?.groupId);
   if (!node || !parent) return shot;
   const remaining = removeMaterial(shot, id);
   const absolute = absolutePosition(shot, node);
-  const position = remaining.groups.some((group) => group.id === parent.id)
-    ? materialPosition(remaining, {
-        x: absolute.x + MATERIAL_WIDTH / 2,
-        y: parent.position.y + parent.height + 36 + MATERIAL_HEIGHT / 2,
-      })
-    : absolute;
+  const position = center
+    ? materialPosition(remaining, center)
+    : remaining.groups.some((group) => group.id === parent.id)
+      ? materialPosition(remaining, {
+          x: absolute.x + MATERIAL_WIDTH / 2,
+          y: parent.position.y + parent.height + 36 + MATERIAL_HEIGHT / 2,
+        })
+      : absolute;
   const { groupId: _, ...material } = node;
   return {
     ...shot,

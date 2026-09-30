@@ -4,7 +4,7 @@ import type { GenerationParameters } from './draft';
 export type Point = { x: number; y: number };
 export type MaterialNode = { id: string; position: Point; groupId?: string } & (
   | { type: 'text'; text: string }
-  | { type: 'asset'; assetId: string }
+  | { type: 'asset'; assetId: string; textOverride?: string }
 );
 export interface GenerationGroup {
   id: string;
