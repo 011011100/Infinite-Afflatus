@@ -93,9 +93,10 @@ export class SequencePlayback {
     });
   }
 
-  setRanges(ranges: ClipTrim[]): void {
+  setRanges(ranges: ClipTrim[], align = true): void {
     this.ranges = ranges;
     if (
+      align &&
       this.active !== null &&
       this.state.pending === null &&
       !this.seeks.target
@@ -119,6 +120,20 @@ export class SequencePlayback {
       video.pause();
     });
     this.update({ playing: false });
+  }
+
+  /** Cancel pending intent while keeping loaded decoders and the last visible frame. */
+  interrupt(): void {
+    this.seeks.cancel();
+    this.jump.abort();
+    this.version++;
+    this.pause();
+    this.update({ pending: null, target: null });
+  }
+
+  warm(index: number, time = 0): void {
+    if (!this.closed && this.active === null && this.sources[index])
+      this.load(0, index, time);
   }
 
   toggle(): void {

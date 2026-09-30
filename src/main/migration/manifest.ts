@@ -1,5 +1,6 @@
 import { lstat } from 'node:fs/promises';
 import type { MigrationStatus } from '../../shared/models';
+import { readProxies } from '../projects/project-database';
 import type { ProjectService } from '../projects/project-service';
 import {
   type Fingerprint,
@@ -59,12 +60,24 @@ export async function buildManifest(
         relativePath: asset.relativePath,
         expected: asset,
       })),
+      ...readProxies(await projects.databasePath(id)).map((proxy) => ({
+        relativePath: proxy.relativePath,
+        expected: proxy,
+      })),
     ];
     for (const entry of entries) {
       const relativePath = `${snapshot.project.folder}/${entry.relativePath}`;
-      const source = await fingerprint(await safeFile(root, relativePath));
-      if (entry.expected && !sameContent(source, entry.expected))
-        throw new Error(`素材已变化：${entry.relativePath}`);
+      const derived = entry.expected && 'sourceHash' in entry.expected;
+      let source: Fingerprint;
+      try {
+        source = await fingerprint(await safeFile(root, relativePath));
+        if (entry.expected && !sameContent(source, entry.expected))
+          throw new Error(`素材已变化：${entry.relativePath}`);
+      } catch (error) {
+        // Missing/replaced derived files are rebuilt later; do not adopt or delete replacements.
+        if (derived) continue;
+        throw error;
+      }
       files.push({
         projectId: id,
         relativePath,

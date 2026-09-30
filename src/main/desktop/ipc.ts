@@ -66,6 +66,13 @@ export function registerDesktop(
     return library.projects.open(id(projectId));
   });
   ipcMain.handle(
+    IPC_CHANNELS.prepareProxy,
+    (event, projectId: unknown, assetId: unknown) => {
+      trustedWindow(event);
+      return library.proxies.ensure(id(projectId), id(assetId));
+    },
+  );
+  ipcMain.handle(
     IPC_CHANNELS.renameProject,
     async (event, projectId: unknown, name: unknown) => {
       trustedWindow(event);

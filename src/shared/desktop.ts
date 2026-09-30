@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   saveViewport: 'project:viewport',
   patchCanvas: 'project:canvas-patch',
   importVideos: 'project:import-videos',
+  prepareProxy: 'media:prepare-proxy',
   chooseDirectory: 'storage:choose',
   startMigration: 'storage:migrate',
   cancelMigration: 'storage:cancel',
@@ -32,6 +33,10 @@ export interface AppInfo {
   platform: string;
 }
 
+export interface ProxyResult {
+  ready: boolean;
+}
+
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
   getAppInfo: () => Promise<AppInfo>;
@@ -44,6 +49,7 @@ export interface DesktopBridge {
   saveViewport: (id: string, viewport: Viewport) => Promise<void>;
   patchCanvas: (id: string, patch: CanvasPatch) => Promise<ProjectSnapshot>;
   importVideos: (id: string) => Promise<void>;
+  prepareProxy: (projectId: string, assetId: string) => Promise<ProxyResult>;
   chooseDirectory: () => Promise<MigrationPreview | null>;
   startMigration: (token: string) => Promise<void>;
   cancelMigration: () => Promise<void>;

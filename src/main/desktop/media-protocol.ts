@@ -26,7 +26,7 @@ export function serveProjectMedia(library: Library): void {
       const url = new URL(request.url);
       const [projectId, assetId, extra] = url.pathname.slice(1).split('/');
       if (
-        url.host !== 'asset' ||
+        !['asset', 'proxy'].includes(url.host) ||
         !isId(projectId) ||
         !isId(assetId) ||
         extra ||
@@ -37,7 +37,11 @@ export function serveProjectMedia(library: Library): void {
       const asset = snapshot.assets.find((item) => item.id === assetId);
       if (!asset) return new Response(null, { status: 404 });
       const root = dirname(await library.projects.databasePath(projectId));
-      const file = await safeFile(root, asset.relativePath);
+      const file =
+        url.host === 'proxy'
+          ? await library.proxies.file(projectId, assetId)
+          : await safeFile(root, asset.relativePath);
+      if (!file) return new Response(null, { status: 404 });
       return net.fetch(pathToFileURL(file).toString(), {
         method: request.method,
         headers: request.headers,

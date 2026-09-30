@@ -2,6 +2,7 @@
 export class WriteGate {
   private tail: Promise<unknown> = Promise.resolve();
   private blocked = false;
+  private available = new Set<() => void>();
 
   get isBlocked(): boolean {
     return this.blocked;
@@ -23,6 +24,35 @@ export class WriteGate {
 
   release(): void {
     this.blocked = false;
+    for (const listener of this.available) listener();
+    this.available.clear();
+  }
+  /** Background derived media may finish during migration; resolve its path only after admission. */
+  async whenOpen<T>(
+    operation: () => Promise<T>,
+    signal: AbortSignal,
+  ): Promise<T> {
+    while (this.blocked) {
+      signal.throwIfAborted();
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          this.available.delete(ready);
+          signal.removeEventListener('abort', abort);
+        };
+        const ready = () => {
+          cleanup();
+          resolve();
+        };
+        const abort = () => {
+          cleanup();
+          reject(signal.reason);
+        };
+        this.available.add(ready);
+        signal.addEventListener('abort', abort, { once: true });
+      });
+    }
+    signal.throwIfAborted();
+    return this.run(operation);
   }
   async idle(): Promise<void> {
     await this.tail;

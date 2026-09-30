@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TimelineClip } from '../editor/timeline';
 import { mediaUrl } from '../media';
-import { type PlaybackState, SequencePlayback } from './sequence-playback';
+import { AdaptivePlayback } from './adaptive-playback';
+import type { PlaybackState } from './sequence-playback';
 
 export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
   const first = useRef<HTMLVideoElement>(null);
   const second = useRef<HTMLVideoElement>(null);
-  const controller = useRef<SequencePlayback | null>(null);
+  const proxyFirst = useRef<HTMLVideoElement>(null);
+  const proxySecond = useRef<HTMLVideoElement>(null);
+  const controller = useRef<AdaptivePlayback | null>(null);
+  const [proxyStatus, setProxyStatus] = useState<
+    'preparing' | 'ready' | 'unavailable'
+  >('preparing');
   const latest = useRef(clips);
   latest.current = clips;
   const sourceKey = clips.map((clip) => clip.asset.id).join(',');
@@ -19,16 +25,44 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
     target: null,
   });
   useEffect(() => {
-    if (!first.current || !second.current) return;
-    const playback = new SequencePlayback(
+    if (
+      !first.current ||
+      !second.current ||
+      !proxyFirst.current ||
+      !proxySecond.current
+    )
+      return;
+    const playback = new AdaptivePlayback(
       [first.current, second.current],
+      [proxyFirst.current, proxySecond.current],
       sourceKey.split(',').map((id) => mediaUrl(projectId, id)),
       setState,
     );
     playback.setRanges(latest.current.map((clip) => clip.range));
     controller.current = playback;
     void playback.select(0);
+    let disposed = false;
+    setProxyStatus('preparing');
+    void Promise.all(
+      sourceKey.split(',').map(async (id, index) => {
+        try {
+          const result = await window.desktop.prepareProxy(projectId, id);
+          if (result.ready && !disposed)
+            playback.setProxy(
+              index,
+              `afflatus-media://proxy/${projectId}/${id}`,
+            );
+          return result.ready;
+        } catch {
+          return false;
+        }
+      }),
+    ).then((results) => {
+      if (!disposed)
+        setProxyStatus(results.every(Boolean) ? 'ready' : 'unavailable');
+    });
     return () => {
+      disposed = true;
       controller.current = null;
       playback.dispose();
     };
@@ -38,9 +72,12 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
   }, [clips]);
   return {
     ...state,
+    proxyStatus,
     videoRefs: [
       { id: 'first', ref: first },
       { id: 'second', ref: second },
+      { id: 'proxy-first', ref: proxyFirst },
+      { id: 'proxy-second', ref: proxySecond },
     ],
     select: (index: number, time?: number, autoplay = false) => {
       void controller.current?.select(index, time, autoplay);

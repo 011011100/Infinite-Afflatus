@@ -11,6 +11,7 @@ import type {
   ProjectSummary,
   Viewport,
 } from '../../shared/models';
+import type { ProxyRecord } from '../media/proxy-record';
 import { openDatabase, transaction } from '../storage/database';
 
 const APPLICATION_ID = 0x49414646;
@@ -80,6 +81,30 @@ function setValue(db: DatabaseSync, key: string, data: unknown): void {
 
 export function readProject(file: string): ProjectSnapshot {
   return withProject(file, false, snapshot);
+}
+
+/** Optional derived-media metadata keeps existing version-1 projects readable. */
+export function readProxies(file: string): ProxyRecord[] {
+  return withProject(file, false, (db) => {
+    const row = db
+      .prepare("SELECT value FROM metadata WHERE key = 'proxies'")
+      .get();
+    return row ? (JSON.parse(String(row.value)) as ProxyRecord[]) : [];
+  });
+}
+
+export function recordProxy(file: string, proxy: ProxyRecord): void {
+  withProject(file, true, (db) => {
+    const row = db
+      .prepare("SELECT value FROM metadata WHERE key = 'proxies'")
+      .get();
+    const records = row ? (JSON.parse(String(row.value)) as ProxyRecord[]) : [];
+    // Keep earlier registered files in the manifest, including older proxy versions.
+    setValue(db, 'proxies', [
+      ...records.filter((item) => item.relativePath !== proxy.relativePath),
+      proxy,
+    ]);
+  });
 }
 
 function snapshot(db: DatabaseSync): ProjectSnapshot {

@@ -2,6 +2,7 @@ import { lstat, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { ProjectService } from '../projects/project-service';
 import { SaveQueue } from '../saving/save-queue';
@@ -18,6 +19,7 @@ export class Library {
   readonly staging: Staging;
   readonly saves: SaveQueue;
   readonly migration: MigrationService;
+  readonly proxies: ProxyService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
   private closing: Promise<void> | null = null;
@@ -32,6 +34,7 @@ export class Library {
   ) {
     this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
+    this.proxies = new ProxyService(this.projects, this.gate, store, userData);
     this.staging = new Staging(
       join(userData, 'staging'),
       store,
@@ -85,6 +88,7 @@ export class Library {
       await library.migration.recover();
       await library.projects.discover();
       await library.staging.recover();
+      await library.proxies.recover();
       library.saves.start();
       return library;
     } catch (error) {
@@ -137,6 +141,7 @@ export class Library {
   }
 
   private async shutdown(): Promise<void> {
+    await this.proxies.close();
     await this.staging.idle();
     await this.migration.idle();
     await this.saves.idle();

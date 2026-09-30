@@ -22,6 +22,8 @@ const desktop: DesktopBridge = {
   patchCanvas: (id, patch) =>
     ipcRenderer.invoke(IPC_CHANNELS.patchCanvas, id, patch),
   importVideos: (id) => ipcRenderer.invoke(IPC_CHANNELS.importVideos, id),
+  prepareProxy: (projectId, assetId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.prepareProxy, projectId, assetId),
   chooseDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.chooseDirectory),
   startMigration: (token) =>
     ipcRenderer.invoke(IPC_CHANNELS.startMigration, token),

@@ -119,6 +119,20 @@ function EditorContent(
           {assets.length > 1 ? '组合编辑' : '视频编辑'}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          {playback.proxyStatus !== 'ready' && (
+            <span
+              className="mr-2 text-xs text-muted-foreground"
+              title={
+                playback.proxyStatus === 'preparing'
+                  ? '后台生成轻量预览，完成后拖动自动使用；当前仍可编辑原片'
+                  : '部分素材未能生成代理，继续使用原片预览；请检查 FFmpeg 与 FFprobe 配置'
+              }
+            >
+              {playback.proxyStatus === 'preparing'
+                ? '正在准备流畅预览…'
+                : '原片预览'}
+            </span>
+          )}
           <span role="status" className="mr-3 text-xs text-muted-foreground">
             {blocked
               ? '迁移中，暂不可编辑'
