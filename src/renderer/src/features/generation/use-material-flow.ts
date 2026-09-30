@@ -152,9 +152,6 @@ export function useMaterialFlow(
     setSelected([id]);
     setActiveGroup(id);
   };
-  const contextNode = (_event: unknown, node: MaterialCanvasNode) => {
-    if (!selected.includes(node.id)) setSelected([node.id]);
-  };
   return {
     nodes,
     onChanges,
@@ -165,7 +162,6 @@ export function useMaterialFlow(
     ungroup,
     activeGroup,
     setActiveGroup,
-    contextNode,
     finishMove,
   };
 }

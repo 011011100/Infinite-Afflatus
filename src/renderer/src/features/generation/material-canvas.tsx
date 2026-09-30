@@ -5,7 +5,6 @@ import {
   Panel,
   ReactFlow,
   type ReactFlowInstance,
-  SelectionMode,
 } from '@xyflow/react';
 import {
   ArrowLeft,
@@ -35,6 +34,7 @@ import { MaterialCard } from './material-node';
 import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
+import { useMaterialSelection } from './use-material-selection';
 import './generation.css';
 
 const nodeTypes = {
@@ -72,6 +72,12 @@ export function MaterialCanvas({
     snapshot.project.id,
     blocked,
     onChange,
+  );
+  const selection = useMaterialSelection(
+    area,
+    flow,
+    model.selected,
+    model.setSelected,
   );
   const {
     addText,
@@ -188,8 +194,13 @@ export function MaterialCanvas({
           )}
         </div>
       )}
-      <ContextMenu>
-        <ContextMenuTrigger ref={area} className="relative min-h-0 flex-1">
+      <ContextMenu open={selection.open} onOpenChange={selection.onOpenChange}>
+        <ContextMenuTrigger
+          ref={area}
+          className="relative min-h-0 flex-1"
+          onPointerDownCapture={selection.onPointerDownCapture}
+          onContextMenuCapture={selection.onContextMenuCapture}
+        >
           <ReactFlow
             nodes={model.nodes}
             edges={edges}
@@ -202,9 +213,8 @@ export function MaterialCanvas({
             maxZoom={2}
             nodesConnectable={false}
             nodesDraggable={!disabled}
-            selectionOnDrag
-            selectionMode={SelectionMode.Partial}
-            panOnDrag={[1]}
+            selectionOnDrag={false}
+            panOnDrag={[0, 1]}
             panActivationKeyCode="Space"
             selectionKeyCode={null}
             multiSelectionKeyCode={isMac ? 'Meta' : 'Control'}
@@ -216,7 +226,6 @@ export function MaterialCanvas({
             onSelectionDragStop={(event, nodes) => {
               if (nodes[0]) model.finishMove(event, nodes[0], nodes);
             }}
-            onNodeContextMenu={model.contextNode}
             onPaneClick={() => {
               model.setSelected([]);
               model.setActiveGroup(null);
@@ -276,6 +285,18 @@ export function MaterialCanvas({
               </Panel>
             )}
           </ReactFlow>
+          {selection.box && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute z-30 rounded-sm border border-primary bg-primary/10"
+              style={{
+                left: selection.box.x,
+                top: selection.box.y,
+                width: selection.box.width,
+                height: selection.box.height,
+              }}
+            />
+          )}
           {!shot.nodes.length && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <div className="pointer-events-auto flex gap-3">
