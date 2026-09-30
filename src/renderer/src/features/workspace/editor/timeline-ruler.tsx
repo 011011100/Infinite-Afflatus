@@ -1,7 +1,14 @@
-import { formatTime, rulerStep } from './timeline';
+import { rulerStep } from './timeline';
 
 const tickGradient =
   'linear-gradient(to right, var(--border) 1px, transparent 1px)';
+
+function formatRulerTick(time: number): string {
+  if (time < 60) return `${time}s`;
+  const minutes = Math.floor(time / 60);
+  const seconds = time % 60;
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
 
 /** Decorative marks share the clips' time origin; seeking stays on the track. */
 export function TimelineRuler({
@@ -51,7 +58,7 @@ export function TimelineRuler({
           style={{ left: tick * scale }}
         >
           <span className="relative -top-1 ml-1.5">
-            {tick < 60 ? `${tick}s` : formatTime(tick)}
+            {formatRulerTick(tick)}
           </span>
         </span>
       ))}
