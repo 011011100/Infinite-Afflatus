@@ -81,7 +81,7 @@ export function TrimHandle({
         ref={feedback.glow}
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute inset-y-0 from-white/70 via-white/20 to-transparent opacity-0',
+          'pointer-events-none absolute inset-y-0 from-primary/70 via-primary/20 to-primary/0 opacity-0',
           edge === 'start'
             ? 'rounded-l-md bg-linear-to-r'
             : 'rounded-r-md bg-linear-to-l',
