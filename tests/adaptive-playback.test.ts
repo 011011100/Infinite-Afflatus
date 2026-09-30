@@ -31,6 +31,50 @@ class Video extends EventTarget {
 }
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+test('play during initial loading starts at the retained in-point and its clock advances', async () => {
+  const videos = [new Video(), new Video(), new Video(), new Video()] as const;
+  let ready = () => {};
+  let state: PlaybackState | undefined;
+  const player = new AdaptivePlayback(
+    videos.slice(0, 2) as unknown as [HTMLVideoElement, HTMLVideoElement],
+    videos.slice(2) as unknown as [HTMLVideoElement, HTMLVideoElement],
+    ['original-a'],
+    (next) => {
+      state = next;
+    },
+    (video, source) => {
+      video.src = source;
+      return new Promise<void>((resolve) => {
+        ready = resolve;
+      });
+    },
+    async (video, time) => {
+      video.currentTime = time;
+    },
+  );
+  try {
+    player.setRanges([{ start: 20, end: 30 }]);
+    const initial = player.select(0);
+    player.toggle();
+    ready();
+    await initial;
+    await flush();
+    assert.equal(videos[0]?.currentTime, 20);
+    assert.equal(state?.time, 20);
+    assert.equal(state?.playing, true);
+    assert.equal(state?.target, null);
+    videos[0].currentTime = 21;
+    videos[0]?.dispatchEvent(new Event('timeupdate'));
+    assert.equal(state?.time, 21);
+    assert.equal(state?.playing, true);
+    player.pause();
+    assert.ok(videos.every((video) => video.paused));
+    assert.equal(state?.playing, false);
+  } finally {
+    player.dispose();
+  }
+});
+
 async function fixture(dwellMs = 60_000) {
   const originals = [new Video(), new Video()];
   const proxies = [new Video(), new Video()];

@@ -235,9 +235,15 @@ export class SequencePlayback {
         : this.active === 0
           ? 1
           : 0;
-    const destination =
+    let destination =
       time ??
       (slot !== this.active ? (this.ranges[index]?.start ?? 0) : undefined);
+    const range = this.ranges[index];
+    if (autoplay && range)
+      destination = Math.max(
+        range.start,
+        Math.min(range.end, destination ?? current?.currentTime ?? range.start),
+      );
     const buffer = this.load(slot, index, destination);
     let ready = await buffer.ready;
     if (this.closed || version !== this.version) return;

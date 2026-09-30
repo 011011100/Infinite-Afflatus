@@ -1,4 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+// Gesture capture and viewport coordinates must reset together during development updates.
+// @refresh reset
+import { type KeyboardEvent, useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import type { ThumbnailFrame } from '../decode-thumbnail';
@@ -12,6 +14,7 @@ import {
 import { TimelineRuler } from './timeline-ruler';
 import { TrimHandle } from './trim-handle';
 import { useRulerSeek } from './use-ruler-seek';
+import { useTimelineViewport } from './use-timeline-viewport';
 import { useTrimGesture } from './use-trim-gesture';
 
 type Edge = 'start' | 'end';
@@ -21,6 +24,7 @@ export function SequenceTimeline({
   frames,
   time,
   playingIndex,
+  playing = false,
   selected,
   disabled,
   reset,
@@ -36,6 +40,7 @@ export function SequenceTimeline({
   frames: Map<string, ThumbnailFrame>;
   time: number;
   playingIndex: number;
+  playing?: boolean;
   selected: number;
   disabled: boolean;
   reset: number;
@@ -47,27 +52,10 @@ export function SequenceTimeline({
   onCancel: () => void;
   onGesture: (active: boolean) => void;
 }) {
-  const scroll = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
-  const initial = useRef({
-    duration: totalDuration(clips),
-    origin: timelineOrigin(clips),
-  });
-  const [width, setWidth] = useState(900);
   const total = totalDuration(clips);
-  const origin = timelineOrigin(clips);
-  // Shrinking scrollWidth at the right edge clamps scrollLeft. That movement
-  // would feed back into the captured drag delta and make the handle run away.
-  // Keep the session's furthest extent, including after release/save.
-  const extent = useRef(origin + total);
-  extent.current = Math.max(extent.current, origin + total);
-  const scale =
-    Math.max(8, Math.min(100, width / initial.current.duration)) * zoom;
-  const trackWidth = Math.max(
-    width,
-    extent.current * scale,
-    initial.current.origin * scale + width,
-  );
+  const viewport = useTimelineViewport(total, timelineOrigin(clips), zoom);
+  const { scroll, origin, scale, trackWidth } = viewport;
   const gesture = useTrimGesture({
     clips,
     scale,
@@ -77,26 +65,12 @@ export function SequenceTimeline({
     preview: onPreview,
     commit: onCommit,
     cancel: onCancel,
-    active: onGesture,
+    active: (active) => {
+      viewport.hold(active);
+      onGesture(active);
+    },
   });
   const { dragging } = gesture;
-  useLayoutEffect(() => {
-    const element = scroll.current;
-    if (!element) return;
-    let initialized = false;
-    const observer = new ResizeObserver(() => {
-      const width = element.clientWidth - 64;
-      setWidth(width);
-      if (!initialized) {
-        element.scrollLeft =
-          initial.current.origin *
-          Math.max(8, Math.min(100, width / initial.current.duration));
-        initialized = true;
-      }
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
   const seekAt = (x: number, final = true) => {
     const rect = track.current?.getBoundingClientRect();
     if (rect)
@@ -106,11 +80,35 @@ export function SequenceTimeline({
       );
   };
   const rulerSeek = useRulerSeek(seekAt);
+  const headSeek = useRulerSeek(
+    seekAt,
+    () =>
+      (track.current?.getBoundingClientRect().left ?? 0) +
+      (origin + Math.max(0, Math.min(time, total))) * scale,
+  );
+  useLayoutEffect(() => {
+    if (playing && !dragging) viewport.reveal(time);
+  });
+  const seekKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    let next: number;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+      next = Math.max(
+        0,
+        Math.min(total, time + (event.key === 'ArrowLeft' ? -0.1 : 0.1)),
+      );
+    else if (event.key === 'Home' || event.key === 'End')
+      next = event.key === 'Home' ? 0 : total;
+    else return;
+    event.preventDefault();
+    onSeek(next);
+    viewport.reveal(next);
+  };
   return (
     <section className="shrink-0 bg-background pb-5" aria-label="组合时间轨道">
       <div
         ref={scroll}
         className="overflow-x-auto overscroll-x-contain px-8 pb-4 [overflow-anchor:none]"
+        onScroll={viewport.constrainScroll}
       >
         <div
           ref={track}
@@ -126,24 +124,7 @@ export function SequenceTimeline({
             aria-valuenow={Math.min(time, total)}
             aria-valuetext={formatTime(time)}
             className="absolute inset-x-0 top-0 h-8 cursor-col-resize outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                event.preventDefault();
-                onSeek(
-                  Math.max(
-                    0,
-                    Math.min(
-                      total,
-                      time + (event.key === 'ArrowLeft' ? -0.1 : 0.1),
-                    ),
-                  ),
-                );
-              }
-              if (event.key === 'Home' || event.key === 'End') {
-                event.preventDefault();
-                onSeek(event.key === 'Home' ? 0 : total);
-              }
-            }}
+            onKeyDown={seekKey}
             {...rulerSeek}
           >
             <TimelineRuler
@@ -230,11 +211,25 @@ export function SequenceTimeline({
             );
           })}
           <div
-            aria-hidden="true"
             className="pointer-events-none absolute top-0 z-20 h-[116px] w-px bg-primary"
-            style={{ left: (origin + Math.min(time, total)) * scale }}
+            style={{
+              left: (origin + Math.max(0, Math.min(time, total))) * scale,
+            }}
           >
-            <span className="absolute -left-[4px] top-0 size-[9px] rounded-b-sm bg-primary" />
+            <div
+              role="slider"
+              tabIndex={0}
+              aria-label="播放头"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={Math.max(0, Math.min(time, total))}
+              aria-valuetext={formatTime(time)}
+              className="pointer-events-auto absolute -left-3 top-0 h-8 w-6 cursor-col-resize touch-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onKeyDown={seekKey}
+              {...headSeek}
+            >
+              <span className="pointer-events-none absolute left-2 top-0 size-[9px] rounded-b-sm bg-primary" />
+            </div>
           </div>
         </div>
       </div>

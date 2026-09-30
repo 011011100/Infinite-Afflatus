@@ -243,6 +243,7 @@ function EditorContent(
         frames={frames}
         time={time}
         playingIndex={playback.index}
+        playing={playback.playing}
         selected={selected}
         disabled={blocked}
         reset={reset}

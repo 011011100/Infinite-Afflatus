@@ -305,6 +305,38 @@ test('scrubbing stays paused and a pause during a pending seek prevents later au
   playback.dispose();
 });
 
+test('autoplay bounds explicit and resumed source positions to the retained range', async () => {
+  const videos = [new Video(), new Video()] as const;
+  const playback = new SequencePlayback(
+    videos as unknown as [HTMLVideoElement, HTMLVideoElement],
+    ['trimmed'],
+    () => {},
+    async (video, source) => {
+      video.src = source;
+    },
+    async (video, time) => {
+      video.currentTime = time;
+    },
+  );
+  try {
+    playback.setRanges([{ start: 20, end: 30 }]);
+    await playback.select(0, 0, true);
+    assert.equal(videos[0].currentTime, 20);
+    assert.equal(videos[0].paused, false);
+    // A trim preview may expose an earlier frame before the draft range updates.
+    await playback.select(0, 15, false);
+    assert.equal(videos[0].currentTime, 15);
+    assert.equal(videos[0].paused, true);
+    await playback.select(0, undefined, true);
+    assert.equal(videos[0].currentTime, 20);
+    await playback.select(0, 45, true);
+    assert.equal(videos[0].currentTime, 30);
+    assert.equal(videos[0].paused, true);
+  } finally {
+    playback.dispose();
+  }
+});
+
 test('a burst of scrub targets finishes the current decode then seeks only the latest position', async () => {
   const decodes: { time: number; signal: AbortSignal; finish: () => void }[] =
     [];

@@ -161,6 +161,13 @@ export class AdaptivePlayback {
 
   async select(index: number, time?: number, autoplay = true): Promise<void> {
     if (this.closed) return;
+    const range = this.ranges[index];
+    if (autoplay && range) {
+      // During the initial load state.time is still 0, not the retained in-point.
+      const requested =
+        time ?? (index === this.state.index ? this.state.time : range.start);
+      time = Math.max(range.start, Math.min(range.end, requested));
+    }
     this.revision++;
     clearTimeout(this.idle);
     this.mode = 'restoring';
