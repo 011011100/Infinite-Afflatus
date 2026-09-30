@@ -6,8 +6,6 @@ import { TimelineToolbar } from './timeline-toolbar';
 export function SequenceControls({
   time,
   duration,
-  index,
-  count,
   playing,
   muted,
   gesturing,
@@ -20,8 +18,6 @@ export function SequenceControls({
 }: {
   time: number;
   duration: number;
-  index: number;
-  count: number;
   playing: boolean;
   muted: boolean;
   gesturing: boolean;
@@ -35,7 +31,7 @@ export function SequenceControls({
   return (
     <fieldset
       aria-label="播放与轨道控制"
-      className="grid h-16 min-w-0 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-8"
+      className="flex h-16 min-w-0 shrink-0 items-center justify-between gap-4 px-8"
     >
       <div className="flex items-center gap-4">
         <Button
@@ -61,14 +57,7 @@ export function SequenceControls({
           </span>
         </span>
       </div>
-      <span
-        className="whitespace-nowrap text-xs tabular-nums text-muted-foreground"
-        aria-live="off"
-      >
-        <span className="sr-only">当前片段</span>
-        {String(index + 1).padStart(2, '0')} / {count}
-      </span>
-      <div className="flex items-center gap-3 justify-self-end">
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon-sm"

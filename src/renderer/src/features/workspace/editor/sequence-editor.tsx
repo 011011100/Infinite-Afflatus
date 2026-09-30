@@ -204,8 +204,6 @@ function EditorContent(
       <SequenceControls
         time={time}
         duration={total}
-        index={playback.index}
-        count={clips.length}
         playing={playback.playing}
         muted={muted}
         gesturing={gesturing}
