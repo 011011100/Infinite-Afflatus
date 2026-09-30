@@ -3,6 +3,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -35,11 +36,16 @@ export function useMaterialSelection(
   const captured = useRef<number | null>(null);
   const [box, setBox] = useState<SelectionBox | null>(null);
   const [open, setOpen] = useState(false);
-  const selectContextNode = () => {
+  const selectContextNode = useCallback(() => {
     const id = contextNode.current;
-    if (id && !latest.current.selected.includes(id))
+    const parentId = id ? flow.current?.getNode(id)?.parentId : undefined;
+    if (
+      id &&
+      !latest.current.selected.includes(id) &&
+      (!parentId || !latest.current.selected.includes(parentId))
+    )
       latest.current.select([id]);
-  };
+  }, [flow]);
   useEffect(() => {
     const surface = area.current;
     const releaseCapture = () => {
@@ -97,9 +103,7 @@ export function useMaterialSelection(
       setBox(null);
       releaseCapture();
       if (result.openMenu) {
-        const id = contextNode.current;
-        if (id && !latest.current.selected.includes(id))
-          latest.current.select([id]);
+        selectContextNode();
         setOpen(true);
       }
     };
@@ -128,7 +132,7 @@ export function useMaterialSelection(
       window.removeEventListener('keydown', key);
       surface?.removeEventListener('lostpointercapture', cancel);
     };
-  }, [area, flow]);
+  }, [area, flow, selectContextNode]);
 
   return {
     box,

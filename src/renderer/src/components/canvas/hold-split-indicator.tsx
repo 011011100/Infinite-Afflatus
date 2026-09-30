@@ -50,7 +50,7 @@ export function HoldSplitIndicator({ ready }: { ready: boolean }) {
         </span>
       </span>
       <span role="status" className="sr-only">
-        {ready ? '松开拆分，移动取消' : '长按以拆分片段'}
+        {ready ? '松开拆分，移动取消' : '长按以拆出卡片'}
       </span>
     </span>
   );

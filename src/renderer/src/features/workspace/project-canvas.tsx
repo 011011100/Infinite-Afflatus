@@ -10,6 +10,7 @@ import {
 import { Plus, RotateCw } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
+import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { Button } from '@/components/ui/button';
 import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { ShotCard, type ShotCardNode } from '@/features/generation/shot-card';
@@ -22,7 +23,6 @@ import type { InteractionSettings } from '../../../../shared/interaction/setting
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
 import { SequenceEditor } from './editor/sequence-editor';
-import { HoldFeedbackProvider } from './hold-feedback';
 import { useCardMorph } from './motion/use-card-morph';
 import { ThumbnailProvider } from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
@@ -461,6 +461,7 @@ function CanvasContent({
         <MaterialCanvas
           key={`materials:${shots.activeShot.id}`}
           shot={shots.activeShot}
+          longPressSplit={interactions.longPressSplit}
           snapshot={document.snapshot}
           blocked={blocked}
           saving={shots.saving}

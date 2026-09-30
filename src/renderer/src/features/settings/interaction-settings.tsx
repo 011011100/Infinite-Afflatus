@@ -43,7 +43,7 @@ export function InteractionSettings({
           </span>
         </p>
         <label className="flex cursor-pointer items-center justify-between gap-4">
-          <span className="font-medium">长按片段拆分</span>
+          <span className="font-medium">长按卡片拆分</span>
           <input
             type="checkbox"
             className="size-4 accent-primary"
@@ -55,8 +55,8 @@ export function InteractionSettings({
           />
         </label>
         <p className="text-xs leading-5 text-muted-foreground">
-          按住组内片段 0.7 秒后松开拆分；移动、提前松开或按 Esc
-          取消。前后两侧各自保留连续组合。
+          按住组内卡片 0.7 秒后松开拆出；移动、提前松开或按 Esc
+          取消。适用于视频组合与镜头素材组；视频前后两侧各自保留连续组合。
         </p>
       </div>
       <section className="border-t pt-5" aria-labelledby="shortcuts-heading">

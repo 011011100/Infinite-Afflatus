@@ -1,5 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Type, X } from 'lucide-react';
+import { useLongPressSplit } from '@/components/canvas/use-long-press-split';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,9 @@ export type MaterialFlowNode = Node<
     asset: Asset | undefined;
     projectId: string;
     blocked: boolean;
+    longPressSplit: boolean;
+    select: (id: string) => void;
+    detach: (id: string) => void;
     text: (id: string, value: string) => void;
     remove: (id: string) => void;
   },
@@ -25,8 +29,39 @@ export function MaterialCard({
   selected,
 }: NodeProps<MaterialFlowNode>) {
   const material = data.material;
+  const hold = useLongPressSplit(
+    !!material.groupId && data.longPressSplit && !data.blocked,
+    () => data.select(id),
+    () => data.detach(id),
+  );
   return (
     <div
+      onPointerDownCapture={(event) => {
+        if (
+          !material.groupId ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.shiftKey
+        )
+          return;
+        // Text editing, media controls, and buttons must never start a detach gesture.
+        if (
+          (event.target as Element).closest(
+            'button, input, textarea, select, a, video, audio, [contenteditable="true"]',
+          )
+        )
+          return;
+        hold.onPointerDown(event);
+      }}
+      onClickCapture={(event) => {
+        if (hold.consumeClick()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onDoubleClickCapture={hold.cancel}
+      onContextMenuCapture={hold.cancel}
       className={cn(
         'material-card h-full rounded-xl bg-card shadow-sm ring-1 ring-border transition-shadow',
         selected && 'ring-2 ring-primary',

@@ -1,11 +1,11 @@
 import { VideoOff } from 'lucide-react';
 import { useLayoutEffect, useRef } from 'react';
+import { useLongPressSplit } from '@/components/canvas/use-long-press-split';
 import { cn } from '@/lib/utils';
 import { type ClipTrim, clipRange } from '../../../../shared/canvas/trim';
 import type { Asset } from '../../../../shared/models';
 import { formatDuration } from './media';
 import { useThumbnail } from './thumbnail-provider';
-import { useLongPressSplit } from './use-long-press-split';
 
 export function VideoThumbnail({
   asset,

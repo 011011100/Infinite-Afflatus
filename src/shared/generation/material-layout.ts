@@ -3,7 +3,7 @@ import {
   MATERIAL_WIDTH,
   type Point,
   type ShotWorkspace,
-} from './workspace';
+} from './workspace-types';
 
 /** Find nearby space without stacking a new card over another card or generation group. */
 export function materialPosition(

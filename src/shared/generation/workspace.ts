@@ -1,40 +1,22 @@
-import type { Viewport } from '../models';
 import {
   emptyGenerationDraft,
   type GenerationDraft,
-  type GenerationParameters,
   validateGenerationDraft,
 } from './draft';
+import { groupMaterials } from './material-groups';
+import type {
+  GenerationWorkspace,
+  Point,
+  ShotWorkspace,
+} from './workspace-types';
 
-export type Point = { x: number; y: number };
-export type MaterialNode = { id: string; position: Point; groupId?: string } & (
-  | { type: 'text'; text: string }
-  | { type: 'asset'; assetId: string }
-);
-export interface GenerationGroup {
-  id: string;
-  position: Point;
-  width: number;
-  height: number;
-  parameters: GenerationParameters;
-}
-export interface ShotWorkspace {
-  id: string;
-  name: string;
-  /** Existing videos keep their shot materials when cards are split or joined. */
-  sourceAssetId?: string;
-  position: Point;
-  viewport: Viewport;
-  nodes: MaterialNode[];
-  groups: GenerationGroup[];
-}
-export interface GenerationWorkspace {
-  version: 1;
-  revision: number;
-  shots: ShotWorkspace[];
-}
-export const MATERIAL_WIDTH = 260;
-export const MATERIAL_HEIGHT = 244;
+export {
+  groupMaterials,
+  removeMaterial,
+  ungroupMaterials,
+} from './material-groups';
+export * from './workspace-types';
+
 export const emptyWorkspace = (): GenerationWorkspace => ({
   version: 1,
   revision: 0,
@@ -96,78 +78,6 @@ export function workspaceFromDraft(
   return { ...emptyWorkspace(), shots: [grouped] };
 }
 
-export function groupMaterials(
-  shot: ShotWorkspace,
-  ids: string[],
-  groupId: string,
-): ShotWorkspace {
-  const selected = shot.nodes.filter(
-    (node) => ids.includes(node.id) && !node.groupId,
-  );
-  if (!selected.length || selected.length > 32)
-    throw new Error('请选择 1–32 张未分组的素材卡片');
-  const columns = Math.min(3, selected.length);
-  const position = {
-    x: Math.min(...selected.map((n) => n.position.x)) - 20,
-    y: Math.min(...selected.map((n) => n.position.y)) - 52,
-  };
-  const group: GenerationGroup = {
-    id: groupId,
-    position,
-    width: columns * (MATERIAL_WIDTH + 16) + 24,
-    height: Math.ceil(selected.length / columns) * (MATERIAL_HEIGHT + 16) + 56,
-    parameters: emptyGenerationDraft().parameters,
-  };
-  return {
-    ...shot,
-    groups: [...shot.groups, group],
-    nodes: shot.nodes.map((node) => {
-      const index = selected.findIndex((n) => n.id === node.id);
-      return index < 0
-        ? node
-        : {
-            ...node,
-            groupId,
-            position: {
-              x: 20 + (index % columns) * (MATERIAL_WIDTH + 16),
-              y: 52 + Math.floor(index / columns) * (MATERIAL_HEIGHT + 16),
-            },
-          };
-    }),
-  };
-}
-export function ungroupMaterials(
-  shot: ShotWorkspace,
-  groupId: string,
-): ShotWorkspace {
-  const group = shot.groups.find((item) => item.id === groupId);
-  if (!group) return shot;
-  return {
-    ...shot,
-    groups: shot.groups.filter((item) => item.id !== groupId),
-    nodes: shot.nodes.map((node) => {
-      if (node.groupId !== groupId) return node;
-      const { groupId: _, ...material } = node;
-      return {
-        ...material,
-        position: {
-          x: node.position.x + group.position.x,
-          y: node.position.y + group.position.y,
-        },
-      };
-    }),
-  };
-}
-export function removeMaterial(shot: ShotWorkspace, id: string): ShotWorkspace {
-  const nodes = shot.nodes.filter((node) => node.id !== id);
-  return {
-    ...shot,
-    nodes,
-    groups: shot.groups.filter((group) =>
-      nodes.some((node) => node.groupId === group.id),
-    ),
-  };
-}
 const validId = (id: unknown): id is string =>
   typeof id === 'string' && /^[a-zA-Z0-9:-]{1,100}$/.test(id);
 const point = (value: Point) =>

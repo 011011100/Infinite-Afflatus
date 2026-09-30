@@ -36,6 +36,7 @@ import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
 import { useMaterialSelection } from './use-material-selection';
+import { useMaterialViewport } from './use-material-viewport';
 import './generation.css';
 
 const nodeTypes = {
@@ -47,6 +48,7 @@ export function MaterialCanvas({
   shot,
   snapshot,
   blocked,
+  longPressSplit,
   saving,
   error,
   onChange,
@@ -56,6 +58,7 @@ export function MaterialCanvas({
   shot: ShotWorkspace;
   snapshot: ProjectSnapshot;
   blocked: boolean;
+  longPressSplit: boolean;
   saving: boolean;
   error: string | null;
   onChange: (change: (shot: ShotWorkspace) => ShotWorkspace) => void;
@@ -72,6 +75,7 @@ export function MaterialCanvas({
     snapshot.assets,
     snapshot.project.id,
     blocked,
+    longPressSplit,
     onChange,
   );
   const selection = useMaterialSelection(
@@ -106,28 +110,7 @@ export function MaterialCanvas({
         focused.focus({ preventScroll: true });
     };
   }, []);
-  const framedGroup = useRef<string | null>(null);
-  useEffect(() => {
-    if (framedGroup.current === model.activeGroup) return;
-    framedGroup.current = model.activeGroup;
-    const group = shot.groups.find((item) => item.id === model.activeGroup);
-    if (group)
-      void flow.current?.fitBounds(
-        {
-          x: group.position.x,
-          y: group.position.y - 72,
-          width: group.width + 296,
-          height: Math.max(group.height, 620) + 72,
-        },
-        {
-          padding: 0.12,
-          duration: window.matchMedia('(prefers-reduced-motion: reduce)')
-            .matches
-            ? 0
-            : 180,
-        },
-      );
-  }, [model.activeGroup, shot.groups]);
+  useMaterialViewport(flow, area, shot, model.activeGroup, model.detached);
   const close = async () => {
     if (closing || importing) return;
     setClosing(true);
@@ -137,6 +120,11 @@ export function MaterialCanvas({
   const selectedGroup = shot.groups.find((group) =>
     model.selected.includes(group.id),
   );
+  const selectedMaterial =
+    model.selected.length === 1
+      ? shot.nodes.find((node) => node.id === model.selected[0] && node.groupId)
+      : undefined;
+  const groupLabel = model.grouping.groups.length ? '合并成组' : '生成视频';
   const disabled = blocked || importing || closing;
   return createPortal(
     <section
@@ -271,21 +259,23 @@ export function MaterialCanvas({
                 </Button>
               </div>
             </Panel>
-            {!!model.freeIds.length && (
-              <Panel position="bottom-center">
-                <Button
-                  className="shadow-md"
-                  disabled={disabled || model.freeIds.length > 32}
-                  onClick={model.group}
-                >
-                  <Sparkles />
-                  生成视频
-                  <span className="ml-1 opacity-70">
-                    {model.freeIds.length}
-                  </span>
-                </Button>
-              </Panel>
-            )}
+            {model.grouping.materials.length > 0 &&
+              (model.grouping.canGroup ||
+                model.grouping.materials.length > 32) && (
+                <Panel position="bottom-center">
+                  <Button
+                    className="shadow-md"
+                    disabled={disabled || !model.grouping.canGroup}
+                    onClick={model.group}
+                  >
+                    <Sparkles />
+                    {groupLabel}
+                    <span className="ml-1 opacity-70">
+                      {model.grouping.materials.length}
+                    </span>
+                  </Button>
+                </Panel>
+              )}
           </ReactFlow>
           {selection.box && (
             <div
@@ -326,14 +316,21 @@ export function MaterialCanvas({
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem
-            disabled={
-              disabled || !model.freeIds.length || model.freeIds.length > 32
-            }
+            disabled={disabled || !model.grouping.canGroup}
             onClick={model.group}
           >
             <Sparkles />
-            生成视频
+            {groupLabel}
           </ContextMenuItem>
+          {selectedMaterial && (
+            <ContextMenuItem
+              disabled={disabled}
+              onClick={() => model.detach(selectedMaterial.id)}
+            >
+              <Ungroup />
+              拆出卡片
+            </ContextMenuItem>
+          )}
           {selectedGroup && (
             <>
               <ContextMenuItem

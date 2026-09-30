@@ -40,8 +40,8 @@
 - `styles/motion.css`、`components/ui/use-modal-motion.ts`、`lib/input-method.ts`：共用动效、弹窗退场清理与键盘即时响应。
 - `src/shared/interaction/`、`src/main/settings/interaction-settings.ts`：手势判定、快捷键格式与校验、应用级设置存储。
 - `features/settings/`：设置分类、交互选项、快捷键录入与存储迁移。
-- `use-long-press-split.ts`、`use-canvas-shortcuts.ts`、`video-thumbnail.tsx`：可取消长按、画布快捷键与缩略图反馈。
-- `hold-feedback.tsx`、`hold-split-indicator.tsx`、`styles/hold-feedback.css`：独立的长按反馈层、进度与可中断的缩放／淡入淡出。
+- `components/canvas/use-long-press-split.ts`：主画布与素材子画布共用的可取消长按；`use-canvas-shortcuts.ts`、`video-thumbnail.tsx`：主画布快捷键与缩略图反馈。
+- `components/canvas/hold-feedback.tsx`、`components/canvas/hold-split-indicator.tsx`、`styles/hold-feedback.css`：独立的长按反馈层、进度与可中断的缩放／淡入淡出。
 - `thumbnail-cache.ts`、`decode-thumbnail.ts`、`thumbnail-provider.tsx`：缓存生命周期、首帧解码和画布内共享，渲染进程不读写文件、不导出像素、不放宽媒体协议权限。
 - `motion/use-card-morph.ts`：保存前采集与保存后 DOM 就绪衔接、中断及卸载清理；`motion/snapshot.ts`：屏幕到画布坐标换算与可见区域；`motion/geometry.ts`：连续片段映射与液态连接几何；`motion/animate-regroup.ts`、`styles/card-morph.css`：GSAP Flip 与 SVG 过渡。装饰层不参与媒体解码和数据持久化。
 - `src/shared/canvas/operations.ts`：左右吸附、拼接、拆分及反向操作。

@@ -44,7 +44,7 @@ export function useLongPressSplit(
     };
   }, [enabled]);
 
-  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     cancel();
     suppressClick.current = false;
     if (!event.isPrimary || event.button !== 0) return;

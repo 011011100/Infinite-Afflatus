@@ -83,7 +83,7 @@ export function HoldFeedbackProvider({ children }: { children: ReactNode }) {
         createPortal(
           <span
             key={indicator.id}
-            className="pointer-events-none fixed z-50 block size-16"
+            className="pointer-events-none fixed z-[70] block size-16"
             style={{
               left: indicator.x,
               top: indicator.y,

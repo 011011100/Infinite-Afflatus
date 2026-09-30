@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { Library } from '../src/main/storage/library';
 import { emptyGenerationDraft } from '../src/shared/generation/draft';
+import { detachMaterial } from '../src/shared/generation/material-groups';
 import { materialPosition } from '../src/shared/generation/material-layout';
 import {
   emptyWorkspace,
@@ -205,6 +206,49 @@ test('SQLite saves independent shots, rejects stale/foreign edits, preserves leg
   await f.library.migration.idle();
   assert.equal(f.library.state().migration?.phase, 'completed');
   assert.deepEqual(await f.library.generation.readWorkspace(project.id), saved);
+});
+
+test('merged groups and detached materials survive SQLite reopen with their content and parameters', async (t) => {
+  const f = await fixture();
+  t.after(() => f.dispose());
+  const { project } = await f.library.projects.create('拆出与合并');
+  let shot = groupMaterials(sample(), ['one', 'two'], 'first');
+  shot = groupMaterials(shot, ['three'], 'second');
+  const group = shot.groups[0];
+  assert.ok(group);
+  group.parameters.duration = 12;
+  let saved = await f.library.generation.saveWorkspace(project.id, {
+    ...emptyWorkspace(),
+    shots: [shot],
+  });
+  shot = groupMaterials(shot, ['first', 'second'], 'merged', 'first');
+  saved = await f.library.generation.saveWorkspace(project.id, {
+    ...saved,
+    shots: [shot],
+  });
+  shot = detachMaterial(shot, 'two');
+  saved = await f.library.generation.saveWorkspace(project.id, {
+    ...saved,
+    shots: [shot],
+  });
+  await f.library.close();
+  const reopened = await Library.open(
+    join(f.base, 'app'),
+    join(f.base, 'projects'),
+  );
+  try {
+    assert.deepEqual(
+      await reopened.generation.readWorkspace(project.id),
+      saved,
+    );
+    assert.equal(saved.shots[0]?.groups[0]?.parameters.duration, 12);
+    assert.equal(
+      saved.shots[0]?.nodes.find((node) => node.id === 'two')?.groupId,
+      undefined,
+    );
+  } finally {
+    await reopened.close();
+  }
 });
 
 test('workspace saving waits for migration and accepts durable staged references when released', async (t) => {

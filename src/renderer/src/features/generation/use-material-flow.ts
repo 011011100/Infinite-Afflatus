@@ -2,6 +2,10 @@ import type { NodeChange, NodePositionChange } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
 import type { GenerationParameters } from '../../../../shared/generation/draft';
 import {
+  detachMaterial,
+  materialSelection,
+} from '../../../../shared/generation/material-groups';
+import {
   groupMaterials,
   MATERIAL_HEIGHT,
   MATERIAL_WIDTH,
@@ -20,10 +24,15 @@ export function useMaterialFlow(
   assets: Asset[],
   projectId: string,
   blocked: boolean,
+  longPressSplit: boolean,
   update: (change: (shot: ShotWorkspace) => ShotWorkspace) => void,
 ) {
   const [selected, setSelected] = useState<string[]>([]);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [detached, setDetached] = useState<{
+    id: string;
+    groupId?: string;
+  } | null>(null);
   const [positions, setPositions] = useState<Record<string, Point>>({});
   const remove = (id: string) =>
     update((current) => removeMaterial(current, id));
@@ -37,9 +46,26 @@ export function useMaterialFlow(
       ),
     }));
   const ungroup = (id: string) => {
+    if (blocked) return;
     update((current) => ungroupMaterials(current, id));
     setActiveGroup(null);
     setSelected([]);
+  };
+  const detach = (id: string) => {
+    if (blocked) return;
+    const material = shot.nodes.find((node) => node.id === id);
+    if (!material?.groupId) return;
+    update((current) => detachMaterial(current, id));
+    setPositions({});
+    setSelected([id]);
+    setDetached({ id, groupId: material.groupId });
+    if (
+      activeGroup === material.groupId &&
+      !shot.nodes.some(
+        (node) => node.id !== id && node.groupId === material.groupId,
+      )
+    )
+      setActiveGroup(null);
   };
   const parameters = (id: string, value: GenerationParameters) =>
     update((current) => ({
@@ -86,6 +112,9 @@ export function useMaterialFlow(
             : undefined,
         projectId,
         blocked,
+        longPressSplit,
+        select: (id: string) => setSelected([id]),
+        detach,
         text,
         remove,
       },
@@ -137,17 +166,14 @@ export function useMaterialFlow(
     }));
     setPositions({});
   };
-  const freeIds = useMemo(
-    () =>
-      shot.nodes
-        .filter((node) => selected.includes(node.id) && !node.groupId)
-        .map((node) => node.id),
-    [shot.nodes, selected],
+  const grouping = useMemo(
+    () => materialSelection(shot, selected),
+    [shot, selected],
   );
   const group = () => {
-    if (!freeIds.length || blocked) return;
+    if (!grouping.canGroup || blocked) return;
     const id = crypto.randomUUID();
-    update((current) => groupMaterials(current, freeIds, id));
+    update((current) => groupMaterials(current, selected, id, activeGroup));
     setPositions({});
     setSelected([id]);
     setActiveGroup(id);
@@ -157,9 +183,11 @@ export function useMaterialFlow(
     onChanges,
     selected,
     setSelected,
-    freeIds,
+    grouping,
     group,
     ungroup,
+    detach,
+    detached,
     activeGroup,
     setActiveGroup,
     finishMove,
