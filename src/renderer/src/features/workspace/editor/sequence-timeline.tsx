@@ -198,9 +198,7 @@ export function SequenceTimeline({
                 data-timeline-clip={clip.asset.id}
                 className={cn(
                   'group/clip absolute top-10 h-16 rounded-md hover:z-20 focus-within:z-20',
-                  selected === index
-                    ? 'z-10 ring-2 ring-primary'
-                    : 'ring-1 ring-border',
+                  selected === index && 'z-10',
                   gesture.draggingIndex === index && 'z-30',
                 )}
                 style={{ left, width: clipWidth }}
@@ -209,7 +207,7 @@ export function SequenceTimeline({
                   type="button"
                   aria-label={`选择片段 ${index + 1} ${clip.asset.name}`}
                   aria-pressed={selected === index}
-                  className="relative size-full overflow-hidden rounded-md bg-muted text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="group/clip-surface relative block size-full overflow-hidden rounded-[inherit] bg-muted text-left outline-none"
                   onClick={(event) => {
                     onSelect(index);
                     seekAt(event.clientX);
@@ -226,6 +224,17 @@ export function SequenceTimeline({
                       className="absolute inset-x-0 top-0 h-1 bg-primary"
                     />
                   )}
+                  {/* Paint the frame inside the same rounded surface as the
+                      filmstrip, so separate outer rings cannot leave a seam. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'pointer-events-none absolute inset-0 rounded-[inherit] group-focus-visible/clip-surface:border-2 group-focus-visible/clip-surface:border-primary',
+                      selected === index
+                        ? 'border-2 border-primary'
+                        : 'border border-foreground/10',
+                    )}
+                  />
                 </button>
                 {(['start', 'end'] as const).map((edge) => (
                   <TrimHandle

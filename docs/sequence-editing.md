@@ -26,6 +26,7 @@
 - `editor/sequence-timeline.tsx`：刻度、定位与手柄展示；`filmstrip.tsx`：复用静态首帧绘制轨道缩略图；`timeline.ts`：组合时间与源时间换算。
 - `editor/timeline-toolbar.tsx`：轨道统计、恢复原片与缩放按钮。
 - `editor/trim-handle.tsx`：内置拖柄、命中区域与键盘微调。
+- 轨道卡片的选中与键盘焦点描边绘制在缩略图的同一圆角裁切层内，避免独立外描边在圆角处露出浅色接缝；拖柄命中区保留在外层，不受内容裁切影响。
 - `editor/trim-drag.ts`：增量裁剪与边界阻尼，保留亚毫秒输入并消除反向空拖；`use-trim-boundary-feedback.ts`：SVG 拖柄形变、GSAP 回弹与减少动态效果。
 - `editor/use-sequence-frames.ts`：复用项目缩略图缓存读取时长，限制新解码并发。
 - `playback/sequence-playback.ts`：双缓冲、播放时钟、出点切换、暂停和取消；`seek-video.ts`：可取消的解码定位；`use-sequence-playback.ts`：React 生命周期。修改裁剪范围不重建播放器。
