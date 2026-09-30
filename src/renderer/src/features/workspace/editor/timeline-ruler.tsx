@@ -4,7 +4,7 @@ const tickGradient =
   'linear-gradient(to right, var(--border) 1px, transparent 1px)';
 
 function formatRulerTick(time: number): string {
-  if (time < 60) return `${time}s`;
+  if (time < 60) return String(time);
   const minutes = Math.floor(time / 60);
   const seconds = time % 60;
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
