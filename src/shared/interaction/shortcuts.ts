@@ -1,10 +1,17 @@
-export const SHORTCUT_ACTIONS = ['play', 'split', 'undo', 'redo'] as const;
+export const SHORTCUT_ACTIONS = [
+  'play',
+  'split',
+  'undo',
+  'redo',
+  'locateLabels',
+] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   play: '播放选中卡片',
   split: '拆分选中片段',
   undo: '撤销',
   redo: '重做',
+  locateLabels: '按住定位标签（素材画布）',
 };
 export interface Shortcut {
   key: string;

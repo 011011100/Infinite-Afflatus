@@ -169,7 +169,7 @@ export function useSequenceEditor(
       )
         return;
       const action = shortcutAction(event, props.shortcuts, isMac);
-      if (!action || action === 'split') return;
+      if (!action || action === 'split' || action === 'locateLabels') return;
       if (
         event.key === ' ' &&
         event.target instanceof Element &&

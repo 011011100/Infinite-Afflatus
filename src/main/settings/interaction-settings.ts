@@ -1,6 +1,7 @@
 import {
   defaultInteractionSettings,
   type InteractionSettings,
+  upgradeInteractionSettings,
   validateInteractionSettings,
 } from '../../shared/interaction/settings';
 import type { AppStore } from '../storage/app-store';
@@ -12,8 +13,7 @@ export class InteractionSettingsStore {
   get(): InteractionSettings {
     const settings =
       this.store.get<unknown>('interactions') ?? defaultInteractionSettings();
-    validateInteractionSettings(settings);
-    return settings;
+    return upgradeInteractionSettings(settings);
   }
 
   save(settings: unknown): InteractionSettings {

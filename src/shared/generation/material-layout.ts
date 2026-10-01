@@ -1,3 +1,4 @@
+import { LABEL_SIZE, materialSize, type Size } from './node-geometry';
 import {
   MATERIAL_HEIGHT,
   MATERIAL_WIDTH,
@@ -10,21 +11,25 @@ export function materialPosition(
   shot: ShotWorkspace,
   center: Point,
   count = 1,
+  size: Size = { width: MATERIAL_WIDTH, height: MATERIAL_HEIGHT },
 ): Point {
   const columns = Math.min(3, count);
-  const width = columns * (MATERIAL_WIDTH + 24) - 24;
-  const height = Math.ceil(count / columns) * (MATERIAL_HEIGHT + 24) - 24;
+  const width = columns * (size.width + 24) - 24;
+  const height = Math.ceil(count / columns) * (size.height + 24) - 24;
   const occupied = [
     ...shot.nodes
       .filter((node) => !node.groupId)
       .map((node) => ({
         ...node.position,
-        width: MATERIAL_WIDTH,
-        height: MATERIAL_HEIGHT,
+        ...materialSize(node),
       })),
+    ...(shot.labels ?? []).map((label) => ({
+      ...label.position,
+      ...LABEL_SIZE,
+    })),
     ...shot.groups.map((group) => ({
       ...group.position,
-      width: group.width + 296,
+      width: group.width,
       height: group.height,
     })),
   ];

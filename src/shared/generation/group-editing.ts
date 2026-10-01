@@ -1,3 +1,4 @@
+import { materialSize } from './node-geometry';
 import {
   MATERIAL_HEIGHT,
   MATERIAL_WIDTH,
@@ -66,9 +67,9 @@ export function appendGroupText(
   while (
     members.some(
       (node) =>
-        position.x < node.position.x + MATERIAL_WIDTH &&
+        position.x < node.position.x + materialSize(node).width &&
         position.x + MATERIAL_WIDTH > node.position.x &&
-        position.y < node.position.y + MATERIAL_HEIGHT &&
+        position.y < node.position.y + materialSize(node).height &&
         position.y + MATERIAL_HEIGHT > node.position.y,
     )
   ) {

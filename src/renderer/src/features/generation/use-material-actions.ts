@@ -2,6 +2,11 @@ import type { ReactFlowInstance } from '@xyflow/react';
 import { type RefObject, useState } from 'react';
 import { materialPosition } from '../../../../shared/generation/material-layout';
 import {
+  LABEL_SIZE,
+  materialSize,
+  type Size,
+} from '../../../../shared/generation/node-geometry';
+import {
   MATERIAL_HEIGHT,
   MATERIAL_WIDTH,
   type ShotWorkspace,
@@ -19,7 +24,7 @@ export function useMaterialActions(
 ) {
   const [importing, setImporting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const position = (count = 1) => {
+  const position = (count = 1, size?: Size) => {
     const rect = area.current?.getBoundingClientRect();
     const center =
       rect && flow.current
@@ -28,9 +33,15 @@ export function useMaterialActions(
             y: rect.top + rect.height / 2,
           })
         : { x: 300, y: 300 };
-    return materialPosition(shot, center, count);
+    return materialPosition(shot, center, count, size);
   };
-  const reveal = (nodes: { position: { x: number; y: number } }[]) => {
+  const reveal = (
+    nodes: {
+      position: { x: number; y: number };
+      width?: number;
+      height?: number;
+    }[],
+  ) => {
     const rects = [...shot.nodes.filter((node) => !node.groupId), ...nodes];
     const x = Math.min(...rects.map((node) => node.position.x));
     const y = Math.min(...rects.map((node) => node.position.y));
@@ -39,13 +50,13 @@ export function useMaterialActions(
         x,
         y,
         width:
-          Math.max(...rects.map((node) => node.position.x)) -
-          x +
-          MATERIAL_WIDTH,
+          Math.max(
+            ...rects.map((node) => node.position.x + materialSize(node).width),
+          ) - x,
         height:
-          Math.max(...rects.map((node) => node.position.y)) -
-          y +
-          MATERIAL_HEIGHT,
+          Math.max(
+            ...rects.map((node) => node.position.y + materialSize(node).height),
+          ) - y,
       },
       {
         padding: 0.25,
@@ -53,6 +64,23 @@ export function useMaterialActions(
           ? 0
           : 180,
       },
+    );
+  };
+  const addLabel = () => {
+    const id = crypto.randomUUID();
+    const at = position(1, LABEL_SIZE);
+    onChange((current) => ({
+      ...current,
+      labels: [
+        ...(current.labels ?? []),
+        { id, name: '标签', color: '#2563eb', pinned: false, position: at },
+      ],
+    }));
+    select([id]);
+    void flow.current?.setCenter(
+      at.x + LABEL_SIZE.width / 2,
+      at.y + LABEL_SIZE.height / 2,
+      { zoom: flow.current.getZoom(), duration: 0 },
     );
   };
   const addText = () => {
@@ -98,6 +126,7 @@ export function useMaterialActions(
   };
   return {
     addText,
+    addLabel,
     addAssets,
     importFiles,
     importing,

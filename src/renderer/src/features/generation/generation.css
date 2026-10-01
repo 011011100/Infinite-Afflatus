@@ -1,3 +1,31 @@
 .material-card .generation-reference {
   overflow: hidden;
 }
+
+.canvas-label[data-pinned="true"] {
+  cursor: default;
+}
+.label-locator {
+  animation: label-locator-in 130ms ease-out both;
+}
+.label-marker {
+  transition:
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+.label-marker:hover {
+  background: var(--secondary);
+}
+@keyframes label-locator-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .label-locator {
+    animation: none;
+  }
+}

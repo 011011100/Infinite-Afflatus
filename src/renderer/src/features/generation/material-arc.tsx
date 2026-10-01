@@ -119,6 +119,7 @@ export function MaterialArc({
                   key={`${node.id}:${node.id === nodes[index]?.id}`}
                   projectId={projectId}
                   asset={asset}
+                  name={node.name}
                   label="参考素材"
                   disabled={disabled}
                   onRemove={() => detach(node.id)}

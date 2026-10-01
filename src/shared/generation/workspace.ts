@@ -4,6 +4,7 @@ import {
   validateGenerationDraft,
 } from './draft';
 import { groupMaterials } from './material-groups';
+import { MAX_MATERIAL_SIZE, MIN_MATERIAL_SIZE } from './node-geometry';
 import type {
   GenerationWorkspace,
   Point,
@@ -172,7 +173,43 @@ export function validateWorkspace(value: unknown): GenerationWorkspace {
           node.textOverride.length > 10000)
       )
         throw new Error('文本卡片最多 10000 个字符');
+      if (
+        node.name !== undefined &&
+        (typeof node.name !== 'string' ||
+          !node.name.trim() ||
+          node.name.length > 100)
+      )
+        throw new Error('卡片名称需要 1–100 个字符');
+      for (const key of ['width', 'height'] as const) {
+        if (
+          node[key] !== undefined &&
+          (!Number.isFinite(node[key]) ||
+            node[key] < MIN_MATERIAL_SIZE[key] ||
+            node[key] > MAX_MATERIAL_SIZE[key])
+        )
+          throw new Error('卡片尺寸无效');
+      }
       ids.add(node.id);
+    }
+    if (shot.labels !== undefined) {
+      if (!Array.isArray(shot.labels) || shot.labels.length > 500)
+        throw new Error('标签数量无效');
+      for (const label of shot.labels) {
+        if (
+          !label ||
+          !validId(label.id) ||
+          ids.has(label.id) ||
+          !point(label.position) ||
+          typeof label.name !== 'string' ||
+          !label.name.trim() ||
+          label.name.length > 100 ||
+          typeof label.color !== 'string' ||
+          !/^#[0-9a-fA-F]{6}$/.test(label.color) ||
+          typeof label.pinned !== 'boolean'
+        )
+          throw new Error('画布标签无效');
+        ids.add(label.id);
+      }
     }
   }
   return structuredClone(doc);

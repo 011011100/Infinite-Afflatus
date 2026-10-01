@@ -1,7 +1,9 @@
 import { FileText, Film, ImageIcon, Music2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { EditableName } from '@/components/ui/editable-name';
 import { Modal } from '@/components/ui/modal';
+import { cn } from '@/lib/utils';
 import type { Asset } from '../../../../shared/models';
 import { mediaUrl } from '../workspace/media';
 import { message } from './errors';
@@ -28,6 +30,9 @@ export function ReferenceCard({
   textOverride,
   removeLabel = '从素材画布移除',
   removeIcon,
+  name,
+  onRename,
+  flexible = false,
 }: {
   projectId: string;
   asset: Asset;
@@ -37,7 +42,11 @@ export function ReferenceCard({
   textOverride?: string | undefined;
   removeLabel?: string;
   removeIcon?: ReactNode;
+  name?: string | undefined;
+  onRename?: (name: string) => void;
+  flexible?: boolean;
 }) {
+  const displayName = name ?? asset.name;
   const Icon = referenceIcons[asset.kind];
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +69,13 @@ export function ReferenceCard({
   }, [projectId, asset.id, asset.kind]);
 
   return (
-    <article className="generation-reference group h-full rounded-xl bg-card">
-      <div className="material-handle flex items-center gap-2 px-3 py-2.5 text-xs">
+    <article
+      className={cn(
+        'generation-reference group h-full rounded-xl bg-card',
+        flexible && 'flex min-h-0 flex-col',
+      )}
+    >
+      <div className="material-handle flex shrink-0 items-center gap-2 px-3 py-2.5 text-xs">
         <Icon className="size-3.5 text-muted-foreground" />
         <span className="font-medium">{label}</span>
         <Button
@@ -78,7 +92,12 @@ export function ReferenceCard({
           {removeIcon ?? <X />}
         </Button>
       </div>
-      <div className="nodrag nopan nowheel mx-2 h-[156px] overflow-hidden rounded-lg bg-secondary">
+      <div
+        className={cn(
+          'nodrag nopan nowheel mx-2 overflow-hidden rounded-lg bg-secondary',
+          flexible ? 'min-h-0 flex-1' : 'h-[156px]',
+        )}
+      >
         {asset.kind === 'image' && (
           <img
             src={url}
@@ -134,17 +153,26 @@ export function ReferenceCard({
           {error}
         </p>
       )}
-      <div className="flex min-w-0 items-center gap-2 px-3 py-2.5">
-        <p
-          className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
-          title={asset.name}
-        >
-          {asset.name}
-        </p>
+      <div className="flex min-w-0 shrink-0 items-center gap-2 px-3 py-2.5">
+        {onRename ? (
+          <EditableName
+            value={displayName}
+            onChange={onRename}
+            disabled={disabled}
+            className="text-[11px] text-muted-foreground"
+          />
+        ) : (
+          <p
+            className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+            title={displayName}
+          >
+            {displayName}
+          </p>
+        )}
       </div>
       {expanded && (
         <Modal
-          title={asset.name}
+          title={displayName}
           onClose={() => setExpanded(false)}
           error={error}
         >

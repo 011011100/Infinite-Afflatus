@@ -462,6 +462,7 @@ function CanvasContent({
           key={`materials:${shots.activeShot.id}`}
           shot={shots.activeShot}
           longPressSplit={interactions.longPressSplit}
+          labelShortcut={interactions.shortcuts.locateLabels}
           snapshot={document.snapshot}
           blocked={blocked}
           saving={shots.saving}

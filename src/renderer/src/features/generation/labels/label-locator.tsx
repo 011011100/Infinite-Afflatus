@@ -1,0 +1,172 @@
+import { Panel, useStore, useViewport } from '@xyflow/react';
+import { ArrowUp, MapPin, Navigation } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { isMac } from '@/lib/platform';
+import type { CanvasLabel } from '../../../../../shared/generation/workspace';
+import {
+  formatShortcut,
+  type Shortcut,
+  sameShortcut,
+  shortcutFromKey,
+} from '../../../../../shared/interaction/shortcuts';
+import { labelMarkers } from './geometry';
+
+const editable = (target: EventTarget | null) =>
+  target instanceof Element &&
+  !!target.closest(
+    'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]',
+  );
+export function LabelLocator({
+  labels,
+  shortcut,
+  disabled,
+  jump,
+  cancel,
+}: {
+  labels: CanvasLabel[];
+  shortcut: Shortcut | null;
+  disabled: boolean;
+  jump: (label: CanvasLabel) => void;
+  cancel: () => void;
+}) {
+  const viewport = useViewport();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const [held, setHeld] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled) {
+      setHeld(false);
+      setOpen(false);
+      return;
+    }
+    const reset = () => {
+      setHeld(false);
+      setOpen(false);
+    };
+    const down = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        reset();
+        cancel();
+        return;
+      }
+      if (
+        event.defaultPrevented ||
+        editable(event.target) ||
+        document.querySelector('dialog[open]') ||
+        !shortcut
+      )
+        return;
+      // Holding Space on a focused button must retain native activation.
+      if (
+        event.key === ' ' &&
+        event.target instanceof Element &&
+        event.target.closest('button')
+      )
+        return;
+      const pressed = shortcutFromKey(event, isMac);
+      if (pressed && sameShortcut(pressed, shortcut)) {
+        event.preventDefault();
+        setHeld(true);
+      }
+    };
+    const up = (event: KeyboardEvent) => {
+      if (!shortcut) return;
+      const key = event.key === ' ' ? 'Space' : event.key.toLowerCase();
+      if (
+        key === shortcut.key ||
+        (shortcut.mod && !(isMac ? event.metaKey : event.ctrlKey)) ||
+        (shortcut.shift && !event.shiftKey)
+      )
+        setHeld(false);
+    };
+    const focus = (event: FocusEvent) => {
+      if (editable(event.target)) reset();
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', reset);
+    window.addEventListener('focusin', focus);
+    document.addEventListener('visibilitychange', reset);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', reset);
+      window.removeEventListener('focusin', focus);
+      document.removeEventListener('visibilitychange', reset);
+    };
+  }, [shortcut, disabled, cancel]);
+  return (
+    <>
+      <Panel position="top-right">
+        <Button
+          variant="outline"
+          size="icon"
+          className="bg-background shadow-sm"
+          disabled={disabled || !labels.length}
+          title={
+            shortcut
+              ? `按住 ${formatShortcut(shortcut, isMac)} 定位标签`
+              : '定位标签'
+          }
+          aria-label="定位标签"
+          aria-pressed={open || held}
+          onClick={() => setOpen(!open)}
+        >
+          <Navigation />
+        </Button>
+      </Panel>
+      {!disabled && (held || open) && (
+        <nav
+          className="label-locator pointer-events-none absolute inset-0 z-40"
+          aria-label="标签位置"
+        >
+          {labelMarkers(labels, viewport, { width, height }).map((marker) => (
+            <button
+              key={marker.label.id}
+              type="button"
+              className="label-marker nodrag nopan pointer-events-auto absolute flex h-8 w-40 items-center gap-2 rounded-full border bg-background px-3 text-xs shadow-md"
+              aria-label={`跳转到标签：${marker.label.name}`}
+              title={marker.label.name}
+              data-label-id={marker.label.id}
+              data-edge={marker.edge ?? 'visible'}
+              style={{
+                left: marker.x,
+                top: marker.y,
+                borderColor: marker.label.color,
+                transform: 'translate(-50%, -50%)',
+              }}
+              onClick={() => {
+                setOpen(false);
+                jump(marker.label);
+              }}
+            >
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: marker.label.color }}
+              />
+              <span className="min-w-0 flex-1 truncate text-left">
+                {marker.label.name}
+              </span>
+              {marker.edge ? (
+                <ArrowUp
+                  className="size-3.5 shrink-0"
+                  style={{
+                    color: marker.label.color,
+                    transform: `rotate(${marker.angle}deg)`,
+                  }}
+                />
+              ) : (
+                <MapPin
+                  className="size-3.5 shrink-0"
+                  style={{ color: marker.label.color }}
+                />
+              )}
+            </button>
+          ))}
+        </nav>
+      )}
+    </>
+  );
+}

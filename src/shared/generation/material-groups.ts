@@ -1,12 +1,11 @@
 import { emptyGenerationDraft } from './draft';
 import { materialPosition } from './material-layout';
-import {
-  type GenerationGroup,
-  MATERIAL_HEIGHT,
-  MATERIAL_WIDTH,
-  type MaterialNode,
-  type Point,
-  type ShotWorkspace,
+import { groupGrid, materialSize } from './node-geometry';
+import type {
+  GenerationGroup,
+  MaterialNode,
+  Point,
+  ShotWorkspace,
 } from './workspace-types';
 
 /** Selecting a group includes every member; selecting parent + child never duplicates it. */
@@ -63,15 +62,15 @@ export function groupMaterials(
     selection.groups.find((group) => group.id === preferredGroupId) ??
     selection.groups[0];
   const positions = selected.map((node) => absolutePosition(shot, node));
-  const columns = Math.min(3, selected.length);
+  const layout = groupGrid(selected);
   const group: GenerationGroup = {
     id: groupId,
     position: {
       x: Math.min(...positions.map((point) => point.x)) - 20,
       y: Math.min(...positions.map((point) => point.y)) - 52,
     },
-    width: columns * (MATERIAL_WIDTH + 16) + 24,
-    height: Math.ceil(selected.length / columns) * (MATERIAL_HEIGHT + 16) + 56,
+    width: layout.width,
+    height: layout.height,
     parameters: { ...(seed?.parameters ?? emptyGenerationDraft().parameters) },
   };
   const indices = new Map(selected.map((node, index) => [node.id, index]));
@@ -82,10 +81,7 @@ export function groupMaterials(
       : {
           ...node,
           groupId,
-          position: {
-            x: 20 + (index % columns) * (MATERIAL_WIDTH + 16),
-            y: 52 + Math.floor(index / columns) * (MATERIAL_HEIGHT + 16),
-          },
+          position: layout.positions[index] ?? node.position,
         };
   });
   return {
@@ -109,15 +105,21 @@ export function detachMaterial(
   const node = shot.nodes.find((item) => item.id === id);
   const parent = shot.groups.find((group) => group.id === node?.groupId);
   if (!node || !parent) return shot;
+  const size = materialSize(node);
   const remaining = removeMaterial(shot, id);
   const absolute = absolutePosition(shot, node);
   const position = center
-    ? materialPosition(remaining, center)
+    ? materialPosition(remaining, center, 1, size)
     : remaining.groups.some((group) => group.id === parent.id)
-      ? materialPosition(remaining, {
-          x: absolute.x + MATERIAL_WIDTH / 2,
-          y: parent.position.y + parent.height + 36 + MATERIAL_HEIGHT / 2,
-        })
+      ? materialPosition(
+          remaining,
+          {
+            x: absolute.x + size.width / 2,
+            y: parent.position.y + parent.height + 36 + size.height / 2,
+          },
+          1,
+          size,
+        )
       : absolute;
   const { groupId: _, ...material } = node;
   return {

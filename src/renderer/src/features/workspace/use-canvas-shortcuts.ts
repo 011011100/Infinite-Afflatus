@@ -14,7 +14,7 @@ export function useCanvasShortcuts({
 }: {
   shortcuts: Shortcuts;
   disabled: boolean;
-  actions: Record<ShortcutAction, (() => void) | null>;
+  actions: Partial<Record<ShortcutAction, (() => void) | null>>;
   cancel: () => void;
 }) {
   useEffect(() => {

@@ -2,7 +2,14 @@ import type { Viewport } from '../models';
 import type { GenerationParameters } from './draft';
 
 export type Point = { x: number; y: number };
-export type MaterialNode = { id: string; position: Point; groupId?: string } & (
+export type MaterialNode = {
+  id: string;
+  position: Point;
+  groupId?: string;
+  name?: string;
+  width?: number;
+  height?: number;
+} & (
   | { type: 'text'; text: string }
   | { type: 'asset'; assetId: string; textOverride?: string }
 );
@@ -13,6 +20,13 @@ export interface GenerationGroup {
   height: number;
   parameters: GenerationParameters;
 }
+export interface CanvasLabel {
+  id: string;
+  position: Point;
+  name: string;
+  color: string;
+  pinned: boolean;
+}
 export interface ShotWorkspace {
   id: string;
   name: string;
@@ -21,6 +35,7 @@ export interface ShotWorkspace {
   position: Point;
   viewport: Viewport;
   nodes: MaterialNode[];
+  labels?: CanvasLabel[];
   groups: GenerationGroup[];
 }
 export interface GenerationWorkspace {

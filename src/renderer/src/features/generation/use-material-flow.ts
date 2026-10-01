@@ -5,9 +5,12 @@ import {
   materialSelection,
 } from '../../../../shared/generation/material-groups';
 import {
+  LABEL_SIZE,
+  materialSize,
+  type Size,
+} from '../../../../shared/generation/node-geometry';
+import {
   groupMaterials,
-  MATERIAL_HEIGHT,
-  MATERIAL_WIDTH,
   type Point,
   removeMaterial,
   type ShotWorkspace,
@@ -15,9 +18,14 @@ import {
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
 import type { GenerationGroupNode } from './generation-group';
+import type { LabelFlowNode } from './label-node';
 import type { MaterialFlowNode } from './material-node';
+import { useMaterialNodeEdits } from './use-material-node-edits';
 
-export type MaterialCanvasNode = MaterialFlowNode | GenerationGroupNode;
+export type MaterialCanvasNode =
+  | MaterialFlowNode
+  | GenerationGroupNode
+  | LabelFlowNode;
 export function useMaterialFlow(
   shot: ShotWorkspace,
   assets: Asset[],
@@ -32,7 +40,10 @@ export function useMaterialFlow(
     id: string;
     groupId?: string;
   } | null>(null);
+  const [measurements, setMeasurements] = useState<Record<string, Size>>({});
   const [positions, setPositions] = useState<Record<string, Point>>({});
+  const { sizes, rename, resize, labelChange, labelRemove, groupSize } =
+    useMaterialNodeEdits(shot, blocked, update);
   const remove = (id: string) =>
     update((current) => removeMaterial(current, id));
   const text = (id: string, value: string) =>
@@ -72,8 +83,8 @@ export function useMaterialFlow(
       type: 'generationGroup' as const,
       position: positions[group.id] ?? group.position,
       selected: selected.includes(group.id),
-      style: { width: group.width, height: group.height },
-      measured: { width: group.width, height: group.height },
+      style: groupSize(group.id, group),
+      measured: measurements[group.id] ?? groupSize(group.id, group),
       dragHandle: '.material-handle',
       data: {
         group,
@@ -92,8 +103,11 @@ export function useMaterialFlow(
         ? { parentId: material.groupId, extent: 'parent' as const }
         : {}),
       selected: selected.includes(material.id),
-      style: { width: MATERIAL_WIDTH, height: MATERIAL_HEIGHT },
-      measured: { width: MATERIAL_WIDTH, height: MATERIAL_HEIGHT },
+      style: sizes[material.id] ?? materialSize(material),
+      measured:
+        measurements[material.id] ??
+        sizes[material.id] ??
+        materialSize(material),
       dragHandle: '.material-handle',
       data: {
         material,
@@ -108,10 +122,39 @@ export function useMaterialFlow(
         detach,
         text,
         remove,
+        rename,
+        resize,
       },
+    })),
+    ...(shot.labels ?? []).map((label) => ({
+      id: label.id,
+      type: 'label' as const,
+      position: positions[label.id] ?? label.position,
+      selected: selected.includes(label.id),
+      draggable: !blocked && !label.pinned,
+      dragHandle: '.material-handle',
+      style: LABEL_SIZE,
+      measured: LABEL_SIZE,
+      data: { label, blocked, change: labelChange, remove: labelRemove },
     })),
   ];
   const onChanges = useCallback((changes: NodeChange<MaterialCanvasNode>[]) => {
+    const dimensions = changes.filter((change) => change.type === 'dimensions');
+    if (dimensions.length)
+      setMeasurements((current) => {
+        const next = { ...current };
+        let changed = false;
+        for (const change of dimensions)
+          if (
+            change.dimensions &&
+            (next[change.id]?.width !== change.dimensions.width ||
+              next[change.id]?.height !== change.dimensions.height)
+          ) {
+            next[change.id] = change.dimensions;
+            changed = true;
+          }
+        return changed ? next : current;
+      });
     const selections = changes.filter((change) => change.type === 'select');
     if (selections.length)
       setSelected((current) => {
@@ -146,6 +189,11 @@ export function useMaterialFlow(
       ...current,
       nodes: current.nodes.map((item) =>
         next.has(item.id)
+          ? { ...item, position: next.get(item.id) ?? item.position }
+          : item,
+      ),
+      labels: (current.labels ?? []).map((item) =>
+        !item.pinned && next.has(item.id)
           ? { ...item, position: next.get(item.id) ?? item.position }
           : item,
       ),

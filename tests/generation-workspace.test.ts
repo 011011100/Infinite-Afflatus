@@ -290,3 +290,55 @@ test('workspace saving waits for migration and accepts durable staged references
   assert.deepEqual(await f.library.generation.readWorkspace(project.id), saved);
   assert.equal(f.library.store.job(assetId).status, 'saved');
 });
+
+test('card instance names/sizes and pinned labels survive SQLite reopen without renaming shared assets', async (t) => {
+  const f = await fixture();
+  t.after(() => f.dispose());
+  const { project } = await f.library.projects.create('标签与卡片');
+  const assetId = await reference(f.library, project.id, 'reference');
+  const shot = sample();
+  const first = shot.nodes[0];
+  assert.ok(first);
+  shot.nodes[0] = { ...first, name: '独白', width: 520, height: 360 };
+  shot.nodes.push({
+    id: 'asset-node',
+    type: 'asset',
+    assetId,
+    name: '镜头参考别名',
+    width: 400,
+    height: 300,
+    position: { x: 1100, y: 100 },
+  });
+  shot.labels = [
+    {
+      id: 'north',
+      name: '角色设定',
+      color: '#ef4444',
+      pinned: true,
+      position: { x: 100, y: -2000 },
+    },
+  ];
+  const saved = await f.library.generation.saveWorkspace(project.id, {
+    ...emptyWorkspace(),
+    shots: [shot],
+  });
+  await f.library.close();
+  const reopened = await Library.open(
+    join(f.base, 'app'),
+    join(f.base, 'projects'),
+  );
+  try {
+    assert.deepEqual(
+      await reopened.generation.readWorkspace(project.id),
+      saved,
+    );
+    assert.equal(
+      (await reopened.projects.open(project.id)).assets.find(
+        (asset) => asset.id === assetId,
+      )?.name,
+      '文本.txt',
+    );
+  } finally {
+    await reopened.close();
+  }
+});

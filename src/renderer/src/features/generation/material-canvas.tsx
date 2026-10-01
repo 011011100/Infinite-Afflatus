@@ -12,6 +12,7 @@ import {
   LoaderCircle,
   Plus,
   Sparkles,
+  Tag,
   Type,
   Ungroup,
   Upload,
@@ -29,9 +30,14 @@ import {
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import { isMac } from '@/lib/platform';
 import type { ShotWorkspace } from '../../../../shared/generation/workspace';
+import { defaultInteractionSettings } from '../../../../shared/interaction/settings';
+import type { Shortcut } from '../../../../shared/interaction/shortcuts';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { GenerationGroupCard } from './generation-group';
 import { GroupStage } from './group-stage';
+import { LabelCard } from './label-node';
+import { LabelLocator } from './labels/label-locator';
+import { useLabelFlight } from './labels/use-label-flight';
 import { MaterialCard } from './material-node';
 import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferencePicker } from './reference-picker';
@@ -43,6 +49,7 @@ import './generation.css';
 
 const nodeTypes = {
   material: MaterialCard,
+  label: LabelCard,
   generationGroup: GenerationGroupCard,
 };
 const edges: Edge[] = [];
@@ -51,6 +58,7 @@ export function MaterialCanvas({
   snapshot,
   blocked,
   longPressSplit,
+  labelShortcut = defaultInteractionSettings().shortcuts.locateLabels,
   saving,
   error,
   onChange,
@@ -62,6 +70,7 @@ export function MaterialCanvas({
   snapshot: ProjectSnapshot;
   blocked: boolean;
   longPressSplit: boolean;
+  labelShortcut?: Shortcut | null;
   saving: boolean;
   error: string | null;
   onChange: (change: (shot: ShotWorkspace) => ShotWorkspace) => void;
@@ -82,6 +91,9 @@ export function MaterialCanvas({
     longPressSplit,
     onChange,
   );
+  const navigation = useLabelFlight(flow, area, (viewport) =>
+    onChange((current) => ({ ...current, viewport })),
+  );
   const selection = useMaterialSelection(
     area,
     flow,
@@ -90,6 +102,7 @@ export function MaterialCanvas({
   );
   const {
     addText,
+    addLabel,
     addAssets,
     importFiles,
     importing,
@@ -117,6 +130,7 @@ export function MaterialCanvas({
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
     if (importing) return;
+    navigation.cancel();
     await requestClose();
   };
   const selectedGroup = shot.groups.find((group) =>
@@ -192,7 +206,11 @@ export function MaterialCanvas({
         <ContextMenuTrigger
           ref={area}
           className="relative min-h-0 flex-1"
-          onPointerDownCapture={selection.onPointerDownCapture}
+          onPointerDownCapture={(event) => {
+            navigation.cancel();
+            selection.onPointerDownCapture(event);
+          }}
+          onWheelCapture={navigation.cancel}
           onContextMenuCapture={selection.onContextMenuCapture}
         >
           <ReactFlow
@@ -224,9 +242,10 @@ export function MaterialCanvas({
               model.setSelected([]);
               model.setActiveGroup(null);
             }}
-            onMoveEnd={(_event, viewport) =>
-              onChange((current) => ({ ...current, viewport }))
-            }
+            onMoveEnd={(_event, viewport) => {
+              if (!navigation.moving.current)
+                onChange((current) => ({ ...current, viewport }));
+            }}
           >
             <MaterialSelectionFrame dragging={selection.box !== null} />
             <Background
@@ -236,11 +255,22 @@ export function MaterialCanvas({
               color="var(--canvas-dot)"
             />
             <CanvasControls />
+            <LabelLocator
+              labels={shot.labels ?? []}
+              shortcut={labelShortcut}
+              disabled={disabled || picker || !!editingGroup}
+              jump={navigation.jump}
+              cancel={navigation.cancel}
+            />
             <Panel position="top-left">
               <div className="flex gap-1 rounded-xl border bg-background p-1.5 shadow-sm">
                 <Button variant="ghost" disabled={disabled} onClick={addText}>
                   <Type />
                   文本
+                </Button>
+                <Button variant="ghost" disabled={disabled} onClick={addLabel}>
+                  <Tag />
+                  标签
                 </Button>
                 <Button
                   variant="ghost"
@@ -294,7 +324,7 @@ export function MaterialCanvas({
               }}
             />
           )}
-          {!shot.nodes.length && (
+          {!shot.nodes.length && !shot.labels?.length && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <div className="pointer-events-auto flex gap-3">
                 <Button
@@ -355,6 +385,10 @@ export function MaterialCanvas({
           <ContextMenuItem disabled={disabled} onClick={addText}>
             <Type />
             添加文本
+          </ContextMenuItem>
+          <ContextMenuItem disabled={disabled} onClick={addLabel}>
+            <Tag />
+            添加标签
           </ContextMenuItem>
           <ContextMenuItem
             disabled={disabled}
