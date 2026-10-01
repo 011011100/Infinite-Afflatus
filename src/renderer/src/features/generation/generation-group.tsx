@@ -10,6 +10,7 @@ export type GenerationGroupNode = Node<
     count: number;
     open: boolean;
     blocked: boolean;
+    receiving?: boolean;
     toggle: (id: string | null) => void;
     ungroup: (id: string) => void;
   },
@@ -23,9 +24,11 @@ export function GenerationGroupCard({
   return (
     <div
       data-generation-group-frame
+      data-receiving={data.receiving || undefined}
       className={cn(
         'h-full rounded-2xl border-2 border-primary/60 bg-primary/5 shadow-sm',
         selected && 'border-primary',
+        data.receiving && 'border-primary ring-2 ring-primary/20',
       )}
     >
       <header className="material-handle flex h-10 items-center gap-2 px-4 text-xs text-primary">

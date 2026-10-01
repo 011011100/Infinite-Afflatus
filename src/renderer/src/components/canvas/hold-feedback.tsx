@@ -1,3 +1,4 @@
+import { Group } from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -8,11 +9,19 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { HoldProgress } from '@/components/ui/hold-progress';
+import { LONG_PRESS_MS } from '../../../../shared/interaction/long-press';
 import { HoldSplitIndicator } from './hold-split-indicator';
 
 interface Feedback {
   ready: () => void;
   hide: () => void;
+  move: (anchor: FeedbackAnchor) => void;
+}
+interface FeedbackAnchor {
+  x: number;
+  y: number;
+  zoom: number;
 }
 interface Indicator {
   id: number;
@@ -21,12 +30,17 @@ interface Indicator {
   zoom: number;
   open: boolean;
   ready: boolean;
+  action: 'split' | 'join';
 }
 const FeedbackContext = createContext<
-  ((target: HTMLElement) => Feedback) | null
+  | ((
+      target: HTMLElement | FeedbackAnchor,
+      action?: 'split' | 'join',
+    ) => Feedback)
+  | null
 >(null);
 
-/** The exit survives a split removing or reparenting the pressed thumbnail. */
+/** Feedback survives a split or join reparenting the card beneath it. */
 export function HoldFeedbackProvider({ children }: { children: ReactNode }) {
   const [indicator, setIndicator] = useState<Indicator | null>(null);
   const sequence = useRef(0);
@@ -48,18 +62,37 @@ export function HoldFeedbackProvider({ children }: { children: ReactNode }) {
   }, [id, open]);
   const show = useMemo(
     () =>
-      (target: HTMLElement): Feedback => {
-        const rect = target.getBoundingClientRect();
+      (
+        target: HTMLElement | FeedbackAnchor,
+        action: 'split' | 'join' = 'split',
+      ): Feedback => {
+        let anchor: FeedbackAnchor;
+        if (target instanceof HTMLElement) {
+          const rect = target.getBoundingClientRect();
+          anchor = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            zoom: rect.width / target.offsetWidth,
+          };
+        } else anchor = target;
         const id = ++sequence.current;
         setIndicator({
           id,
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-          zoom: rect.width / target.offsetWidth,
+          ...anchor,
           open: true,
           ready: false,
+          action,
         });
         return {
+          move: (anchor) =>
+            setIndicator((current) =>
+              current?.id === id &&
+              (current.x !== anchor.x ||
+                current.y !== anchor.y ||
+                current.zoom !== anchor.zoom)
+                ? { ...current, ...anchor }
+                : current,
+            ),
           ready: () =>
             setIndicator((current) =>
               current?.id === id ? { ...current, ready: true } : current,
@@ -95,7 +128,16 @@ export function HoldFeedbackProvider({ children }: { children: ReactNode }) {
               className="hold-feedback relative block size-full"
               data-open={indicator.open}
             >
-              <HoldSplitIndicator ready={indicator.ready} />
+              {indicator.action === 'join' ? (
+                <HoldProgress
+                  ready={indicator.ready}
+                  duration={LONG_PRESS_MS}
+                  icon={<Group size={20} />}
+                  label={indicator.ready ? '已加入生成组' : '悬停加入生成组'}
+                />
+              ) : (
+                <HoldSplitIndicator ready={indicator.ready} />
+              )}
             </span>
           </span>,
           document.body,

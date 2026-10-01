@@ -1,5 +1,6 @@
 import type { NodeChange, NodePositionChange } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
+import { joinMaterials } from '../../../../shared/generation/join-materials';
 import {
   detachMaterial,
   materialSelection,
@@ -209,6 +210,13 @@ export function useMaterialFlow(
     () => materialSelection(shot, selected),
     [shot, selected],
   );
+  const join = (ids: string[], groupId: string) => {
+    if (blocked) return;
+    update((current) => joinMaterials(current, ids, groupId));
+    setPositions({});
+    setSelected([groupId]);
+    setActiveGroup(null);
+  };
   const group = () => {
     if (!grouping.canGroup || blocked) return;
     const id = crypto.randomUUID();
@@ -224,6 +232,7 @@ export function useMaterialFlow(
     setSelected,
     grouping,
     group,
+    join,
     ungroup,
     detach,
     detached,

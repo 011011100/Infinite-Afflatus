@@ -43,6 +43,7 @@ import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
+import { useMaterialGroupHover } from './use-material-group-hover';
 import { useMaterialSelection } from './use-material-selection';
 import { useMaterialViewport } from './use-material-viewport';
 import './generation.css';
@@ -145,6 +146,15 @@ export function MaterialCanvas({
   const editingGroup = shot.groups.find(
     (group) => group.id === model.activeGroup,
   );
+  const hoverGroup = useMaterialGroupHover({
+    shot,
+    disabled: disabled || picker || !!editingGroup,
+    flow,
+    area,
+    join: model.join,
+    onChanges: model.onChanges,
+    finishMove: model.finishMove,
+  });
   return createPortal(
     <section
       ref={page}
@@ -213,8 +223,18 @@ export function MaterialCanvas({
           onWheelCapture={navigation.cancel}
           onContextMenuCapture={selection.onContextMenuCapture}
         >
-          <ReactFlow
-            nodes={model.nodes}
+          <ReactFlow<MaterialCanvasNode>
+            nodes={model.nodes.map((node) =>
+              node.type === 'generationGroup'
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      receiving: hoverGroup.groupId === node.id,
+                    },
+                  }
+                : node,
+            )}
             edges={edges}
             nodeTypes={nodeTypes}
             defaultViewport={shot.viewport}
@@ -233,10 +253,15 @@ export function MaterialCanvas({
             deleteKeyCode={null}
             zoomOnDoubleClick={false}
             nodeDragThreshold={5}
-            onNodesChange={model.onChanges}
-            onNodeDragStop={model.finishMove}
+            autoPanOnNodeDrag={!hoverGroup.settled}
+            onNodesChange={hoverGroup.changes}
+            onNodeDragStart={hoverGroup.start}
+            onNodeDragStop={hoverGroup.finish}
+            onSelectionDragStart={(event, nodes) => {
+              if (nodes[0]) hoverGroup.start(event, nodes[0], nodes);
+            }}
             onSelectionDragStop={(event, nodes) => {
-              if (nodes[0]) model.finishMove(event, nodes[0], nodes);
+              if (nodes[0]) hoverGroup.finish(event, nodes[0], nodes);
             }}
             onPaneClick={() => {
               model.setSelected([]);
