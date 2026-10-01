@@ -16,6 +16,22 @@
 .label-marker:hover {
   background: var(--secondary);
 }
+.label-marker[data-edge="top"] .label-marker-arrow {
+  bottom: calc(100% + 4px);
+  left: calc(50% - 7px);
+}
+.label-marker[data-edge="bottom"] .label-marker-arrow {
+  top: calc(100% + 4px);
+  left: calc(50% - 7px);
+}
+.label-marker[data-edge="left"] .label-marker-arrow {
+  right: calc(100% + 4px);
+  top: calc(50% - 7px);
+}
+.label-marker[data-edge="right"] .label-marker-arrow {
+  left: calc(100% + 4px);
+  top: calc(50% - 7px);
+}
 @keyframes label-locator-in {
   from {
     opacity: 0;

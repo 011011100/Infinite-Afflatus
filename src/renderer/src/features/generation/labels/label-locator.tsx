@@ -1,5 +1,5 @@
 import { Panel, useStore, useViewport } from '@xyflow/react';
-import { ArrowUp, MapPin, Navigation } from 'lucide-react';
+import { ArrowUp, Navigation } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { isMac } from '@/lib/platform';
@@ -126,7 +126,7 @@ export function LabelLocator({
             <button
               key={marker.label.id}
               type="button"
-              className="label-marker nodrag nopan pointer-events-auto absolute flex h-8 w-40 items-center gap-2 rounded-full border bg-background px-3 text-xs shadow-md"
+              className="label-marker nodrag nopan pointer-events-auto absolute flex h-7 w-max max-w-32 items-center gap-1.5 rounded-full border bg-background px-2.5 text-xs shadow-sm"
               aria-label={`跳转到标签：${marker.label.name}`}
               title={marker.label.name}
               data-label-id={marker.label.id}
@@ -143,24 +143,20 @@ export function LabelLocator({
               }}
             >
               <span
-                className="size-2 shrink-0 rounded-full"
+                className="size-1.5 shrink-0 rounded-full"
                 style={{ background: marker.label.color }}
               />
               <span className="min-w-0 flex-1 truncate text-left">
                 {marker.label.name}
               </span>
-              {marker.edge ? (
+              {marker.edge && (
                 <ArrowUp
-                  className="size-3.5 shrink-0"
+                  aria-hidden="true"
+                  className="label-marker-arrow pointer-events-none absolute size-3.5"
                   style={{
                     color: marker.label.color,
                     transform: `rotate(${marker.angle}deg)`,
                   }}
-                />
-              ) : (
-                <MapPin
-                  className="size-3.5 shrink-0"
-                  style={{ color: marker.label.color }}
                 />
               )}
             </button>

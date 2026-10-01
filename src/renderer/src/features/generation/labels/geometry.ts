@@ -81,7 +81,8 @@ export function labelMarkers(
         next = marker[axis];
       }
       for (const marker of lane) {
-        const inset = Math.floor(offset / perLane) * (horizontal ? 42 : 168);
+        // Rows also reserve room for the outward arrow above/below each bubble.
+        const inset = Math.floor(offset / perLane) * (horizontal ? 56 : 168);
         if (horizontal) marker.y += edge === 'top' ? inset : -inset;
         else marker.x += edge === 'left' ? inset : -inset;
       }
