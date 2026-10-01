@@ -75,14 +75,28 @@ export function ReferenceCard({
         flexible && 'flex min-h-0 flex-col',
       )}
     >
-      <div className="material-handle flex shrink-0 items-center gap-2 px-3 py-2.5 text-xs">
-        <Icon className="size-3.5 text-muted-foreground" />
-        <span className="font-medium">{label}</span>
+      <div className="material-handle flex min-w-0 shrink-0 items-center gap-2 px-3 py-2.5 text-xs">
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        {onRename ? (
+          <EditableName
+            value={name ?? label}
+            onChange={onRename}
+            disabled={disabled}
+            className="font-medium"
+          />
+        ) : (
+          <span
+            className="min-w-0 flex-1 truncate font-medium"
+            title={name ?? label}
+          >
+            {name ?? label}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
           disabled={disabled}
-          className="nodrag nopan ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className="nodrag nopan ml-auto shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
           aria-label={
             removeLabel === '从素材画布移除' ? `移除${label}` : removeLabel
           }
@@ -154,21 +168,12 @@ export function ReferenceCard({
         </p>
       )}
       <div className="flex min-w-0 shrink-0 items-center gap-2 px-3 py-2.5">
-        {onRename ? (
-          <EditableName
-            value={displayName}
-            onChange={onRename}
-            disabled={disabled}
-            className="text-[11px] text-muted-foreground"
-          />
-        ) : (
-          <p
-            className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
-            title={displayName}
-          >
-            {displayName}
-          </p>
-        )}
+        <p
+          className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+          title={asset.name}
+        >
+          {asset.name}
+        </p>
       </div>
       {expanded && (
         <Modal

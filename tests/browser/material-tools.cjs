@@ -110,11 +110,23 @@ app.whenReady().then(async () => {
       '开场独白',
     );
     await rename(
-      `${node('asset')} button[aria-label="重命名卡片名称"]`,
+      `${node('asset')} .material-handle button[aria-label="重命名卡片名称"]`,
       '人物参考',
     );
     assert.equal((await state()).nodes[0].name, '开场独白');
     assert.equal((await state()).nodes[1].name, '人物参考');
+    assert.equal(
+      await run(
+        `document.querySelector('${node('asset')} .material-handle span[title="人物参考"]').textContent`,
+      ),
+      '人物参考',
+    );
+    assert.equal(
+      await run(
+        `document.querySelector('${node('asset')} p[title="源素材.png"]').textContent`,
+      ),
+      '源素材.png',
+    );
     assert.equal((await state()).nodes[1].assetId, 'image');
     await click(`${node('text')} header > svg`);
     let p = await point(`${node('text')} .material-resize`);
