@@ -10,7 +10,10 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { HoldProgress } from '@/components/ui/hold-progress';
-import { LONG_PRESS_MS } from '../../../../shared/interaction/long-press';
+import {
+  HOLD_HINT_DELAY_MS,
+  LONG_PRESS_MS,
+} from '../../../../shared/interaction/long-press';
 import { HoldSplitIndicator } from './hold-split-indicator';
 
 interface Feedback {
@@ -131,9 +134,11 @@ export function HoldFeedbackProvider({ children }: { children: ReactNode }) {
               {indicator.action === 'join' ? (
                 <HoldProgress
                   ready={indicator.ready}
-                  duration={LONG_PRESS_MS}
+                  duration={LONG_PRESS_MS - HOLD_HINT_DELAY_MS}
                   icon={<Group size={20} />}
-                  label={indicator.ready ? '已加入生成组' : '悬停加入生成组'}
+                  label={
+                    indicator.ready ? '松开合并，移动取消' : '悬停以加入生成组'
+                  }
                 />
               ) : (
                 <HoldSplitIndicator ready={indicator.ready} />

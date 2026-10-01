@@ -253,7 +253,7 @@ export function MaterialCanvas({
             deleteKeyCode={null}
             zoomOnDoubleClick={false}
             nodeDragThreshold={5}
-            autoPanOnNodeDrag={!hoverGroup.settled}
+            autoPanOnNodeDrag={!hoverGroup.ready}
             onNodesChange={hoverGroup.changes}
             onNodeDragStart={hoverGroup.start}
             onNodeDragStop={hoverGroup.finish}

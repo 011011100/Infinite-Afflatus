@@ -13,7 +13,11 @@ import type {
   Point,
   ShotWorkspace,
 } from '../../../../shared/generation/workspace';
-import { LONG_PRESS_MS } from '../../../../shared/interaction/long-press';
+import {
+  DRAG_THRESHOLD,
+  HOLD_HINT_DELAY_MS,
+  LONG_PRESS_MS,
+} from '../../../../shared/interaction/long-press';
 import type { MaterialCanvasNode } from './use-material-flow';
 
 type DragEvent = MouseEvent | TouchEvent | ReactMouseEvent;
@@ -21,8 +25,10 @@ const pointer = (event: DragEvent): Point | null => {
   const source = 'touches' in event ? event.touches[0] : event;
   return source ? { x: source.clientX, y: source.clientY } : null;
 };
+const movedBeyondHold = (point: Point, origin: Point) =>
+  Math.hypot(point.x - origin.x, point.y - origin.y) > DRAG_THRESHOLD;
 
-/** Dwell-to-join owns feedback and shields the new parent from the old drag's final events. */
+/** Like hold-to-split: show confirmation first, commit on release, cancel on movement. */
 export function useMaterialGroupHover({
   shot,
   disabled,
@@ -44,54 +50,78 @@ export function useMaterialGroupHover({
   const latest = useRef({ shot, disabled, join, onChanges, finishMove });
   latest.current = { shot, disabled, join, onChanges, finishMove };
   const drag = useRef<{ ids: string[]; point: Point } | null>(null);
-  const hover = useRef<{ id: string; since: number } | null>(null);
+  const hover = useRef<{
+    id: string;
+    since: number;
+    origin: Point;
+    ready: boolean;
+  } | null>(null);
   const feedback = useRef<ReturnType<typeof show> | null>(null);
   const frame = useRef(0);
-  const exit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const release = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const consumed = useRef(new Set<string>());
   const [groupId, setGroupId] = useState<string | null>(null);
-  const [settled, setSettled] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const clearHover = useCallback(() => {
     hover.current = null;
     feedback.current?.hide();
     feedback.current = null;
     setGroupId(null);
+    setReady(false);
   }, []);
   const cancel = useCallback(() => {
     cancelAnimationFrame(frame.current);
-    clearTimeout(exit.current);
     drag.current = null;
     clearHover();
   }, [clearHover]);
 
+  const targetAt = useCallback(
+    (point: Point, ids: string[]) => {
+      const instance = flow.current;
+      const rect = area.current?.getBoundingClientRect();
+      if (
+        !instance ||
+        !rect ||
+        latest.current.disabled ||
+        point.x < rect.left ||
+        point.x > rect.right ||
+        point.y < rect.top ||
+        point.y > rect.bottom
+      )
+        return undefined;
+      return materialHoverGroup(
+        latest.current.shot,
+        ids,
+        instance.screenToFlowPosition(point),
+      );
+    },
+    [area, flow],
+  );
+
   const tick = useCallback(
     (now: number) => {
       const current = drag.current;
-      const instance = flow.current;
       const rect = area.current?.getBoundingClientRect();
-      if (!current || !instance || !rect || latest.current.disabled) {
+      if (!current || !rect || latest.current.disabled) {
         cancel();
         return;
       }
       const { point, ids } = current;
-      const inside =
-        point.x >= rect.left &&
-        point.x <= rect.right &&
-        point.y >= rect.top &&
-        point.y <= rect.bottom;
-      const target = inside
-        ? materialHoverGroup(
-            latest.current.shot,
-            ids,
-            instance.screenToFlowPosition(point),
-          )
-        : undefined;
+      const target = targetAt(point, ids);
       if (target?.id !== hover.current?.id) {
+        if (hover.current?.ready) {
+          cancel();
+          return;
+        }
         clearHover();
         if (target) {
-          hover.current = { id: target.id, since: now };
+          hover.current = {
+            id: target.id,
+            since: now,
+            origin: point,
+            ready: false,
+          };
           setGroupId(target.id);
         }
       }
@@ -102,36 +132,58 @@ export function useMaterialGroupHover({
           y: Math.min(rect.bottom - 36, Math.max(rect.top + 36, point.y + 44)),
           zoom: 1,
         };
-        if (!feedback.current) feedback.current = show(anchor, 'join');
-        else feedback.current.move(anchor);
-        if (now - hover.current.since >= LONG_PRESS_MS) {
-          consumed.current = new Set(ids);
-          drag.current = null;
-          hover.current = null;
-          setGroupId(null);
-          setSettled(true);
-          feedback.current.ready();
-          latest.current.join(ids, target.id);
-          exit.current = setTimeout(clearHover, 140);
-          return;
+        const elapsed = now - hover.current.since;
+        if (!feedback.current && elapsed >= HOLD_HINT_DELAY_MS)
+          feedback.current = show(anchor, 'join');
+        else feedback.current?.move(anchor);
+        if (!hover.current.ready && elapsed >= LONG_PRESS_MS) {
+          hover.current.ready = true;
+          setReady(true);
+          feedback.current?.ready();
         }
       }
       frame.current = requestAnimationFrame(tick);
     },
-    [area, flow, cancel, clearHover, show],
+    [area, targetAt, cancel, clearHover, show],
   );
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!drag.current) return;
       if (!(event.buttons & 1)) cancel();
-      else drag.current.point = { x: event.clientX, y: event.clientY };
+      else {
+        const point = { x: event.clientX, y: event.clientY };
+        drag.current.point = point;
+        if (hover.current && movedBeyondHold(point, hover.current.origin)) {
+          // Once confirmed, moving cancels this drag's join altogether; staying
+          // inside the same group must not silently arm it again before release.
+          if (hover.current.ready) cancel();
+          else clearHover();
+        }
+      }
+    };
+    const up = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      const current = drag.current;
+      const pending = hover.current;
+      const point = { x: event.clientX, y: event.clientY };
+      const confirmed =
+        current &&
+        pending?.ready &&
+        !movedBeyondHold(point, pending.origin) &&
+        targetAt(point, current.ids)?.id === pending.id;
+      if (confirmed) {
+        // Pointer release precedes React Flow's mouseup position/stop callbacks.
+        consumed.current = new Set(current.ids);
+        latest.current.join(current.ids, pending.id);
+      }
+      cancel();
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') cancel();
     };
     window.addEventListener('pointermove', move, true);
-    window.addEventListener('pointerup', cancel, true);
+    window.addEventListener('pointerup', up, true);
     window.addEventListener('pointercancel', cancel, true);
     window.addEventListener('blur', cancel);
     window.addEventListener('keydown', key, true);
@@ -141,14 +193,14 @@ export function useMaterialGroupHover({
       cancel();
       clearTimeout(release.current);
       window.removeEventListener('pointermove', move, true);
-      window.removeEventListener('pointerup', cancel, true);
+      window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', cancel, true);
       window.removeEventListener('blur', cancel);
       window.removeEventListener('keydown', key, true);
       window.removeEventListener('wheel', cancel, true);
       document.removeEventListener('visibilitychange', cancel);
     };
-  }, [cancel]);
+  }, [cancel, clearHover, targetAt]);
   useEffect(() => {
     if (disabled) cancel();
   }, [disabled, cancel]);
@@ -161,7 +213,6 @@ export function useMaterialGroupHover({
     cancel();
     clearTimeout(release.current);
     consumed.current.clear();
-    setSettled(false);
     const moved = nodes.length ? nodes : node ? [node] : [];
     const point = pointer(event);
     if (
@@ -180,7 +231,6 @@ export function useMaterialGroupHover({
     nodes: MaterialCanvasNode[],
   ) => {
     cancel();
-    setSettled(false);
     if (!consumed.current.size && node)
       latest.current.finishMove(
         'nativeEvent' in event ? event.nativeEvent : event,
@@ -192,7 +242,7 @@ export function useMaterialGroupHover({
   };
   return {
     groupId,
-    settled,
+    ready,
     start,
     finish,
     changes: (changes: NodeChange<MaterialCanvasNode>[]) =>

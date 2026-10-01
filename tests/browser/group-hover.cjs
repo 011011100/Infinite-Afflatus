@@ -112,9 +112,32 @@ app.whenReady().then(async () => {
     await sleep(600);
     assert.equal(
       await parent(),
-      'target',
-      'join completes before mouse release',
+      undefined,
+      'ready is confirmation only, not a join',
     );
+    assert.equal(
+      await run(
+        'document.querySelector(".hold-feedback [role=status]").textContent',
+      ),
+      '松开合并，移动取消',
+    );
+    assert.equal(
+      await run('!!document.querySelector(".hold-indicator[data-ready=true]")'),
+      true,
+    );
+    await screenshot('ready-to-join');
+    await sleep(800);
+    assert.equal(
+      await parent(),
+      undefined,
+      'holding the checkmark longer cannot join',
+    );
+    // Tiny pointer jitter uses the same five-screen-pixel tolerance as split.
+    const jitter = { x: p.x + 3, y: p.y };
+    send('mouseMove', jitter);
+    send('mouseUp', jitter);
+    await sleep(150);
+    assert.equal(await parent(), 'target', 'only release confirms the join');
     const joined = await state();
     assert.deepEqual(joined.groups[0].position, before.groups[0].position);
     assert.deepEqual(joined.groups[0].parameters, before.groups[0].parameters);
@@ -126,17 +149,17 @@ app.whenReady().then(async () => {
       await run('!!document.querySelector("[aria-label=视频生成组合编辑]")'),
       false,
     );
-    await move(p, { x: 300, y: 600 });
-    send('mouseUp', { x: 300, y: 600 });
-    await sleep(150);
-    assert.deepEqual(
-      (await state()).nodes,
-      joined.nodes,
-      'old drag cannot move the newly parented card',
+    const added = joined.nodes.find((n) => n.id === 'outside');
+    const frame = await rect(node('target'));
+    const card = await rect(node('outside'));
+    assert.ok(Math.abs(card.x - frame.x - added.position.x) < 1);
+    assert.ok(
+      Math.abs(card.y - frame.y - added.position.y) < 1,
+      'final drag coordinates cannot overwrite group-relative placement',
     );
     await screenshot('joined');
     console.log(
-      'PASS dwell joins before release; target settings, member positions and subsequent pointer moves stay correct',
+      'PASS circle becomes confirmation; only release joins, with split-compatible jitter tolerance and correct final placement',
     );
 
     // The finished drag must not suppress a later gesture, including the existing split hold.
@@ -185,8 +208,10 @@ app.whenReady().then(async () => {
     await sleep(160);
     assert.equal(await parent(), undefined, 'return starts a fresh dwell');
     await sleep(600);
-    assert.equal(await parent(), 'target');
+    assert.equal(await parent(), undefined);
     send('mouseUp', p);
+    await sleep(100);
+    assert.equal(await parent(), 'target');
     console.log(
       'PASS leaving cancels feedback; returning restarts the whole dwell',
     );
@@ -199,8 +224,10 @@ app.whenReady().then(async () => {
     await sleep(160);
     assert.equal(await parent(), undefined);
     await sleep(650);
-    assert.equal(await parent(), 'second');
+    assert.equal(await parent(), undefined);
     send('mouseUp', second);
+    await sleep(100);
+    assert.equal(await parent(), 'second');
     assert.equal(
       (await state()).nodes.filter((n) => n.groupId === 'target').length,
       1,
@@ -212,9 +239,42 @@ app.whenReady().then(async () => {
     await load('?zoom');
     p = await grab();
     await sleep(800);
-    assert.equal(await parent(), 'target', 'hit testing respects zoom and pan');
+    assert.equal(await parent(), undefined);
     send('mouseUp', p);
+    await sleep(100);
+    assert.equal(await parent(), 'target', 'hit testing respects zoom and pan');
     console.log('PASS hovered group detection respects viewport zoom and pan');
+
+    // Movement AFTER the checkmark cancels even while remaining inside the same target.
+    await load();
+    p = await grab();
+    await sleep(800);
+    const shifted = { x: p.x + 24, y: p.y };
+    await move(p, shifted);
+    await sleep(800);
+    assert.equal(
+      await run('!!document.querySelector(".hold-feedback[data-open=true]")'),
+      false,
+      'cancelled confirmation must not rearm in the same drag',
+    );
+    send('mouseUp', shifted);
+    await sleep(100);
+    assert.equal(await parent(), undefined);
+    console.log(
+      'PASS dragging after confirmation cancels joining, even inside the same group',
+    );
+
+    // Moving throughout the countdown is not a stationary hold.
+    await load();
+    p = await grab();
+    for (let i = 0; i < 20; i++) {
+      send('mouseMove', { x: p.x + (i % 2 ? 24 : 0), y: p.y });
+      await sleep(50);
+    }
+    send('mouseUp', { x: p.x + 24, y: p.y });
+    await sleep(100);
+    assert.equal(await parent(), undefined);
+    console.log('PASS continuous movement cannot finish the hold countdown');
 
     for (const reason of [
       'Escape',
@@ -225,7 +285,8 @@ app.whenReady().then(async () => {
     ]) {
       await load();
       p = await grab();
-      await sleep(150);
+      await sleep(800);
+      assert.equal(await parent(), undefined);
       if (reason === 'Escape') {
         wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
         wc.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
@@ -237,6 +298,12 @@ app.whenReady().then(async () => {
       await sleep(800);
       assert.equal(await parent(), undefined, `${reason} cancels pending join`);
       send('mouseUp', p);
+      await sleep(100);
+      assert.equal(
+        await parent(),
+        undefined,
+        `${reason} cannot merge on release`,
+      );
     }
     console.log(
       'PASS Escape, blur, pointer cancellation, edit blocking and unmount cancel pending work',
