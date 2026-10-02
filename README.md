@@ -38,6 +38,7 @@ pnpm dev
 ```bash
 pnpm check         # 代码规范与类型检查
 pnpm test          # 真实文件、SQLite、迁移与保存恢复测试
+pnpm test:upgrade  # 历史版本写入 → 当前版本读写 → 独立进程重启核对
 pnpm build         # 构建到 out/，不产生安装包
 pnpm start         # 打开构建后的桌面应用
 pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
@@ -61,6 +62,7 @@ pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔�
 | [存储实现与验证](docs/storage-implementation.md) | 实际模块、恢复行为、测试和当前限制 |
 | [UI 基础与组件约定](docs/ui-foundation.md) | 组件库选择、主题、共用组件与画布的分工 |
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
+| [版本升级数据回归](docs/data-upgrade-testing.md) | GitHub 三系统测试、历史数据基线、验证范围与维护规则 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |
 
 ## 技术选择

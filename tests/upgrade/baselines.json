@@ -1,0 +1,14 @@
+[
+  {
+    "name": "legacy-draft",
+    "scenario": "legacy-draft",
+    "commit": "c5ad575ba7dad4dc27540192e74bc4b33228954f",
+    "description": "Project-level generation draft, before shot workspaces and label shortcuts"
+  },
+  {
+    "name": "material-workspace",
+    "scenario": "material-workspace",
+    "commit": "e0c58b3033e0bd4973d2da5797cb7247a8b962bc",
+    "description": "Shot workspaces, independent groups, card sizes, labels and shortcuts"
+  }
+]

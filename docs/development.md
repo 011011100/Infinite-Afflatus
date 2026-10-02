@@ -56,11 +56,14 @@ UI 组件与样式遵循 [UI 基础与组件约定](ui-foundation.md)。`@/` 只
 ```bash
 pnpm check
 pnpm test
+pnpm test:upgrade
 pnpm build
 pnpm doctor:media
 ```
 
 `check` 检查代码规范、导入顺序、格式和 TypeScript 类型。`build` 构建主进程、preload、renderer 三部分。
+
+`test:upgrade` 在临时目录运行固定历史提交的存储代码，再用当前代码读取和编辑旧数据，并启动两个独立 Node 进程核对保存后的结果。需要完整 Git 历史，缺少历史提交会直接失败。GitHub 的 `Data upgrade safety` 工作流在 push、PR 和手动触发时分别运行 Linux、Windows、macOS 测试；日志保留 14 天。详见 [版本升级数据回归](data-upgrade-testing.md)。这是 SQLite／文件和存储业务层测试，不会启动桌面开发服务。
 
 已有 `pnpm dev` 运行时，可以执行 `pnpm test:text-drag` 回归悬浮编辑的文本块拖动。脚本复用 5173 服务，在隔离 Electron 窗口中加载真实组件与合成文本，用原生鼠标按下／移动／松开事件验证排序、取消、移出和边缘滚动；不会启动第二个开发服务或打开用户项目。临时页面在退出时清理。
 
