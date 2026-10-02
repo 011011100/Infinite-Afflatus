@@ -80,7 +80,8 @@ export async function history(t: TestContext, baseline: Baseline) {
       { cause: error },
     );
   }
-  await exec('tar', ['-xf', archive, '-C', source]);
+  // Git Bash's tar treats a Windows drive colon as a remote host. Use relative argv.
+  await exec('tar', ['-xf', '../history.tar'], { cwd: source });
   t.diagnostic(
     `${baseline.name}: historical writer ${baseline.commit}; Node ${process.version}; ${process.platform}`,
   );
