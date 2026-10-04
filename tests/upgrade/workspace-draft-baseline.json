@@ -1,0 +1,7 @@
+{
+  "name": "workspace-draft-v1",
+  "scenario": "image-workspace",
+  "commit": "29f19980b993a4462d3c97605ea55be51806a037",
+  "formatVersion": 1,
+  "description": "Initial durable workspace recovery records, including exact in-flight submissions and independent video/image groups"
+}

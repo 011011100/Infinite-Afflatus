@@ -124,7 +124,10 @@ async function runCases() {
     'Build production output first',
   );
   for (const kind of ['missing-root', 'corrupt-store', 'empty-store']) {
-    const base = realpathSync(mkdtempSync(join(tmpdir(), 'afflatus-startup-')));
+    // Match the application's native canonicalization, including Windows 8.3 TEMP paths.
+    const base = realpathSync.native(
+      mkdtempSync(join(tmpdir(), 'afflatus-startup-')),
+    );
     const fixture = seed(base, kind);
     try {
       const env = {

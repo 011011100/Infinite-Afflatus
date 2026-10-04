@@ -3,7 +3,7 @@ import { ArrowUpRight, Clapperboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 export type ShotCardNode = Node<
-  { name: string; count: number; open: () => void },
+  { name: string; count: number; disabled: boolean; open: () => void },
   'shot'
 >;
 export function ShotCard({ data, selected }: NodeProps<ShotCardNode>) {
@@ -26,6 +26,7 @@ export function ShotCard({ data, selected }: NodeProps<ShotCardNode>) {
           variant="ghost"
           size="sm"
           className="nodrag nopan"
+          disabled={data.disabled}
           onClick={data.open}
         >
           素材画布

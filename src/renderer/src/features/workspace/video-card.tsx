@@ -18,6 +18,7 @@ export type VideoCardNode = Node<
     play: (id: string) => void;
     openMaterials: (assetId: string) => void;
     canOpenMaterials: boolean;
+    disabled: boolean;
     canHold: boolean;
     splitAsset: (cardId: string, assetId: string) => void;
     selectAsset: (cardId: string, assetId: string) => void;
@@ -87,6 +88,7 @@ export function VideoCard({
         <Button
           variant="ghost"
           size="sm"
+          disabled={data.disabled}
           className="nodrag nopan shrink-0"
           aria-label={
             grouped

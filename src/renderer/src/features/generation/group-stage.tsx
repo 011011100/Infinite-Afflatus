@@ -40,6 +40,7 @@ export function GroupStage({
   projectId,
   disabled,
   saving,
+  recovering = false,
   error,
   origin,
   update,
@@ -54,6 +55,7 @@ export function GroupStage({
   projectId: string;
   disabled: boolean;
   saving: boolean;
+  recovering?: boolean;
   error: string | null;
   origin: () => { x: number; y: number; width: number; height: number };
   update: ShotUpdate;
@@ -65,6 +67,7 @@ export function GroupStage({
   const dialog = useRef<HTMLDialogElement>(null);
   const closeMotion = useGroupStageMotion(dialog, origin, onClose);
   const requestClose = () => {
+    if (recovering) return;
     // Local name inputs must join the retained draft before their editor unmounts.
     void flushPendingChanges().then((saved) => {
       if (saved) closeMotion();
@@ -128,6 +131,7 @@ export function GroupStage({
           variant="outline"
           className="rounded-full bg-background/90 shadow-sm"
           onClick={requestClose}
+          disabled={recovering}
         >
           <ArrowLeft />
           收起组合

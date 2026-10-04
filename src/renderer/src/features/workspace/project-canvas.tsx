@@ -65,6 +65,7 @@ function CanvasContent({
   report,
 }: ProjectCanvasProps) {
   const shots = useShotWorkspace(snapshot.project.id, blocked, report);
+  const interactionBlocked = blocked || shots.recovering;
   const recoveryNotice = (
     <WorkspaceDraftNotice
       recovery={shots.recovery}
@@ -75,18 +76,22 @@ function CanvasContent({
       restore={shots.recoverDraft}
     />
   );
-  const saveViewport = useViewportSave(snapshot.project.id, blocked, report);
+  const saveViewport = useViewportSave(
+    snapshot.project.id,
+    interactionBlocked,
+    report,
+  );
   const [shotPositions, setShotPositions] = useState<
     Record<string, { x: number; y: number }>
   >({});
   const root = useRef<HTMLElement | null>(null);
   const prepareTransition = useCardMorph(
     root,
-    blocked || inactive || !!shots.activeId,
+    interactionBlocked || inactive || !!shots.activeId,
   );
   const document = useCanvasDocument(
     snapshot,
-    blocked,
+    interactionBlocked,
     report,
     prepareTransition,
   );
@@ -113,16 +118,22 @@ function CanvasContent({
     (cardId: string, assetId: string) => setSelection({ cardId, assetId }),
     [],
   );
-  const drag = useCardDrag(cards, blocked, document.commit, selectCard);
+  const drag = useCardDrag(
+    cards,
+    interactionBlocked,
+    document.commit,
+    selectCard,
+  );
   const play = useCallback(
     (id: string) => {
+      if (blocked || inactive || shots.isRecovering()) return;
       const card = cards.find((item) => item.id === id);
       if (card) {
         selectCard(id);
         setPlaying(id);
       }
     },
-    [cards, selectCard],
+    [cards, selectCard, blocked, inactive, shots.isRecovering],
   );
   const selectedCard = cards.find((card) => card.id === selection?.cardId);
   const selectedAssetId = selection?.assetId;
@@ -134,7 +145,8 @@ function CanvasContent({
   const splitAsset = useCallback(
     (cardId: string, assetId: string) => {
       if (
-        blocked ||
+        interactionBlocked ||
+        shots.isRecovering() ||
         inactive ||
         shots.activeId ||
         playing ||
@@ -158,7 +170,8 @@ function CanvasContent({
       });
     },
     [
-      blocked,
+      interactionBlocked,
+      shots.isRecovering,
       inactive,
       shots.activeId,
       playing,
@@ -175,7 +188,7 @@ function CanvasContent({
   useCanvasShortcuts({
     shortcuts: interactions.shortcuts,
     disabled:
-      blocked ||
+      interactionBlocked ||
       inactive ||
       !!shots.activeId ||
       document.saving ||
@@ -193,7 +206,7 @@ function CanvasContent({
   });
   const canHold =
     interactions.longPressSplit &&
-    !blocked &&
+    !interactionBlocked &&
     !inactive &&
     !shots.activeId &&
     !document.saving &&
@@ -233,7 +246,8 @@ function CanvasContent({
             const asset = assets.get(assetId);
             if (asset) shots.create(card.position, asset);
           },
-          canOpenMaterials: shots.loaded && !blocked,
+          canOpenMaterials: shots.loaded && !interactionBlocked,
+          disabled: interactionBlocked || inactive,
         },
       })),
       ...shots.shots
@@ -247,6 +261,7 @@ function CanvasContent({
           data: {
             name: shot.name,
             count: shot.nodes.length,
+            disabled: interactionBlocked || inactive,
             open: () => shots.open(shot.id),
           },
         })),
@@ -266,7 +281,8 @@ function CanvasContent({
       shots.create,
       shots.open,
       shots.loaded,
-      blocked,
+      interactionBlocked,
+      inactive,
       shotPositions,
     ],
   );
@@ -293,7 +309,7 @@ function CanvasContent({
       ref={root}
       className="relative min-h-0 flex-1"
       aria-label="视频创作画布"
-      aria-busy={document.saving}
+      aria-busy={document.saving || shots.recovering}
     >
       {!shots.activeShot && !playing && (
         <div className="absolute inset-x-0 top-0 z-20">{recoveryNotice}</div>
@@ -309,7 +325,7 @@ function CanvasContent({
         minZoom={0.25}
         maxZoom={2}
         nodesConnectable={false}
-        nodesDraggable={!blocked && !document.saving}
+        nodesDraggable={!interactionBlocked && !document.saving}
         nodeDragThreshold={DRAG_THRESHOLD}
         panActivationKeyCode={null}
         nodeClickDistance={5}
@@ -318,13 +334,15 @@ function CanvasContent({
         selectionKeyCode={null}
         disableKeyboardA11y
         zoomOnDoubleClick={false}
-        panOnDrag={!blocked}
-        zoomOnScroll={!blocked}
-        zoomOnPinch={!blocked}
+        panOnDrag={!interactionBlocked}
+        zoomOnScroll={!interactionBlocked}
+        zoomOnPinch={!interactionBlocked}
         onNodesChange={(changes) => {
           for (const change of changes) {
             if (
               change.type === 'position' &&
+              !interactionBlocked &&
+              !shots.isRecovering() &&
               change.position &&
               change.id.startsWith('shot:')
             ) {
@@ -350,11 +368,19 @@ function CanvasContent({
         onPaneClick={() => setSelection(null)}
         onNodeDoubleClick={(event, node) => {
           event.preventDefault();
-          if (inactive || drag.drag || document.saving) return;
+          if (
+            interactionBlocked ||
+            shots.isRecovering() ||
+            inactive ||
+            drag.drag ||
+            document.saving
+          )
+            return;
           if (node.type === 'shot') shots.open(node.id.slice(5));
           else play(node.id);
         }}
         onNodeDragStart={(_event, node) => {
+          if (interactionBlocked || shots.isRecovering()) return;
           if (node.type === 'video') drag.start(node.id);
         }}
         onNodeDrag={(_event, node) =>
@@ -362,6 +388,10 @@ function CanvasContent({
           drag.move(node.position, flow.current?.getZoom() ?? 1)
         }
         onNodeDragStop={(_event, node) => {
+          if (interactionBlocked || shots.isRecovering()) {
+            setShotPositions({});
+            return;
+          }
           if (node.type === 'shot') {
             shots.updateShot(node.id.slice(5), (shot) => ({
               ...shot,
@@ -371,7 +401,8 @@ function CanvasContent({
           } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
         }}
         onMoveEnd={(_event, viewport) => {
-          if (!blocked) void saveViewport(viewport);
+          if (!interactionBlocked && !shots.isRecovering())
+            void saveViewport(viewport);
         }}
       >
         <ViewportPortal>
@@ -387,13 +418,14 @@ function CanvasContent({
           size={1}
           color="var(--canvas-dot)"
         />
-        {!blocked && <CanvasControls />}
+        {!interactionBlocked && <CanvasControls />}
         <Panel position="top-left">
           <Button
             variant="outline"
             className="bg-background shadow-sm"
-            disabled={blocked || !shots.loaded}
+            disabled={interactionBlocked || !shots.loaded}
             onClick={() => {
+              if (shots.isRecovering()) return;
               const bottom = Math.max(
                 60,
                 ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
@@ -431,7 +463,7 @@ function CanvasContent({
         )}
         <Panel position="bottom-center">
           <CanvasActions
-            disabled={blocked || document.saving || !!drag.drag}
+            disabled={interactionBlocked || document.saving || !!drag.drag}
             canUndo={document.canUndo}
             canRedo={document.canRedo}
             canSplit={canSplit}
@@ -483,7 +515,8 @@ function CanvasContent({
           shortcuts={interactions.shortcuts}
           history={shots.historyFor(shots.activeShot.id)}
           snapshot={document.snapshot}
-          blocked={blocked || shots.recovering}
+          blocked={interactionBlocked}
+          recovering={shots.recovering}
           projectUnavailable={projectUnavailable}
           unavailableNotice={
             <>
@@ -507,7 +540,7 @@ function CanvasContent({
           card={playingCard}
           assets={playingAssets}
           projectName={snapshot.project.name}
-          blocked={blocked}
+          blocked={interactionBlocked}
           projectUnavailable={projectUnavailable}
           unavailableNotice={unavailableNotice}
           saving={document.saving}

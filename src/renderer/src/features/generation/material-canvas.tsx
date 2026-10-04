@@ -75,6 +75,7 @@ export function MaterialCanvas({
   shortcuts = defaultInteractionSettings().shortcuts,
   history,
   saving,
+  recovering = false,
   error,
   onChange,
   onClose,
@@ -91,6 +92,7 @@ export function MaterialCanvas({
   shortcuts?: Shortcuts;
   history?: ShotHistoryActions;
   saving: boolean;
+  recovering?: boolean;
   error: string | null;
   onChange: ShotUpdate;
   onClose: () => void;
@@ -151,7 +153,7 @@ export function MaterialCanvas({
   }, []);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
-    if (importing) return;
+    if (importing || recovering) return;
     navigation.cancel();
     await requestClose();
   };
@@ -218,7 +220,7 @@ export function MaterialCanvas({
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-5">
         <Button
           variant="ghost"
-          disabled={importing || closing}
+          disabled={importing || closing || recovering}
           onClick={() => void close()}
         >
           <ArrowLeft />
@@ -245,15 +247,17 @@ export function MaterialCanvas({
           role="status"
         >
           {saving && <LoaderCircle className="size-3 animate-spin" />}
-          {blocked
-            ? projectUnavailable
-              ? '项目不可用，未保存输入仍在本页'
-              : '迁移中'
-            : error
-              ? '保存失败'
-              : saving
-                ? '保存中…'
-                : '已保存'}
+          {recovering
+            ? '正在恢复镜头草稿…'
+            : blocked
+              ? projectUnavailable
+                ? '项目不可用，未保存输入仍在本页'
+                : '迁移中'
+              : error
+                ? '保存失败'
+                : saving
+                  ? '保存中…'
+                  : '已保存'}
         </span>
       </header>
       {unavailableNotice}
@@ -497,6 +501,7 @@ export function MaterialCanvas({
           projectId={snapshot.project.id}
           disabled={disabled}
           saving={saving}
+          recovering={recovering}
           error={error}
           unavailableNotice={unavailableNotice}
           update={onChange}

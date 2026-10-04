@@ -34,9 +34,15 @@ export function WorkspaceDraftNotice({
   return (
     <section
       aria-label="镜头恢复草稿"
+      aria-busy={recovering}
       className="max-h-52 shrink-0 overflow-auto border-b bg-warning px-4 py-3 text-xs text-warning-foreground"
     >
       <p className="font-medium">镜头恢复草稿</p>
+      {recovering && (
+        <p role="status" className="mt-1">
+          正在恢复镜头草稿，请稍候…
+        </p>
+      )}
       <p className="mt-1 leading-5">
         仅保护镜头文字、参数、分组和素材引用；不含未提交的名称输入、主画布裁剪或原始媒体。恢复文件用于救援，不能作为完整项目包导入。
       </p>

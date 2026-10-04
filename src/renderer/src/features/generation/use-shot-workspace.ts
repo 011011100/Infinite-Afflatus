@@ -30,6 +30,7 @@ export function useShotWorkspace(
   const [error, setError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   const recoveringRef = useRef(false);
+  const isRecovering = useCallback(() => recoveringRef.current, []);
   const recovery = useWorkspaceDrafts(projectId);
   const draftQueue = recovery.queue;
   const current = useRef<GenerationWorkspace | null>(null);
@@ -154,7 +155,12 @@ export function useShotWorkspace(
     return () => clearInterval(timer);
   }, [loaded, blocked, flush]);
   const recoverDraft = async (record: WorkspaceDraftRecord) => {
-    if (locked.current || edit.current !== saved.current || pending.current)
+    if (
+      !current.current ||
+      locked.current ||
+      edit.current !== saved.current ||
+      pending.current
+    )
       return false;
     recoveringRef.current = true;
     locked.current = true;
@@ -168,7 +174,9 @@ export function useShotWorkspace(
         confirmed.current = value;
         current.current = value;
         history.current = new ShotHistory();
-        setActiveId(null);
+        setActiveId((id) =>
+          id && value.shots.some((shot) => shot.id === id) ? id : null,
+        );
         setWorkspace(value);
         setError(null);
         await recovery.refresh();
@@ -220,12 +228,19 @@ export function useShotWorkspace(
     });
   };
   const open = (id: string | null) => {
+    // A stale card callback can run in the same event turn as recovery begins,
+    // before React has rendered disabled controls. Do not queue a late switch.
+    if (
+      recoveringRef.current ||
+      (id && !current.current?.shots.some((shot) => shot.id === id))
+    )
+      return;
     if (activeId) history.current.breakMerge(activeId);
     if (id) history.current.breakMerge(id);
     setActiveId(id);
   };
   const create = (position: Point, asset?: Asset) => {
-    if (!current.current || blocked) return;
+    if (!current.current || locked.current) return;
     const existing =
       asset &&
       current.current.shots.find((shot) => shot.sourceAssetId === asset.id);
@@ -254,6 +269,7 @@ export function useShotWorkspace(
     recovery,
     recoverDraft,
     recovering,
+    isRecovering,
     baseline: confirmed.current,
     dirty: edit.current !== saved.current,
     loaded: !!workspace,

@@ -37,6 +37,8 @@ const draftText = '项目盘离线期间的镜头文字，异常退出后仍应�
 const initialText = '已经确认保存的镜头文本';
 const projectName = '异常退出恢复回归';
 let current;
+let phase = 'prepare fixture';
+const proof = join(tmpdir(), 'afflatus-draft-recovery-screens');
 
 async function launch() {
   const port = await freePort();
@@ -114,12 +116,20 @@ async function terminate() {
   await current.exited;
   current = null;
 }
-const click = (client, text) =>
-  client.run(`(() => {
+const click = async (client, text) => {
+  await waitFor(
+    () =>
+      client.run(
+        `!![...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled)`,
+      ),
+    `enabled ${text} action`,
+  );
+  return client.run(`(() => {
   const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled);
   if (!button) throw new Error('Button unavailable: ' + ${JSON.stringify(text)});
   button.click();
 })()`);
+};
 async function openProject(client) {
   await client.run(`(() => {
     const label = [...document.querySelectorAll('button span')].find(s => s.textContent.trim() === ${JSON.stringify(projectName)});
@@ -181,6 +191,7 @@ try {
   const database = join(projects, project.folder, 'project.sqlite');
   const heldDatabase = join(scratch, 'original-project.sqlite');
   const originalBytes = await readFile(database);
+  phase = 'protect text while the project is unavailable';
   const first = await launch();
   await openProject(first);
   await click(first, '素材画布');
@@ -208,6 +219,7 @@ try {
   );
 
   await rename(heldDatabase, database);
+  phase = 'reject a conflicting project after restart';
   const conflict = new DatabaseSync(database);
   try {
     const value = structuredClone(baseline);
@@ -249,6 +261,7 @@ try {
   );
 
   await writeFile(database, originalBytes);
+  phase = 'recover the original project and display its text';
   const third = await launch();
   await openProject(third);
   await waitFor(
@@ -280,7 +293,6 @@ try {
       ),
     'recovered text visible',
   );
-  const proof = join(tmpdir(), 'afflatus-draft-recovery-screens');
   await mkdir(proof, { recursive: true });
   const screenshot = await third.send('Page.captureScreenshot', {
     format: 'png',
@@ -293,6 +305,27 @@ try {
   console.log(
     'PASS restoring the original database permits explicit recovery, writes through native IPC and displays the recovered text',
   );
+} catch (error) {
+  console.error(`Failed phase: ${phase}`);
+  if (current?.client) {
+    try {
+      console.error(
+        await current.client.run('document.body.innerText.slice(0, 8000)'),
+      );
+      console.error('Renderer errors:', current.client.errors);
+      await mkdir(proof, { recursive: true });
+      const screenshot = await current.client.send('Page.captureScreenshot', {
+        format: 'png',
+      });
+      await writeFile(
+        join(proof, 'failure.png'),
+        Buffer.from(screenshot.data, 'base64'),
+      );
+    } catch (diagnosticError) {
+      console.error('Unable to capture failure state:', diagnosticError);
+    }
+  }
+  throw error;
 } finally {
   await terminate();
   await rm(scratch, {
