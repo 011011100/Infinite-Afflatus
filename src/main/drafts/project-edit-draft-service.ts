@@ -13,6 +13,7 @@ import {
   projectEditRecord,
   sameProjectEditInput,
 } from './project-edit-validation';
+import { addRescueRecord } from './rescue-record';
 
 type Restore = (
   record: ProjectEditDraftRecord,
@@ -50,6 +51,15 @@ export class ProjectEditDraftService {
 
   private requireUnlocked(name: string) {
     if (this.locked.has(name)) throw new Error('此编辑正在恢复，请完成后重试');
+  }
+
+  addRescue(input: unknown, beforeAdd: () => Promise<void>) {
+    const record = projectEditRecord(input);
+    return this.run(async () => {
+      if (this.acknowledged.has(this.name(record.project.id, record.sessionId)))
+        throw new Error('此恢复副本已确认或移除，请重新检查救援文件');
+      return addRescueRecord(this.files, record, beforeAdd);
+    });
   }
 
   protect(project: ProjectSummary, input: unknown): Promise<number> {

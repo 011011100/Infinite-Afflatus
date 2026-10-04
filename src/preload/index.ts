@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  chooseRescueImport: () => ipcRenderer.invoke(IPC_CHANNELS.chooseRescueImport),
+  confirmRescueImport: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.confirmRescueImport, token),
+  cancelRescueImport: () => ipcRenderer.invoke(IPC_CHANNELS.cancelRescueImport),
   getAppBackups: () => ipcRenderer.invoke(IPC_CHANNELS.getAppBackups),
   createAppBackup: () => ipcRenderer.invoke(IPC_CHANNELS.createAppBackup),
   revealAppBackups: () => ipcRenderer.invoke(IPC_CHANNELS.revealAppBackups),

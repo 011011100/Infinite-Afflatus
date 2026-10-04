@@ -9,6 +9,7 @@ import type {
   WorkspaceDraftList,
   WorkspaceDraftRecord,
 } from '../../../../shared/workspace-draft';
+import { subscribeDraftLists } from './draft-list-events';
 import { WorkspaceDraftQueue } from './workspace-draft-queue';
 
 export function useWorkspaceDrafts(projectId: string) {
@@ -44,11 +45,13 @@ export function useWorkspaceDrafts(projectId: string) {
     }
   }, [projectId, queue]);
   useEffect(() => {
+    const unsubscribe = subscribeDraftLists(projectId, () => void refresh());
     void refresh();
     return () => {
+      unsubscribe();
       epoch.current++;
     };
-  }, [refresh]);
+  }, [projectId, refresh]);
   const exportDraft = async (record?: WorkspaceDraftRecord) => {
     const snapshot = queue.snapshot();
     const input = record

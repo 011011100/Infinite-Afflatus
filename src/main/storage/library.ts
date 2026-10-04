@@ -6,6 +6,7 @@ import { AppBackupRecovery } from '../backups/app-backup-recovery';
 import { AppBackupService } from '../backups/app-backup-service';
 import { preflightBackupAnchor } from '../backups/backup-open-check';
 import { ProjectEditDraftService } from '../drafts/project-edit-draft-service';
+import { RescueImportService } from '../drafts/rescue-import-service';
 import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
@@ -26,7 +27,7 @@ import { StagingCleanupService } from '../saving/staging-cleanup-service';
 import { InteractionSettingsStore } from '../settings/interaction-settings';
 import { AppStore } from './app-store';
 import { readAppStoreRoot } from './app-store-guard';
-import { canonicalDirectory, overlaps } from './files';
+import { canonicalDirectory, overlaps, safeFile } from './files';
 import { LibraryOpenError } from './library-open-error';
 import {
   pathInfo,
@@ -52,6 +53,7 @@ export class Library {
   readonly health: ProjectHealthService;
   readonly drafts: WorkspaceDraftService;
   readonly editDrafts: ProjectEditDraftService;
+  readonly rescueImports: RescueImportService;
   readonly referenceImports: ReferenceImportService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
@@ -97,6 +99,26 @@ export class Library {
       () => this.mediaTools.snapshot(),
     );
     this.generation = new GenerationService(this.projects, store, this.gate);
+    this.rescueImports = new RescueImportService(this.drafts, this.editDrafts, {
+      summary: (id) => this.projects.summary(id),
+      read: (id) => this.projects.open(id),
+      readWorkspace: (id) => this.generation.readWorkspace(id),
+      databasePath: (id) => this.projects.databasePath(id),
+      resolveAsset: (id, asset) =>
+        safeFile(
+          store.root,
+          `${this.projects.summary(id).folder}/${asset.relativePath}`,
+        ),
+      assertAvailable: () => {
+        if (this.isClosing) throw new Error('应用正在关闭，请重新打开后导入');
+        if (
+          this.gate.isBlocked ||
+          this.migration.journal?.status.restartRequired
+        )
+          throw new Error('项目目录正在切换，请完成目录恢复后再导入恢复文件');
+      },
+      run: (operation) => this.gate.run(operation),
+    });
     this.proxies = new ProxyService(
       this.projects,
       this.gate,
@@ -256,6 +278,7 @@ export class Library {
     // every cancellation before waiting, and observe every cleanup outcome.
     // Fully received results remain durable and resume on the next library open.
     const stopped = await Promise.allSettled([
+      this.rescueImports.close(),
       this.backups.close(),
       this.mediaTools.close(),
       this.referenceImports.close(),

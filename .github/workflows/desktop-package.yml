@@ -62,6 +62,8 @@ jobs:
         run: node --import tsx tests/browser/draft-recovery.mjs
       - name: Verify abrupt termination preserves project names and completed trim gestures
         run: node --import tsx tests/browser/project-edit-recovery.mjs
+      - name: Verify rescue file preview, independent import and explicit recovery across restarts
+        run: node tests/browser/rescue-import.mjs
       - name: Verify application index backup and offline recovery preserve original data
         run: node --import tsx tests/browser/app-backup-recovery.mjs
       - name: Verify partial reference imports preserve successful files and continued editing

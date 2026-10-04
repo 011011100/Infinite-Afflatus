@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/project-edit-draft';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { projectErrorMessage } from '../projects/library-session';
+import { subscribeDraftLists } from './draft-list-events';
 import {
   type ProjectEditRecoveryAttempt,
   projectEditRecoveryGuards,
@@ -85,15 +86,19 @@ export function useProjectEditDrafts(
   }, [projectId]);
 
   useEffect(() => {
+    const unsubscribe = projectId
+      ? subscribeDraftLists(projectId, () => void refresh())
+      : undefined;
     setList(empty());
     setError(null);
     setNotice(null);
     void refresh();
     return () => {
+      unsubscribe?.();
       epoch.current++;
       context.current.version++;
     };
-  }, [refresh]);
+  }, [projectId, refresh]);
 
   const perform = (
     operation: (id: string, isCurrent: () => boolean) => Promise<void>,

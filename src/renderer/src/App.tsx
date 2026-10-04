@@ -230,6 +230,7 @@ export function App() {
       {settings && library && (
         <AppSettings
           library={library}
+          currentProjectId={project?.project.id ?? null}
           error={state.error}
           run={run}
           beforeMigration={() => lifecycle.prepare()}

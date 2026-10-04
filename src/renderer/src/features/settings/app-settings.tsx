@@ -14,6 +14,7 @@ export function AppSettings({
   error,
   beforeMigration,
   initialPage = 'interactions',
+  currentProjectId = null,
 }: {
   library: LibraryState;
   onClose: () => void;
@@ -21,6 +22,7 @@ export function AppSettings({
   error: string | null;
   beforeMigration?: (() => Promise<boolean>) | undefined;
   initialPage?: 'interactions' | 'storage';
+  currentProjectId?: string | null;
 }) {
   const [page, setPage] = useState<'interactions' | 'storage' | 'media'>(
     initialPage,
@@ -52,6 +54,7 @@ export function AppSettings({
             library={library}
             run={run}
             beforeMigration={beforeMigration}
+            currentProjectId={currentProjectId}
           />
         </div>
         <div hidden={page !== 'media'}>

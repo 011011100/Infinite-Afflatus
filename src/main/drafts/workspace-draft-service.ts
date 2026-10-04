@@ -10,6 +10,7 @@ import { errorMessage } from '../storage/database';
 import { DraftFiles } from './draft-files';
 import { draftId, draftInput, draftKey, draftRecord } from './draft-validation';
 import { exportDraft } from './export-draft';
+import { addRescueRecord } from './rescue-record';
 
 /** Independent of the library database, project volume and project write gate. */
 export class WorkspaceDraftService {
@@ -31,6 +32,15 @@ export class WorkspaceDraftService {
 
   private name(projectId: string, sessionId: string) {
     return `${draftId(projectId)}.${draftId(sessionId)}.json`;
+  }
+
+  addRescue(input: unknown, beforeAdd: () => Promise<void>) {
+    const record = draftRecord(input);
+    return this.run(async () => {
+      if (this.acknowledged.has(this.name(record.project.id, record.sessionId)))
+        throw new Error('此恢复副本已确认或移除，请重新检查救援文件');
+      return addRescueRecord(this.files, record, beforeAdd);
+    });
   }
 
   protect(project: ProjectSummary, input: unknown) {

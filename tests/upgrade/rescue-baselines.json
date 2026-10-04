@@ -1,0 +1,14 @@
+[
+  {
+    "name": "workspace-rescue-v1",
+    "scenario": "image-workspace",
+    "commit": "29f19980b993a4462d3c97605ea55be51806a037",
+    "description": "Actual public WorkspaceDraftService.export from the first fixed workspace draft v1 writer"
+  },
+  {
+    "name": "project-edit-rescue-v1",
+    "scenario": "image-workspace",
+    "commit": "1f77f143f909940571a337adcc787b301933bd86",
+    "description": "Actual public ProjectEditDraftService.export from the fixed native-only name/trim v1 writer"
+  }
+]

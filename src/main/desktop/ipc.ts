@@ -14,6 +14,7 @@ import type { Viewport } from '../../shared/models';
 import { registerAppBackupIpc } from '../backups/app-backup-ipc';
 import { registerWorkspaceDraftIpc } from '../drafts/draft-ipc';
 import { registerProjectEditDraftIpc } from '../drafts/project-edit-draft-ipc';
+import { registerRescueImportIpc } from '../drafts/rescue-import-ipc';
 import { registerExportIpc } from '../export/export-ipc';
 import { registerGenerationIpc } from '../generation/generation-ipc';
 import { registerMediaToolsIpc } from '../media/media-tools-ipc';
@@ -54,6 +55,7 @@ export function registerDesktop(
   registerRecoveryIpc(library, trustedWindow, getWindow);
   registerMediaToolsIpc(library.mediaTools, trustedWindow);
   registerStagingCleanupIpc(library.stagingCleanup, trustedWindow);
+  registerRescueImportIpc(library.rescueImports, trustedWindow);
   registerWorkspaceDraftIpc(
     library.drafts,
     {

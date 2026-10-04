@@ -33,6 +33,7 @@ import type {
 } from './project-health';
 import type { ProjectPackageInfo } from './project-package';
 import type { ProjectRecoverySnapshot } from './project-recovery';
+import type { RescueImportPreview, RescueImportResult } from './rescue-import';
 import type {
   StagingCleanupPreview,
   StagingCleanupResult,
@@ -46,6 +47,9 @@ import type {
 } from './workspace-draft';
 
 export const IPC_CHANNELS = {
+  chooseRescueImport: 'draft:choose-rescue-import',
+  confirmRescueImport: 'draft:confirm-rescue-import',
+  cancelRescueImport: 'draft:cancel-rescue-import',
   getAppBackups: 'backup:list',
   createAppBackup: 'backup:create',
   revealAppBackups: 'backup:reveal',
@@ -130,6 +134,9 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  chooseRescueImport: () => Promise<RescueImportPreview | null>;
+  confirmRescueImport: (token: string) => Promise<RescueImportResult>;
+  cancelRescueImport: () => Promise<void>;
   getAppBackups: () => Promise<AppBackupList>;
   createAppBackup: () => Promise<AppBackupInfo>;
   revealAppBackups: () => Promise<void>;

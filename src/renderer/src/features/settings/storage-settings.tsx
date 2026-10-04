@@ -1,6 +1,7 @@
 import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { DraftImportPanel } from '@/features/drafts/draft-import-panel';
 import type { LibraryState, MigrationPreview } from '../../../../shared/models';
 import { AppBackupPanel } from './app-backup-panel';
 import { StagingCleanupPanel } from './staging-cleanup-panel';
@@ -18,11 +19,13 @@ export function StorageSettings({
   run,
   beforeMigration,
   active = true,
+  currentProjectId = null,
 }: {
   library: LibraryState;
   run: (operation: () => Promise<unknown>) => Promise<void>;
   beforeMigration?: (() => Promise<boolean>) | undefined;
   active?: boolean;
+  currentProjectId?: string | null;
 }) {
   const [preview, setPreview] = useState<MigrationPreview | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -177,6 +180,11 @@ export function StorageSettings({
       <AppBackupPanel
         active={active}
         disabled={library.writeBlocked || restartRequired}
+      />
+      <DraftImportPanel
+        active={active}
+        disabled={library.writeBlocked || restartRequired}
+        currentProjectId={currentProjectId}
       />
     </>
   );
