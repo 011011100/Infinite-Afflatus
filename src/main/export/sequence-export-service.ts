@@ -10,7 +10,9 @@ import {
   type SequenceExportOptions,
   validateExportOptions,
 } from '../../shared/export';
+import type { MediaToolPair } from '../../shared/media-tools';
 import type { Asset } from '../../shared/models';
+import { resolveMediaToolPair } from '../media/media-tools';
 import type { ProjectService } from '../projects/project-service';
 import type { AppStore } from '../storage/app-store';
 import { errorMessage } from '../storage/database';
@@ -55,6 +57,7 @@ export class SequenceExportService {
     private userData: string,
     private changed: () => void = () => {},
     private media = { probe: probeExportMedia, encode: encodeSequence },
+    private mediaTools: () => MediaToolPair = () => resolveMediaToolPair(),
   ) {
     this.work = new ExportWork(store, join(userData, 'export-work'));
   }
@@ -139,6 +142,9 @@ export class SequenceExportService {
     });
     try {
       const options = validateExportOptions(input);
+      // Capture before the first asynchronous preparation step. Every process
+      // in this export keeps these locations even when settings change later.
+      const tools = this.mediaTools();
       const output = await validateOutputPath(
         outputPath,
         this.store.root,
@@ -180,7 +186,7 @@ export class SequenceExportService {
       };
       this.lastProgress = 0;
       this.update(job);
-      this.task = this.run(job, snapshot, signal).finally(() => {
+      this.task = this.run(job, snapshot, signal, tools).finally(() => {
         this.task = null;
         this.releaseController(controller);
       });
@@ -244,6 +250,7 @@ export class SequenceExportService {
     job: SequenceExportJob,
     snapshot: ExportSnapshot,
     signal: AbortSignal,
+    tools: MediaToolPair,
   ): Promise<void> {
     try {
       const files = await this.copyInputs(job, snapshot, signal);
@@ -254,7 +261,7 @@ export class SequenceExportService {
         const asset = snapshot.assets[index];
         if (!file || !asset) throw new Error('导出素材准备失败');
         signal.throwIfAborted();
-        const media = await this.media.probe(file, signal);
+        const media = await this.media.probe(file, signal, tools.ffprobe);
         const range = clipRange(
           media.duration,
           snapshot.card.trims?.[asset.id],
@@ -285,8 +292,9 @@ export class SequenceExportService {
             0.1 + fraction * 0.85,
             finalizing ? 'finalizing' : 'encoding',
           ),
+        tools.ffmpeg,
       );
-      const result = await this.media.probe(output, signal);
+      const result = await this.media.probe(output, signal, tools.ffprobe);
       const tolerance = Math.max(
         0.12,
         clips.length / job.options.frameRate + 0.05,

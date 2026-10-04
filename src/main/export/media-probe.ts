@@ -1,4 +1,5 @@
 import type { SequenceExportOptions } from '../../shared/export';
+import type { MediaToolLocation } from '../../shared/media-tools';
 import { resolveMediaTool } from '../media/media-tools';
 import { mediaProcess } from './media-process';
 
@@ -23,10 +24,11 @@ interface ProbeStream {
 export async function probeExportMedia(
   file: string,
   signal: AbortSignal,
+  location: MediaToolLocation = resolveMediaTool('ffprobe'),
 ): Promise<ExportMedia> {
   const result = JSON.parse(
     await mediaProcess(
-      resolveMediaTool('ffprobe'),
+      location,
       [
         '-v',
         'error',

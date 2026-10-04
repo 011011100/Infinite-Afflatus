@@ -49,7 +49,7 @@ export function registerDesktop(
   registerExportIpc(library, trustedWindow);
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);
-  registerMediaToolsIpc(trustedWindow);
+  registerMediaToolsIpc(library.mediaTools, trustedWindow);
   registerStagingCleanupIpc(library.stagingCleanup, trustedWindow);
   registerWorkspaceDraftIpc(
     library.drafts,

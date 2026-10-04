@@ -1,17 +1,19 @@
 import { spawn } from 'node:child_process';
-import type { MediaToolName } from '../../shared/media-tools';
-import { mediaToolStartError, resolveMediaTool } from './media-tools';
+import type {
+  MediaToolLocation,
+  MediaToolPair,
+} from '../../shared/media-tools';
+import { mediaToolStartError, resolveMediaToolPair } from './media-tools';
 
 export const PROXY_VERSION = 1;
 export const MAX_PROXY_BYTES = 256 * 1024 * 1024;
 
 function run(
-  name: MediaToolName,
+  location: MediaToolLocation,
   args: string[],
   signal: AbortSignal,
 ): Promise<string> {
   signal.throwIfAborted();
-  const location = resolveMediaTool(name);
   return new Promise((resolve, reject) => {
     const child = spawn(location.command, args, {
       shell: false,
@@ -40,10 +42,14 @@ function run(
   });
 }
 
-async function probe(file: string, signal: AbortSignal) {
+async function probe(
+  file: string,
+  signal: AbortSignal,
+  location: MediaToolLocation,
+) {
   const data = JSON.parse(
     await run(
-      'ffprobe',
+      location,
       [
         '-v',
         'error',
@@ -81,8 +87,9 @@ export async function transcodeProxy(
   input: string,
   output: string,
   signal: AbortSignal,
+  tools: MediaToolPair = resolveMediaToolPair(),
 ): Promise<void> {
-  const source = await probe(input, signal);
+  const source = await probe(input, signal, tools.ffprobe);
   if (
     !Number.isFinite(source.duration) ||
     source.duration <= 0 ||
@@ -90,7 +97,7 @@ export async function transcodeProxy(
   )
     throw new Error('当前素材时间戳不适合代理预览');
   await run(
-    'ffmpeg',
+    tools.ffmpeg,
     [
       '-hide_banner',
       '-loglevel',
@@ -138,7 +145,7 @@ export async function transcodeProxy(
     ],
     signal,
   );
-  const proxy = await probe(output, signal);
+  const proxy = await probe(output, signal, tools.ffprobe);
   if (
     !Number.isFinite(proxy.duration) ||
     !Number.isFinite(proxy.start) ||

@@ -161,6 +161,14 @@ const controls = {
 };
 Object.assign(window, { cleanupControls: controls });
 window.desktop = {
+  getMediaToolSettings: async () => ({
+    paths: { ffmpeg: null, ffprobe: null },
+    locations: {
+      ffmpeg: { name: 'ffmpeg', command: 'ffmpeg', source: 'path' },
+      ffprobe: { name: 'ffprobe', command: 'ffprobe', source: 'path' },
+    },
+    error: null,
+  }),
   inspectStaging: () => {
     const next = deferred<StagingInspection>();
     inspections.push(next);

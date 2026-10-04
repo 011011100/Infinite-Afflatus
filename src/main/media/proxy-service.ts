@@ -4,6 +4,7 @@ import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { ProxyResult } from '../../shared/desktop';
+import type { MediaToolPair } from '../../shared/media-tools';
 import { readProxies, recordProxy } from '../projects/project-database';
 import type { ProjectService } from '../projects/project-service';
 import type { AppStore } from '../storage/app-store';
@@ -16,6 +17,7 @@ import {
   sameContent,
 } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
+import { resolveMediaToolPair } from './media-tools';
 import { ProxyWork } from './proxy-work';
 import {
   MAX_PROXY_BYTES,
@@ -36,6 +38,7 @@ export class ProxyService {
     store: AppStore,
     private userData: string,
     private encode = transcodeProxy,
+    private mediaTools: () => MediaToolPair = () => resolveMediaToolPair(),
   ) {
     this.work = new ProxyWork(store, join(userData, 'preview-work'));
   }
@@ -103,6 +106,9 @@ export class ProxyService {
   }
 
   private async generate(projectId: string, assetId: string): Promise<void> {
+    // Queued work uses the latest settings only when actual generation starts.
+    // Cache hits return before this point and need no configured encoder.
+    const tools = this.mediaTools();
     const signal = this.abort.signal;
     const temporary: string[] = [];
     try {
@@ -129,7 +135,7 @@ export class ProxyService {
           throw new Error('素材内容已经变化');
         return asset;
       }, signal);
-      await this.encode(input, output, signal);
+      await this.encode(input, output, signal, tools);
       const generated = await fingerprint(output);
       if (!generated.size || generated.size > MAX_PROXY_BYTES)
         throw new Error('预览文件超出大小限制');

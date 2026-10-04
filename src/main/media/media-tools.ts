@@ -3,12 +3,20 @@ import { join } from 'node:path';
 import type {
   MediaToolLocation,
   MediaToolName,
+  MediaToolPair,
+  MediaToolPaths,
 } from '../../shared/media-tools';
 
 export const MEDIA_TOOL_ENV = {
   ffmpeg: 'FFMPEG_PATH',
   ffprobe: 'FFPROBE_PATH',
 } as const;
+
+export interface MediaToolResolutionOptions {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  executable?: (file: string) => boolean;
+}
 
 function isExecutable(file: string): boolean {
   try {
@@ -22,15 +30,12 @@ function isExecutable(file: string): boolean {
 /** Diagnosis and real media work use the same resolution; explicit configuration never falls back. */
 export function resolveMediaTool(
   name: MediaToolName,
-  options: {
-    env?: NodeJS.ProcessEnv;
-    platform?: NodeJS.Platform;
-    executable?: (file: string) => boolean;
-  } = {},
+  options: MediaToolResolutionOptions & { saved?: string | null } = {},
 ): MediaToolLocation {
   const env = options.env ?? process.env;
   const configured = env[MEDIA_TOOL_ENV[name]];
   if (configured) return { name, command: configured, source: 'environment' };
+  if (options.saved) return { name, command: options.saved, source: 'saved' };
   if ((options.platform ?? process.platform) === 'darwin') {
     const executable = options.executable ?? isExecutable;
     // Finder does not normally inherit a shell's Homebrew PATH. Prefer the actual
@@ -47,6 +52,24 @@ export function resolveMediaTool(
     }
   }
   return { name, command: name, source: 'path' };
+}
+
+/** Capture both commands once; tasks retain their own immutable configuration. */
+export function resolveMediaToolPair(
+  paths?: MediaToolPaths,
+  options: MediaToolResolutionOptions = {},
+): MediaToolPair {
+  return Object.freeze({
+    ffmpeg: Object.freeze(
+      resolveMediaTool('ffmpeg', { ...options, saved: paths?.ffmpeg ?? null }),
+    ),
+    ffprobe: Object.freeze(
+      resolveMediaTool('ffprobe', {
+        ...options,
+        saved: paths?.ffprobe ?? null,
+      }),
+    ),
+  });
 }
 
 export function mediaToolStartError(

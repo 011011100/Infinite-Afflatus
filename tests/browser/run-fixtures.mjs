@@ -13,6 +13,7 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const available = [
   'xyflow-lifecycle',
   'canvas-recovery',
+  'media-tool-settings-controls',
   'reference-import-controls',
   'staging-cleanup-controls',
 ];

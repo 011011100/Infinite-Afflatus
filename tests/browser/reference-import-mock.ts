@@ -11,7 +11,16 @@ export function referenceImportMock() {
     | 'prepareReferenceImportsForLeave'
     | 'resumeReferenceSaves'
     | 'cancelStagingOperations'
+    | 'getMediaToolSettings'
   > = {
+    getMediaToolSettings: async () => ({
+      paths: { ffmpeg: null, ffprobe: null },
+      locations: {
+        ffmpeg: { name: 'ffmpeg', command: 'ffmpeg', source: 'path' },
+        ffprobe: { name: 'ffprobe', command: 'ffprobe', source: 'path' },
+      },
+      error: null,
+    }),
     importReferences: async () => ({
       assetIds: [],
       errors: [],

@@ -1,12 +1,18 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import type {
   MediaToolLocation,
+  MediaToolPair,
   MediaToolResult,
   MediaToolsReport,
 } from '../../shared/media-tools';
-import { mediaToolStartError, resolveMediaTool } from './media-tools';
+import { mediaToolStartError, resolveMediaToolPair } from './media-tools';
 
 type Launch = (command: string, args: string[]) => ChildProcess;
+export interface MediaToolInspectionOptions {
+  launch?: Launch;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
 const launch: Launch = (command, args) =>
   spawn(command, args, {
     shell: false,
@@ -17,67 +23,101 @@ const launch: Launch = (command, args) =>
 /** A bounded version check, never a transcode or a codec compatibility claim. */
 export function inspectMediaTool(
   location: MediaToolLocation,
-  options: { launch?: Launch; timeoutMs?: number } = {},
+  options: MediaToolInspectionOptions = {},
 ): Promise<MediaToolResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const signal = options.signal;
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
     let child: ChildProcess;
     let output = '';
     let bytes = 0;
     let settled = false;
+    let stopping: { result: MediaToolResult } | { error: unknown } | null =
+      null;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (
+    const result = (
       status: MediaToolResult['status'],
       detail: string | null,
       version: string | null = null,
+    ): MediaToolResult => ({ ...location, status, detail, version });
+    const finish = (
+      value: { result: MediaToolResult } | { error: unknown },
     ) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ ...location, status, detail, version });
+      signal?.removeEventListener('abort', abort);
+      if ('error' in value) reject(value.error);
+      else resolve(value.result);
     };
-    const failure = (error: NodeJS.ErrnoException) =>
-      finish(
+    const failure = (error: NodeJS.ErrnoException) => ({
+      result: result(
         error.code === 'ENOENT'
           ? 'missing'
           : ['EACCES', 'EPERM'].includes(error.code ?? '')
             ? 'permission-denied'
             : 'failed',
         mediaToolStartError(location, error).message,
-      );
-    try {
-      child = (options.launch ?? launch)(location.command, ['-version']);
-    } catch (error) {
-      failure(error as NodeJS.ErrnoException);
-      return;
-    }
-    const stop = () => {
-      // A version check has no output file to finish. SIGKILL also bounds tools
-      // that ignore termination; no shell or child process tree is created here.
+      ),
+    });
+    const stop = (value: NonNullable<typeof stopping>) => {
+      if (settled || stopping) return;
+      stopping = value;
+      clearTimeout(timer);
+      // Wait for close: cancellation must finish the process and its pipe handles
+      // before application shutdown closes services. No shell/process tree is used.
       child.kill('SIGKILL');
       child.stdout?.destroy();
       child.stderr?.destroy();
-      child.unref();
     };
+    const abort = () => stop({ error: signal?.reason });
+    try {
+      child = (options.launch ?? launch)(location.command, ['-version']);
+    } catch (error) {
+      finish(failure(error as NodeJS.ErrnoException));
+      return;
+    }
     const read = (chunk: string) => {
-      if (settled) return;
+      if (settled || stopping) return;
       bytes += Buffer.byteLength(chunk);
       if (bytes > 64 * 1024) {
-        finish('invalid', '组件返回的信息过多，无法识别版本，请检查组件文件。');
-        stop();
+        stop({
+          result: result(
+            'invalid',
+            '组件返回的信息过多，无法识别版本，请检查组件文件。',
+          ),
+        });
         return;
       }
       output += chunk;
     };
     child.stdout?.setEncoding('utf8').on('data', read);
     child.stderr?.setEncoding('utf8').on('data', read);
-    child.on('error', failure);
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      if (settled || stopping) return;
+      // Even a failed spawn owns pipe handles. Node emits close after error,
+      // and only then may a caller finish shutdown or begin a replacement check.
+      stopping = failure(error);
+      clearTimeout(timer);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    });
     child.once('close', (code) => {
       if (settled) return;
+      if (stopping) {
+        finish(stopping);
+        return;
+      }
       if (code !== 0) {
-        finish(
-          'failed',
-          `组件启动后异常退出（${code ?? '无退出码'}），请检查系统兼容性和依赖。`,
-        );
+        finish({
+          result: result(
+            'failed',
+            `组件启动后异常退出（${code ?? '无退出码'}），请检查系统兼容性和依赖。`,
+          ),
+        });
         return;
       }
       const firstLine = output.split(/\r?\n/, 1)[0]?.trim() ?? '';
@@ -85,39 +125,63 @@ export function inspectMediaTool(
         firstLine,
       );
       if (!match?.[1]) {
-        finish(
-          'invalid',
-          '组件未返回可识别的版本，请确认配置指向正确的可执行文件。',
-        );
+        finish({
+          result: result(
+            'invalid',
+            '组件未返回可识别的版本，请确认配置指向正确的可执行文件。',
+          ),
+        });
         return;
       }
-      finish('available', null, match[1].slice(0, 200));
+      finish({ result: result('available', null, match[1].slice(0, 200)) });
     });
-    timer = setTimeout(() => {
-      finish(
-        'timeout',
-        '组件在 5 秒内没有完成版本检测，请检查组件文件与系统限制。',
-      );
-      stop();
-    }, options.timeoutMs ?? 5000);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+    else
+      timer = setTimeout(() => {
+        stop({
+          result: result(
+            'timeout',
+            '组件在 5 秒内没有完成版本检测，请检查组件文件与系统限制。',
+          ),
+        });
+      }, options.timeoutMs ?? 5000);
   });
 }
 
-/** Checks start only on explicit request; repeated requests share the current check. */
+/** Explicit checks share only requests for the same captured pair of commands. */
 export class MediaToolDiagnostics {
-  private pending: Promise<MediaToolsReport> | null = null;
+  private pending = new Map<string, Promise<MediaToolsReport>>();
+  private controller = new AbortController();
   constructor(private inspect = inspectMediaTool) {}
-  check(): Promise<MediaToolsReport> {
-    if (this.pending) return this.pending;
-    this.pending = Promise.all(
+  check(
+    pair: MediaToolPair = resolveMediaToolPair(),
+  ): Promise<MediaToolsReport> {
+    if (this.controller.signal.aborted)
+      return Promise.reject(this.controller.signal.reason);
+    const key = JSON.stringify(pair);
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    const pending = Promise.allSettled(
       (['ffmpeg', 'ffprobe'] as const).map((name) =>
-        this.inspect(resolveMediaTool(name)),
+        this.inspect(pair[name], { signal: this.controller.signal }),
       ),
     )
-      .then((tools) => ({ tools, checkedAt: new Date().toISOString() }))
+      .then((results) => {
+        const tools = results.map((result) => {
+          if (result.status === 'rejected') throw result.reason;
+          return result.value;
+        });
+        return { tools, checkedAt: new Date().toISOString() };
+      })
       .finally(() => {
-        this.pending = null;
+        if (this.pending.get(key) === pending) this.pending.delete(key);
       });
-    return this.pending;
+    this.pending.set(key, pending);
+    return pending;
+  }
+  async close(): Promise<void> {
+    this.controller.abort(new Error('视频处理组件检测已关闭'));
+    await Promise.allSettled(this.pending.values());
   }
 }

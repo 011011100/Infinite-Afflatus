@@ -1,4 +1,4 @@
-// Pure Node helpers shared by real-process reference-import checks.
+// Pure Node helpers shared by isolated real-process desktop checks.
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
@@ -50,13 +50,21 @@ async function withFixture(prefix, operation) {
       retryDelay: 250,
     });
     if (passed) rmSync(log);
-    else console.error(`Reference import failure log retained: ${log}`);
+    else console.error(`Desktop fixture failure log retained: ${log}`);
   }
 }
 
-async function runElectron(electron, script, base, args, log) {
+async function runElectron(
+  electron,
+  script,
+  base,
+  args,
+  log,
+  environment = {},
+) {
   const env = {
     ...process.env,
+    ...environment,
     AFFLATUS_USER_DATA: join(base, 'profile'),
     AFFLATUS_PROJECTS_DIR: join(base, 'projects'),
   };

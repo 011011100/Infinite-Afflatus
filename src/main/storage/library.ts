@@ -6,6 +6,7 @@ import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
 import { ReferenceImportService } from '../generation/reference-import-service';
+import { MediaToolSettings } from '../media/media-tool-settings';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { ProjectPackageService } from '../packages/project-package-service';
@@ -35,6 +36,7 @@ export class Library {
   readonly projects: ProjectService;
   readonly generation: GenerationService;
   readonly interactions: InteractionSettingsStore;
+  readonly mediaTools: MediaToolSettings;
   readonly staging: Staging;
   readonly stagingCleanup: StagingCleanupService;
   readonly saves: SaveQueue;
@@ -60,6 +62,7 @@ export class Library {
   ) {
     this.drafts = new WorkspaceDraftService(userData);
     this.interactions = new InteractionSettingsStore(store);
+    this.mediaTools = new MediaToolSettings(store);
     this.projects = new ProjectService(store, this.gate);
     this.health = new ProjectHealthService(
       this.projects,
@@ -81,9 +84,18 @@ export class Library {
       () => {
         for (const listener of this.exportListeners) listener();
       },
+      undefined,
+      () => this.mediaTools.snapshot(),
     );
     this.generation = new GenerationService(this.projects, store, this.gate);
-    this.proxies = new ProxyService(this.projects, this.gate, store, userData);
+    this.proxies = new ProxyService(
+      this.projects,
+      this.gate,
+      store,
+      userData,
+      undefined,
+      () => this.mediaTools.snapshot(),
+    );
     this.staging = new Staging(
       join(userData, 'staging'),
       store,
@@ -226,6 +238,7 @@ export class Library {
     // every cancellation before waiting, and observe every cleanup outcome.
     // Fully received results remain durable and resume on the next library open.
     const stopped = await Promise.allSettled([
+      this.mediaTools.close(),
       this.referenceImports.close(),
       this.stagingCleanup.close(),
       this.health.close(),

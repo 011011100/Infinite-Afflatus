@@ -42,7 +42,7 @@ jobs:
       - run: pnpm check
       - name: Build internal archive or installer and verify packaged contents
         run: pnpm package:local
-      - name: Verify renderer observer lifecycle and import and cleanup interactions
+      - name: Verify renderer observer lifecycle, import, cleanup and media settings interactions
         run: pnpm test:browser
       - name: Launch packaged app against an isolated library and verify saved content after restart
         run: node --import tsx tests/browser/packaged-delivery.mjs
@@ -58,6 +58,8 @@ jobs:
         run: node tests/browser/reference-import-unavailable.cjs
       - name: Verify explicit partial-file cleanup preserves complete results and historical files
         run: node tests/browser/staging-cleanup.cjs
+      - name: Verify saved media program selection, restart and explicit invalid configuration recovery
+        run: node tests/browser/media-tool-settings-desktop.cjs
       - name: Verify Windows installation, same-version overwrite and retained user data after uninstall
         if: runner.os == 'Windows'
         timeout-minutes: 8

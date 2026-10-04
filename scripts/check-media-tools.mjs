@@ -1,5 +1,6 @@
 import { MediaToolDiagnostics } from '../src/main/media/media-tool-diagnostics.ts';
 
+console.info('检查当前终端环境；不读取桌面应用保存的组件路径。');
 const report = await new MediaToolDiagnostics().check();
 for (const tool of report.tools) {
   if (tool.status === 'available')

@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { ClipTrim } from '../../shared/canvas/trim';
 import type { SequenceExportOptions } from '../../shared/export';
+import type { MediaToolLocation } from '../../shared/media-tools';
 import { resolveMediaTool } from '../media/media-tools';
 import type { ExportWork } from './export-work';
 import type { ExportMedia } from './media-probe';
@@ -34,8 +35,8 @@ export async function encodeSequence(
   work: ExportWork,
   signal: AbortSignal,
   progress: (fraction: number, finalizing: boolean) => void,
+  executable: MediaToolLocation = resolveMediaTool('ffmpeg'),
 ): Promise<string> {
-  const executable = resolveMediaTool('ffmpeg');
   const total = clips.reduce(
     (sum, clip) => sum + clip.range.end - clip.range.start,
     0,

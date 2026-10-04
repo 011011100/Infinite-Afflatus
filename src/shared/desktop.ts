@@ -7,7 +7,12 @@ import type {
 import type { ReferenceImportProgress } from './generation/reference-import';
 import type { GenerationWorkspace } from './generation/workspace';
 import type { InteractionSettings } from './interaction/settings';
-import type { MediaToolsReport } from './media-tools';
+import type {
+  MediaToolName,
+  MediaToolSettingsChange,
+  MediaToolSettingsState,
+  MediaToolsReport,
+} from './media-tools';
 import type {
   LibraryState,
   MigrationPreview,
@@ -40,6 +45,9 @@ export const IPC_CHANNELS = {
   recoverWorkspaceDraft: 'draft:recover-workspace',
   exportWorkspaceDraft: 'draft:export-workspace',
   checkMediaTools: 'media:check-tools',
+  getMediaToolSettings: 'media:tool-settings',
+  chooseMediaTool: 'media:choose-tool',
+  resetMediaTool: 'media:reset-tool',
   scanProjectHealth: 'health:scan',
   restoreMissingAsset: 'health:restore',
   cancelProjectHealth: 'health:cancel',
@@ -123,6 +131,13 @@ export interface DesktopBridge {
     input: WorkspaceDraftExport,
   ) => Promise<string | null>;
   checkMediaTools: () => Promise<MediaToolsReport>;
+  getMediaToolSettings: () => Promise<MediaToolSettingsState>;
+  chooseMediaTool: (
+    name: MediaToolName,
+  ) => Promise<MediaToolSettingsChange | null>;
+  resetMediaTool: (
+    name: MediaToolName | 'all',
+  ) => Promise<MediaToolSettingsChange>;
   scanProjectHealth: (
     projectId: string,
     mode: ProjectHealthMode,

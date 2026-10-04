@@ -13,6 +13,12 @@ const desktop: DesktopBridge = {
   exportWorkspaceDraft: (projectId, input) =>
     ipcRenderer.invoke(IPC_CHANNELS.exportWorkspaceDraft, projectId, input),
   checkMediaTools: () => ipcRenderer.invoke(IPC_CHANNELS.checkMediaTools),
+  getMediaToolSettings: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.getMediaToolSettings),
+  chooseMediaTool: (name) =>
+    ipcRenderer.invoke(IPC_CHANNELS.chooseMediaTool, name),
+  resetMediaTool: (name) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resetMediaTool, name),
   scanProjectHealth: (projectId, mode) =>
     ipcRenderer.invoke(IPC_CHANNELS.scanProjectHealth, projectId, mode),
   restoreMissingAsset: (projectId, assetId) =>

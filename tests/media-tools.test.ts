@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { ChildProcess } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,7 +11,10 @@ import {
   inspectMediaTool,
   MediaToolDiagnostics,
 } from '../src/main/media/media-tool-diagnostics';
-import { resolveMediaTool } from '../src/main/media/media-tools';
+import {
+  resolveMediaTool,
+  resolveMediaToolPair,
+} from '../src/main/media/media-tools';
 import type {
   MediaToolLocation,
   MediaToolResult,
@@ -30,6 +33,7 @@ function fakeProcess() {
     stderr: new PassThrough(),
     kill: (signal?: string | number) => {
       signals.push(signal);
+      queueMicrotask(() => child.emit('close', null));
       return true;
     },
     unref: () => {},
@@ -132,6 +136,7 @@ test('startup errors distinguish missing files and permission failures without r
     const { child } = fakeProcess();
     const result = inspectMediaTool(tool, { launch: () => child });
     child.emit('error', Object.assign(new Error('spawn ENOENT'), { code }));
+    child.emit('close', -1);
     const report = await result;
     assert.equal(report.status, status);
     assert.match(report.detail ?? '', /设置 → 视频处理/);
@@ -201,4 +206,105 @@ test('missing configured commands are never interpreted by a shell and export re
   } finally {
     await rm(folder, { recursive: true, force: true });
   }
+});
+
+test('checks for changed tool pairs never reuse a stale pending report', async () => {
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const diagnostics = new MediaToolDiagnostics(async (location) => {
+    calls++;
+    await wait;
+    return {
+      ...location,
+      status: 'available',
+      version: 'fixture',
+      detail: null,
+    };
+  });
+  const options = { env: {}, platform: 'linux' as const };
+  const old = resolveMediaToolPair(undefined, options);
+  const changed = resolveMediaToolPair(
+    { ffmpeg: '/selected/ffmpeg', ffprobe: null },
+    options,
+  );
+  const first = diagnostics.check(old);
+  assert.equal(diagnostics.check(old), first);
+  const next = diagnostics.check(changed);
+  assert.notEqual(first, next);
+  assert.equal(calls, 4);
+  release();
+  assert.equal((await first).tools[0]?.command, 'ffmpeg');
+  assert.equal((await next).tools[0]?.command, '/selected/ffmpeg');
+  await diagnostics.close();
+});
+
+test('abort and service close wait for every version process close, including pipe cleanup', async () => {
+  const children: ChildProcess[] = [];
+  const signals: (string | number | undefined)[] = [];
+  const inspect = (
+    location: MediaToolLocation,
+    options: { signal?: AbortSignal } = {},
+  ) =>
+    inspectMediaTool(location, {
+      ...options,
+      launch: () => {
+        const { child } = fakeProcess();
+        child.kill = (signal) => {
+          signals.push(signal);
+          return true;
+        };
+        children.push(child);
+        return child;
+      },
+    });
+  const diagnostics = new MediaToolDiagnostics(inspect);
+  const result = diagnostics.check(
+    resolveMediaToolPair(undefined, { env: {}, platform: 'linux' }),
+  );
+  const rejected = assert.rejects(result, /已关闭/);
+  let complete = false;
+  const closing = diagnostics.close().then(() => {
+    complete = true;
+  });
+  assert.equal(children.length, 2);
+  assert.deepEqual(signals, ['SIGKILL', 'SIGKILL']);
+  for (const child of children) {
+    assert.equal(child.stdout?.destroyed, true);
+    assert.equal(child.stderr?.destroyed, true);
+  }
+  children[0]?.emit('close', null);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(complete, false, 'closing one child cannot finish the pair');
+  children[1]?.emit('close', null);
+  await Promise.all([closing, rejected]);
+  assert.equal(complete, true);
+  await assert.rejects(diagnostics.check(), /已关闭/);
+});
+
+test('cancellation terminates a real version subprocess and returns only after close', async () => {
+  const controller = new AbortController();
+  let child: ChildProcess | undefined;
+  let closed = false;
+  const result = inspectMediaTool(tool, {
+    signal: controller.signal,
+    launch: () => {
+      child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      child.once('close', () => {
+        closed = true;
+      });
+      child.once('spawn', () => controller.abort(new Error('synthetic close')));
+      return child;
+    },
+  });
+  await assert.rejects(result, /synthetic close/);
+  assert.equal(closed, true);
+  assert.ok(child?.killed);
+  assert.equal(child.stdout?.destroyed, true);
+  assert.equal(child.stderr?.destroyed, true);
 });
