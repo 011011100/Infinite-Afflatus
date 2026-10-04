@@ -48,6 +48,7 @@ export function AppSettings({
         </div>
         <div hidden={page !== 'storage'}>
           <StorageSettings
+            active={page === 'storage'}
             library={library}
             run={run}
             beforeMigration={beforeMigration}

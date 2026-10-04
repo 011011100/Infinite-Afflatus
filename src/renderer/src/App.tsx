@@ -178,6 +178,7 @@ export function App() {
         <SaveStatus
           jobs={library.jobs}
           migrating={library.writeBlocked}
+          restartRequired={library.migration?.restartRequired}
           run={run}
           blockedProjectId={state.projectUnavailable?.projectId}
           onManageStaging={() => {

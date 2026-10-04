@@ -2,6 +2,7 @@ import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { LibraryState, MigrationPreview } from '../../../../shared/models';
+import { AppBackupPanel } from './app-backup-panel';
 import { StagingCleanupPanel } from './staging-cleanup-panel';
 
 const phaseLabels = {
@@ -16,14 +17,17 @@ export function StorageSettings({
   library,
   run,
   beforeMigration,
+  active = true,
 }: {
   library: LibraryState;
   run: (operation: () => Promise<unknown>) => Promise<void>;
   beforeMigration?: (() => Promise<boolean>) | undefined;
+  active?: boolean;
 }) {
   const [preview, setPreview] = useState<MigrationPreview | null>(null);
   const [choosing, setChoosing] = useState(false);
   const migration = library.migration;
+  const restartRequired = migration?.restartRequired === true;
   const choose = () =>
     run(async () => {
       if (beforeMigration && !(await beforeMigration())) return;
@@ -56,7 +60,10 @@ export function StorageSettings({
         <Button
           variant="outline"
           disabled={
-            choosing || library.writeBlocked || migration?.phase === 'cleaning'
+            choosing ||
+            library.writeBlocked ||
+            restartRequired ||
+            migration?.phase === 'cleaning'
           }
           onClick={() => {
             void choose();
@@ -80,7 +87,7 @@ export function StorageSettings({
           </p>
           <div className="mt-4 flex gap-2">
             <Button
-              disabled={library.writeBlocked}
+              disabled={library.writeBlocked || restartRequired}
               onClick={() => {
                 void run(async () => {
                   if (beforeMigration && !(await beforeMigration())) return;
@@ -100,21 +107,27 @@ export function StorageSettings({
       {migration && (
         <section className="mt-6 border-t pt-5" aria-live="polite">
           <div className="flex items-center justify-between text-sm">
-            <h3 className="font-medium">{phaseLabels[migration.phase]}</h3>
+            <h3 className="font-medium">
+              {restartRequired
+                ? '目录切换等待恢复'
+                : phaseLabels[migration.phase]}
+            </h3>
             <span className="text-muted-foreground">
               {migration.copied} / {migration.total} 个文件
             </span>
           </div>
-          {library.writeBlocked && (
+          {library.writeBlocked && !restartRequired && (
             <progress
               className="mt-3 h-1.5 w-full accent-primary"
               value={migration.copied}
               max={Math.max(migration.total, 1)}
             />
           )}
-          {migration.error && (
+          {(restartRequired || migration.error) && (
             <p className="mt-3 text-xs leading-5 text-destructive">
-              {migration.error}
+              {restartRequired
+                ? '目录切换确认中断，写入已暂停，请关闭并重新打开应用。'
+                : migration.error}
             </p>
           )}
           {migration.warnings.map((warning) => (
@@ -125,29 +138,32 @@ export function StorageSettings({
               {warning}
             </p>
           ))}
-          {['copying', 'verifying'].includes(migration.phase) && (
-            <Button
-              variant="ghost"
-              className="mt-3"
-              onClick={() => {
-                void run(() => window.desktop.cancelMigration());
-              }}
-            >
-              取消迁移
-            </Button>
-          )}
-          {migration.phase === 'cleaning' && !library.writeBlocked && (
-            <Button
-              variant="outline"
-              className="mt-3"
-              onClick={() => {
-                void run(() => window.desktop.retryCleanup());
-              }}
-            >
-              重试清理旧副本
-            </Button>
-          )}
-          {migration.phase === 'completed' && (
+          {!restartRequired &&
+            ['copying', 'verifying'].includes(migration.phase) && (
+              <Button
+                variant="ghost"
+                className="mt-3"
+                onClick={() => {
+                  void run(() => window.desktop.cancelMigration());
+                }}
+              >
+                取消迁移
+              </Button>
+            )}
+          {migration.phase === 'cleaning' &&
+            !library.writeBlocked &&
+            !restartRequired && (
+              <Button
+                variant="outline"
+                className="mt-3"
+                onClick={() => {
+                  void run(() => window.desktop.retryCleanup());
+                }}
+              >
+                重试清理旧副本
+              </Button>
+            )}
+          {migration.phase === 'completed' && !restartRequired && (
             <p className="mt-2 text-xs text-muted-foreground">
               后续项目和生成结果都会保存到新目录。
             </p>
@@ -158,6 +174,10 @@ export function StorageSettings({
         暂存文件与项目目录分开保存。完整结果只有在项目保存成功后，才会自动清除对应暂存文件。
       </p>
       <StagingCleanupPanel />
+      <AppBackupPanel
+        active={active}
+        disabled={library.writeBlocked || restartRequired}
+      />
     </>
   );
 }

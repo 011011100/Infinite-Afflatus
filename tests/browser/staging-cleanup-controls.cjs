@@ -259,6 +259,52 @@ app.whenReady().then(async () => {
     console.log(
       'PASS expired preview retains its details but cannot authorize deletion',
     );
+
+    await load();
+    await run('cleanupControls.migrate(false)');
+    await open();
+    await wait(
+      `!!${button('取消迁移')}`,
+      'ordinary migration retains cancellation',
+    );
+    assert.match(await text(), /正在迁移项目目录，新结果将暂存后自动保存/);
+    await run('cleanupControls.migrate(true)');
+    await wait(
+      `!${button('取消迁移')}`,
+      'interrupted cutover has no ineffective cancel',
+    );
+    const restartNotice = '目录切换确认中断，写入已暂停，请关闭并重新打开应用';
+    assert.match(await text(), new RegExp(restartNotice));
+    assert.doesNotMatch(await text(), /正在校验文件|新结果将暂存后自动保存/);
+    for (const label of ['修改保存目录', '创建本机备份', '重试保存'])
+      assert.equal(
+        await run(`${button(label)}.disabled`),
+        true,
+        `${label} must stay unavailable until restart`,
+      );
+    assert.equal(
+      await run('!!document.querySelector("dialog[open] progress")'),
+      false,
+    );
+    await run(
+      'document.querySelector("dialog[open] button[aria-label=关闭]").click()',
+    );
+    await wait(
+      '!document.querySelector("dialog[open]")',
+      'settings closes without hiding the restart state',
+    );
+    assert.match(await text(), new RegExp(restartNotice));
+    assert.doesNotMatch(await text(), /自动保存/);
+    await run('cleanupControls.migrate(false)');
+    await open();
+    await wait(
+      `!!${button('取消迁移')}`,
+      'normal migration behavior is unchanged',
+    );
+    assert.match(await text(), /正在校验文件/);
+    console.log(
+      'PASS interrupted cutover remains visible outside settings, disables ineffective writes and cancellation, and does not change ordinary migration behavior',
+    );
     assert.deepEqual(errors, []);
   } catch (error) {
     failed = true;

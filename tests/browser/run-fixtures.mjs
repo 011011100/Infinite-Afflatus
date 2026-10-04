@@ -19,6 +19,7 @@ const available = [
   'project-rename-controls',
   'trim-recovery-controls',
   'project-edit-recovery-controls',
+  'app-backup-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

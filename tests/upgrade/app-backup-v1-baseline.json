@@ -1,0 +1,6 @@
+{
+  "name": "app-index-backup-v1",
+  "commit": "0550d2cbe736daf7443e8570a18c57a6aec1b4bd",
+  "formatVersion": 1,
+  "description": "Fixed native public writer for application index checkpoints, dual-generation anchors and durable interrupted-publication intents. This commit establishes native storage, not the later renderer and desktop acceptance evidence."
+}

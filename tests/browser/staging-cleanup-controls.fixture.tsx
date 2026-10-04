@@ -11,6 +11,7 @@ import type {
   StagingInspection,
   StagingItem,
 } from '../../src/shared/staging-cleanup';
+import { appBackupMock } from './app-backup-mock';
 import '../../src/renderer/src/styles.css';
 
 function deferred<T>() {
@@ -68,6 +69,7 @@ const executions: {
 const retryIds: string[] = [];
 let changeJobs: (jobs: SaveJob[]) => void = () => {};
 let closeSettings: () => void = () => {};
+let setMigration: (restartRequired: boolean) => void = () => {};
 let currentJobs = structuredClone(initialJobs);
 const controls = {
   state: () => ({
@@ -84,6 +86,7 @@ const controls = {
   failInspection: (index = inspections.length - 1) =>
     inspections[index]?.reject(new Error('暂存状态读取失败')),
   refresh: () => changeJobs(structuredClone(currentJobs)),
+  migrate: (restartRequired: boolean) => setMigration(restartRequired),
   changeOtherJob: () => {
     currentJobs = currentJobs.map((job, i) =>
       i === 1 ? { ...job, error: `${job.error}（更新）` } : job,
@@ -161,6 +164,7 @@ const controls = {
 };
 Object.assign(window, { cleanupControls: controls });
 window.desktop = {
+  ...appBackupMock(),
   getMediaToolSettings: async () => ({
     paths: { ffmpeg: null, ffprobe: null },
     locations: {
@@ -194,12 +198,27 @@ function Fixture() {
   const [jobs, setJobs] = useState(initialJobs);
   const [settings, setSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [migration, changeMigration] =
+    useState<LibraryState['migration']>(null);
   useEffect(() => {
     changeJobs = setJobs;
     closeSettings = () => setSettings(false);
+    setMigration = (restartRequired) =>
+      changeMigration({
+        id: 'fixture-migration',
+        source: '/isolated/project-library',
+        target: '/isolated/new-library',
+        phase: 'verifying',
+        copied: 3,
+        total: 3,
+        error: restartRequired ? 'Runtime cutover interruption' : null,
+        warnings: [],
+        ...(restartRequired ? { restartRequired: true } : {}),
+      });
     return () => {
       changeJobs = () => {};
       closeSettings = () => {};
+      setMigration = () => {};
     };
   }, []);
   const run = async (operation: () => Promise<unknown>) => {
@@ -214,14 +233,15 @@ function Fixture() {
     jobs,
     projects: [],
     interactions: defaultInteractionSettings(),
-    migration: null,
-    writeBlocked: false,
+    migration,
+    writeBlocked: !!migration,
   };
   return (
     <>
       <SaveStatus
         jobs={jobs}
-        migrating={false}
+        migrating={library.writeBlocked}
+        restartRequired={migration?.restartRequired}
         run={run}
         onManageStaging={() => setSettings(true)}
       />

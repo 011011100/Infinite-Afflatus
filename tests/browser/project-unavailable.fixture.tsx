@@ -13,6 +13,7 @@ import type { DesktopBridge } from '../../src/shared/desktop';
 import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { LibraryState, ProjectSnapshot } from '../../src/shared/models';
+import { appBackupMock } from './app-backup-mock';
 import { referenceImportMock } from './reference-import-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
@@ -59,6 +60,7 @@ const validate = () => {
   if (!available) throw new Error('测试项目数据库离线');
 };
 window.desktop = {
+  ...appBackupMock(),
   ...referenceImportMock().bridge,
   ...workspaceDraftMock(() => workspace).bridge,
   getLibrary: async () => structuredClone(globalState),

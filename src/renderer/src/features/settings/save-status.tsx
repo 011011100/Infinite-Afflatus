@@ -5,19 +5,21 @@ import { useStagingInspection } from './use-staging-inspection';
 export function SaveStatus({
   jobs,
   migrating,
+  restartRequired = false,
   run,
   blockedProjectId,
   onManageStaging,
 }: {
   jobs: SaveJob[];
   migrating: boolean;
+  restartRequired?: boolean | undefined;
   run: (operation: () => Promise<unknown>) => Promise<void>;
   blockedProjectId?: string | undefined;
   onManageStaging: () => void;
 }) {
   const inspection = useStagingInspection(jobs);
   const pending = jobs.filter((job) => job.status !== 'saved');
-  if (!pending.length && !migrating) return null;
+  if (!pending.length && !migrating && !restartRequired) return null;
   const failed = pending.filter((job) => job.status === 'failed');
   const receiving = pending.filter((job) => job.status === 'receiving').length;
   const incomplete = failed.filter(
@@ -45,9 +47,11 @@ export function SaveStatus({
       aria-live="polite"
     >
       <p className="text-muted-foreground">
-        {migrating
-          ? '正在迁移项目目录，新结果将暂存后自动保存。'
-          : `${summary}。`}
+        {restartRequired
+          ? '目录切换确认中断，写入已暂停，请关闭并重新打开应用。'
+          : migrating
+            ? '正在迁移项目目录，新结果将暂存后自动保存。'
+            : `${summary}。`}
       </p>
       {!!failed.length && (
         <div className="flex items-center gap-3">
@@ -91,7 +95,7 @@ export function SaveStatus({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={job.projectId === blockedProjectId}
+                disabled={restartRequired || job.projectId === blockedProjectId}
                 onClick={() => {
                   void run(() => window.desktop.retrySave(job.id));
                 }}
