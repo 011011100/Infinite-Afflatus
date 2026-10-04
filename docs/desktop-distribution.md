@@ -78,4 +78,6 @@ pnpm package:verify release/mac-arm64
 
 提交 `3b10d76ed46fba737595da479f26b93db9281016` 的[后续验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499)在两端全部通过：新增暂存清理实测、恢复基线与节点尺寸通知回归，两端各 25 项隔离界面场景保持严格控制台检查。原有包内启动、启动故障、异常退出草稿恢复、部分导入、取消和失联恢复继续通过；Windows NSIS 首次安装、同版本覆盖及卸载保留数据再次通过。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499/artifacts/11312132176)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499/artifacts/11312042459)，仍未签名，不能代替正式发行及历史安装版升级验证。
 
+提交 `2de1b36f25a762e30123b0b8c712617160df44e4` 的[媒体组件配置验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144)在两端全部通过：各 36 项严格界面场景、新增真实生产配置三进程重开，以及原有磁盘、强杀和恢复回归。Windows 实际运行测试生成的 `.exe` 完成选择与版本验证，安装／同版本覆盖／卸载保留数据再次通过。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144/artifacts/11312421768)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144/artifacts/11312810966)。版本程序仅证明配置链路，Windows 真实 FFmpeg 编码、正式签名与历史安装版升级仍待各自验收。
+
 正式分发前仍需确定支持平台与最低系统版本，补齐发行者信息、第三方许可审查、媒体工具分发方案、签名／公证、安装升级与卸载回归。云端 API 与账号计费没有因打包而接入；云端实测应单独记录。
