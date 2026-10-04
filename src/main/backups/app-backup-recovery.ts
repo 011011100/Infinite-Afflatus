@@ -237,7 +237,10 @@ export class AppBackupRecovery {
       } finally {
         db.close();
       }
-      const handle = await open(candidatePath, 'r');
+      const handle = await open(
+        candidatePath,
+        constants.O_RDWR | constants.O_NOFOLLOW,
+      );
       try {
         await handle.sync();
       } finally {

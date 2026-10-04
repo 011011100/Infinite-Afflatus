@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
 import { mkdir, open, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppBackupInfo } from '../../shared/app-backup';
@@ -134,7 +135,10 @@ export class AppBackupService {
         )
           throw new Error('应用数据库恢复代际不符，未发布旧索引备份');
         const digest = await fingerprint(database);
-        const handle = await open(database, 'r');
+        const handle = await open(
+          database,
+          constants.O_RDWR | constants.O_NOFOLLOW,
+        );
         try {
           await handle.sync();
         } finally {
