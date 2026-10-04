@@ -20,6 +20,7 @@ import type {
   ProjectHealthReport,
 } from './project-health';
 import type { ProjectPackageInfo } from './project-package';
+import type { ProjectRecoverySnapshot } from './project-recovery';
 import type {
   StagingCleanupPreview,
   StagingCleanupResult,
@@ -74,6 +75,7 @@ export const IPC_CHANNELS = {
   changed: 'library:changed',
   createProject: 'project:create',
   openProject: 'project:open',
+  readProjectRecovery: 'project:read-recovery',
   renameProject: 'project:rename',
   saveViewport: 'project:viewport',
   patchCanvas: 'project:canvas-patch',
@@ -177,6 +179,7 @@ export interface DesktopBridge {
   onLibraryChanged: (listener: () => void) => () => void;
   createProject: (name: string) => Promise<ProjectSnapshot>;
   openProject: (id: string) => Promise<ProjectSnapshot>;
+  readProjectRecovery: (id: string) => Promise<ProjectRecoverySnapshot>;
   renameProject: (id: string, name: string) => Promise<void>;
   saveViewport: (id: string, viewport: Viewport) => Promise<void>;
   patchCanvas: (id: string, patch: CanvasPatch) => Promise<ProjectSnapshot>;

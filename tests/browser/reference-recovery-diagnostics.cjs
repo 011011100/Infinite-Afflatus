@@ -152,13 +152,14 @@ async function readRecoveryDiagnostic(
       readError: library.diagnosticError,
     };
   const key = JSON.stringify(projectId);
-  const [ui, project, generation, drafts] = await Promise.all([
+  const [ui, project, generation, drafts, recovery] = await Promise.all([
     read(
       `window.referenceRecoveryDiagnostics ? {current:window.referenceRecoveryDiagnostics.snapshot(),trace:window.referenceRecoveryDiagnostics.trace} : {notInstalled:true}`,
     ),
     projectId ? read(`window.desktop.openProject(${key})`) : null,
     projectId ? read(`window.desktop.getGenerationWorkspace(${key})`) : null,
     projectId ? read(`window.desktop.listWorkspaceDrafts(${key})`) : null,
+    projectId ? read(`window.desktop.readProjectRecovery(${key})`) : null,
   ]);
   return {
     ui,
@@ -189,6 +190,13 @@ async function readRecoveryDiagnostic(
             size,
             sha256,
           })),
+        },
+    recovery: recovery?.diagnosticError
+      ? recovery
+      : recovery && {
+          canvasSha256: fingerprint(recovery.snapshot.canvas),
+          assetIds: recovery.snapshot.assets.map((asset) => asset.id),
+          savedReferenceAssets: recovery.savedReferenceAssets,
         },
     generation: generation?.diagnosticError
       ? generation

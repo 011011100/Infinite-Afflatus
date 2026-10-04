@@ -120,6 +120,8 @@ const desktop: DesktopBridge = {
   },
   createProject: (name) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   openProject: (id) => ipcRenderer.invoke(IPC_CHANNELS.openProject, id),
+  readProjectRecovery: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.readProjectRecovery, id),
   renameProject: (id, name) =>
     ipcRenderer.invoke(IPC_CHANNELS.renameProject, id, name),
   saveViewport: (id, viewport) =>

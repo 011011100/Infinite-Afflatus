@@ -1,5 +1,10 @@
 import type { DesktopBridge } from '../../../../shared/desktop';
-import type { LibraryState, ProjectSnapshot } from '../../../../shared/models';
+import type {
+  Asset,
+  LibraryState,
+  ProjectSnapshot,
+} from '../../../../shared/models';
+import type { ProjectRecoverySnapshot } from '../../../../shared/project-recovery';
 
 export interface ProjectUnavailable {
   projectId: string;
@@ -40,7 +45,14 @@ export class LibrarySession {
     private readonly verifyRecovery: (
       projectId: string,
       snapshot: ProjectSnapshot,
+      savedReferenceAssets?: Asset[],
     ) => Promise<string | null> = async () => null,
+    private readonly readRecovery: (
+      id: string,
+    ) => Promise<ProjectRecoverySnapshot> = async (id) => ({
+      snapshot: await desktop.openProject(id),
+      savedReferenceAssets: [],
+    }),
   ) {}
 
   getSnapshot = () => this.state;
@@ -129,7 +141,9 @@ export class LibrarySession {
       id === this.state.project?.project.id &&
       (!verifyActive || changeEpoch === this.internalChangeEpoch);
     try {
-      let snapshot = await this.desktop.openProject(id);
+      const strict = (retry && !!this.state.projectUnavailable) || verifyActive;
+      let recovery = strict ? await this.readRecovery(id) : null;
+      let snapshot = recovery?.snapshot ?? (await this.desktop.openProject(id));
       if (!current()) return false;
       const previous = this.state.project;
       const suspiciousCanvas =
@@ -140,17 +154,28 @@ export class LibrarySession {
               JSON.stringify(previous.assets) &&
             JSON.stringify(snapshot.canvas) !==
               JSON.stringify(previous.canvas)));
-      if (
-        (retry && this.state.projectUnavailable) ||
-        verifyActive ||
-        suspiciousCanvas
-      ) {
-        let conflict = await this.verifyRecovery(id, snapshot);
+      if (strict || suspiciousCanvas) {
+        if (!recovery) {
+          recovery = await this.readRecovery(id);
+          snapshot = recovery.snapshot;
+          if (!current()) return false;
+        }
+        let conflict = await this.verifyRecovery(
+          id,
+          snapshot,
+          recovery.savedReferenceAssets,
+        );
         // A just-acknowledged in-flight write may have settled while guards waited.
         // Read once more before classifying that transient baseline as a conflict.
         if (conflict && verifyActive && current()) {
-          snapshot = await this.desktop.openProject(id);
-          conflict = await this.verifyRecovery(id, snapshot);
+          recovery = await this.readRecovery(id);
+          snapshot = recovery.snapshot;
+          if (!current()) return false;
+          conflict = await this.verifyRecovery(
+            id,
+            snapshot,
+            recovery.savedReferenceAssets,
+          );
         }
         if (!current()) return false;
         if (conflict) {

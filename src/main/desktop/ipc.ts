@@ -89,6 +89,13 @@ export function registerDesktop(
     return library.projects.open(id(projectId));
   });
   ipcMain.handle(
+    IPC_CHANNELS.readProjectRecovery,
+    (event, projectId: unknown) => {
+      trustedWindow(event);
+      return library.projects.readRecovery(id(projectId));
+    },
+  );
+  ipcMain.handle(
     IPC_CHANNELS.prepareProxy,
     (event, projectId: unknown, assetId: unknown) => {
       trustedWindow(event);

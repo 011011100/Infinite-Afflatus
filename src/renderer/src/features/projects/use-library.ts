@@ -16,7 +16,9 @@ export function useLibrary() {
           getLibrary: () => window.desktop.getLibrary(),
           openProject: (id) => window.desktop.openProject(id),
         },
-        (id, snapshot) => projectRecoveryGuards.verify(id, snapshot),
+        (id, snapshot, savedReferenceAssets) =>
+          projectRecoveryGuards.verify(id, snapshot, savedReferenceAssets),
+        (id) => window.desktop.readProjectRecovery(id),
       ),
   );
   const { library, project, projectUnavailable } = useSyncExternalStore(

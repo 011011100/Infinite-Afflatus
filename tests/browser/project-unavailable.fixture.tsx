@@ -66,6 +66,10 @@ window.desktop = {
     validate();
     return structuredClone(stored);
   },
+  readProjectRecovery: async () => {
+    validate();
+    return { snapshot: structuredClone(stored), savedReferenceAssets: [] };
+  },
   onLibraryChanged: (next) => {
     listener = next;
     return () => {

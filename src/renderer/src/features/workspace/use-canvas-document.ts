@@ -7,6 +7,7 @@ import {
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
+import { canResumeCanvas } from './canvas-recovery';
 
 /** One short transaction at a time; failed writes restore the authoritative project. */
 export function useCanvasDocument(
@@ -30,16 +31,15 @@ export function useCanvasDocument(
     `主画布:${initial.project.id}`,
     () => pending.current ?? Promise.resolve(true),
   );
-  useProjectRecoveryGuard(initial.project.id, async (remote) => {
-    await pending.current;
-    if (
-      JSON.stringify(remote.canvas) !==
-        JSON.stringify(confirmed.current.canvas) ||
-      JSON.stringify(remote.assets) !== JSON.stringify(confirmed.current.assets)
-    )
-      return '磁盘上的画布或素材记录与本页最后确认的版本不同。已保留当前页面和撤销记录，请先恢复原项目文件；未自动覆盖或合并。';
-    return null;
-  });
+  useProjectRecoveryGuard(
+    initial.project.id,
+    async (remote, savedReferenceAssets) => {
+      await pending.current;
+      if (!canResumeCanvas(confirmed.current, remote, savedReferenceAssets))
+        return '磁盘上的画布或素材记录与本页最后确认的版本不同。已保留当前页面和撤销记录，请先恢复原项目文件；未自动覆盖或合并。';
+      return null;
+    },
+  );
   useEffect(() => {
     if (saving || writing.current) return;
     setSnapshot((current) => {

@@ -3,10 +3,12 @@ import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CanvasPatch } from '../../shared/canvas/model';
 import type {
+  Asset,
   ProjectSnapshot,
   ProjectSummary,
   Viewport,
 } from '../../shared/models';
+import type { ProjectRecoverySnapshot } from '../../shared/project-recovery';
 import type { AppStore } from '../storage/app-store';
 import { inside, safeFile, syncDirectory } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
@@ -36,6 +38,35 @@ export class ProjectService {
 
   async open(id: string): Promise<ProjectSnapshot> {
     return readProject(await this.databasePath(id), this.summary(id));
+  }
+
+  async readRecovery(id: string): Promise<ProjectRecoverySnapshot> {
+    const database = await this.databasePath(id);
+    // SaveQueue records the asset and its saved acknowledgement synchronously.
+    // Keep these reads in the same turn so a newer job cannot authorize an older
+    // snapshot, or look like a missing asset merely because it finished later.
+    const snapshot = readProject(database, this.summary(id));
+    const savedReferenceAssets: Asset[] = this.store.jobs().flatMap((job) =>
+      job.projectId === id &&
+      job.status === 'saved' &&
+      job.usage === 'reference' &&
+      job.resultKey.startsWith('reference:') &&
+      job.outputRelativePath &&
+      /^[a-f0-9]{64}$/.test(job.sha256)
+        ? [
+            {
+              id: job.id,
+              name: job.name,
+              relativePath: job.outputRelativePath,
+              size: job.size,
+              sha256: job.sha256,
+              kind: job.kind,
+              usage: 'reference' as const,
+            },
+          ]
+        : [],
+    );
+    return { snapshot, savedReferenceAssets };
   }
 
   async create(name: string): Promise<ProjectSnapshot> {

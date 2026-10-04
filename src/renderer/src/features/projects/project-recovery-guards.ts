@@ -1,7 +1,8 @@
-import type { ProjectSnapshot } from '../../../../shared/models';
+import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 
 type Guard = (
   snapshot: ProjectSnapshot,
+  savedReferenceAssets?: Asset[],
 ) => Promise<string | null> | string | null;
 
 /** Editors retain their own confirmed baselines and drafts; recovery only asks whether resuming is safe. */
@@ -19,9 +20,10 @@ export class ProjectRecoveryGuards {
   async verify(
     projectId: string,
     snapshot: ProjectSnapshot,
+    savedReferenceAssets?: Asset[],
   ): Promise<string | null> {
     for (const guard of this.entries.get(projectId) ?? []) {
-      const reason = await guard(snapshot);
+      const reason = await guard(snapshot, savedReferenceAssets);
       if (reason) return reason;
     }
     return null;
