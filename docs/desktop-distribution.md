@@ -62,7 +62,7 @@ pnpm package:verify release/mac-arm64
 
 `tests/browser/media-tool-settings-desktop.cjs` 另在生产构建上验证三次独立启动：通过原生选择入口验证并保存两项路径、重启读取与单项重置、未知版本配置保留及明确清除。测试生成只返回版本的可执行程序，Windows 使用本机 .NET Framework 编译器生成可执行 `.exe`，缺少编译器时失败而不跳过；实际执行子进程、SQLite、preload 和页面，源程序哈希须不变。这证明组件配置链路，不证明 FFmpeg 编解码能力或系统安装器行为。
 
-`tests/browser/project-edit-recovery.mjs` 使用生产入口、preload、页面和实际 SQLite，验证名称输入与真实视频裁剪手势保护后强杀重开、内容冲突与救援导出、提交成功但副本清理失败，以及连续两次丢失提交回执后的第三次名称输入恢复。原生故障注入只用于确定失败时点，原数据库、卡片、工作区、恢复副本与源素材哈希均有完整核对；视频为固定公开合成测试素材。另有名称、裁剪与公共恢复共 21 项模拟 IPC 界面场景，两类证据分别记录。
+`tests/browser/project-edit-recovery.mjs` 使用生产入口、preload、页面和实际 SQLite，验证名称输入与真实视频裁剪手势保护后强杀重开、内容冲突与救援导出、提交成功但副本清理失败，以及连续两次丢失提交回执后的第三次名称输入恢复。原生故障注入只用于确定失败时点，原数据库、卡片、工作区、恢复副本与源素材哈希均有完整核对；视频为固定合成测试素材。另有名称、裁剪与公共恢复共 21 项模拟 IPC 界面场景，两类证据分别记录。
 
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
 
@@ -83,5 +83,7 @@ pnpm package:verify release/mac-arm64
 提交 `3b10d76ed46fba737595da479f26b93db9281016` 的[后续验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499)在两端全部通过：新增暂存清理实测、恢复基线与节点尺寸通知回归，两端各 25 项隔离界面场景保持严格控制台检查。原有包内启动、启动故障、异常退出草稿恢复、部分导入、取消和失联恢复继续通过；Windows NSIS 首次安装、同版本覆盖及卸载保留数据再次通过。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499/artifacts/11312132176)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37225856499/artifacts/11312042459)，仍未签名，不能代替正式发行及历史安装版升级验证。
 
 提交 `2de1b36f25a762e30123b0b8c712617160df44e4` 的[媒体组件配置验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144)在两端全部通过：各 36 项严格界面场景、新增真实生产配置三进程重开，以及原有磁盘、强杀和恢复回归。Windows 实际运行测试生成的 `.exe` 完成选择与版本验证，安装／同版本覆盖／卸载保留数据再次通过。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144/artifacts/11312421768)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37227675144/artifacts/11312810966)。版本程序仅证明配置链路，Windows 真实 FFmpeg 编码、正式签名与历史安装版升级仍待各自验收。
+
+提交 `dd0a849ac0407ea81fe9c38ebcf1982ce373128e` 的[名称与裁剪恢复验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190)在两端通过：各 57 项严格界面场景和新增 5 条生产恢复链路，原有包内启动、磁盘故障、导入取消、草稿恢复与暂存清理继续通过。Windows NSIS 首次安装、同版本覆盖、重开及卸载均验证独立名称恢复记录的原字节保留。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190/artifacts/11312759166)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190/artifacts/11313379646)，仍是未签名内部包。相同提交的三系统固定历史升级各 34 项通过；正式签名、历史安装版升级和云端 API 仍未验证。
 
 正式分发前仍需确定支持平台与最低系统版本，补齐发行者信息、第三方许可审查、媒体工具分发方案、签名／公证、安装升级与卸载回归。云端 API 与账号计费没有因打包而接入；云端实测应单独记录。

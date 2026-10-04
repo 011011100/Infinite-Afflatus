@@ -22,7 +22,7 @@
 
 ## 应用数据库缺失时
 
-仅首次安装且没有已知管理数据痕迹时才创建新库。当前痕迹包括 SQLite 的 journal／WAL／SHM 旁路文件、非空的 `staging`、`export-work`、`preview-work`、`asset-recovery`、`workspace-drafts`、`drafts`、`recovery-drafts`、包操作临时目录，以及默认项目根目录内已有的受管项目数据库。
+仅首次安装且没有已知管理数据痕迹时才创建新库。当前痕迹包括 SQLite 的 journal／WAL／SHM 旁路文件、非空的 `staging`、`export-work`、`preview-work`、`asset-recovery`、`workspace-drafts`、`project-edit-drafts`、`drafts`、`recovery-drafts`、包操作临时目录，以及默认项目根目录内已有的受管项目数据库。
 
 空的预建工作目录和 Electron 自己的 Preferences 等配置不等同于已保存项目。发现管理痕迹时保留全部文件，要求放回原应用数据库，不尝试扫描目录自动重建保存队列或迁移日志。扩展新的独立持久化目录时，需要把目录加入 `MANAGED_DATA_DIRECTORIES`。
 
