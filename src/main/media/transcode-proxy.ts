@@ -1,16 +1,19 @@
 import { spawn } from 'node:child_process';
+import type { MediaToolName } from '../../shared/media-tools';
+import { mediaToolStartError, resolveMediaTool } from './media-tools';
 
 export const PROXY_VERSION = 1;
 export const MAX_PROXY_BYTES = 256 * 1024 * 1024;
 
 function run(
-  executable: string,
+  name: MediaToolName,
   args: string[],
   signal: AbortSignal,
 ): Promise<string> {
   signal.throwIfAborted();
+  const location = resolveMediaTool(name);
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, {
+    const child = spawn(location.command, args, {
       shell: false,
       windowsHide: true,
       signal,
@@ -26,7 +29,7 @@ function run(
       diagnostic = (diagnostic + chunk).slice(-2_000);
     });
     child.on('error', (error) => {
-      failure = error;
+      failure = signal.aborted ? error : mediaToolStartError(location, error);
     });
     child.once('close', (code) => {
       if (failure) reject(failure);
@@ -40,7 +43,7 @@ function run(
 async function probe(file: string, signal: AbortSignal) {
   const data = JSON.parse(
     await run(
-      process.env.FFPROBE_PATH || 'ffprobe',
+      'ffprobe',
       [
         '-v',
         'error',
@@ -87,7 +90,7 @@ export async function transcodeProxy(
   )
     throw new Error('当前素材时间戳不适合代理预览');
   await run(
-    process.env.FFMPEG_PATH || 'ffmpeg',
+    'ffmpeg',
     [
       '-hide_banner',
       '-loglevel',

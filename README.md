@@ -50,7 +50,7 @@ pnpm doctor:media  # 检查本机 ffmpeg / ffprobe
 pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔离交互回归
 ```
 
-项目管理、视频导入和原片预览不依赖 FFmpeg。轻量预览和成片导出需要本机 `ffmpeg` 和 `ffprobe`，可通过 `FFMPEG_PATH`、`FFPROBE_PATH` 指定可执行文件；代理缺失或失败时使用原片，导出缺少工具时明确报错。代理在首次进入编辑页时后台生成并缓存，时间截取仍使用原片播放参数。安装包内置工具待实现。
+项目管理、视频导入和原片预览不依赖 FFmpeg。轻量预览和成片导出需要本机 `ffmpeg` 和 `ffprobe`；“设置 → 视频处理”可按需检查版本与配置，并查看缺失或权限错误的处理说明。可通过 `FFMPEG_PATH`、`FFPROBE_PATH` 指定可执行文件，macOS 也检查常见 Homebrew 安装位置；诊断和实际任务共用路径解析。代理缺失或失败时使用原片，导出缺少工具时明确报错。代理在首次进入编辑页时后台生成并缓存，时间截取仍使用原片播放参数。当前安装包未内置工具，版本可运行不代表所有编码器和视频格式已经验证。
 
 ## 文档入口
 
@@ -71,6 +71,7 @@ pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔�
 | [版本升级数据回归](docs/data-upgrade-testing.md) | GitHub 三系统测试、历史数据基线、验证范围与维护规则 |
 | [本地创作交付](docs/local-delivery.md) | MP4 导出、任务、项目包与副本、验证边界 |
 | [素材检查与恢复](docs/media-recovery.md) | 缺失素材诊断、完整校验、精确原文件恢复 |
+| [视频处理组件诊断](docs/media-tools.md) | FFmpeg／FFprobe 路径、版本检测、缺失组件排查 |
 | [离开前保存](docs/saving-on-leave.md) | 草稿提交、失败留页、关闭握手与测试 |
 | [商业可用性推进](docs/commercial-readiness.md) | 当前质量差距与后续验收清单 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |

@@ -13,6 +13,7 @@ import { IPC_CHANNELS } from '../../shared/desktop';
 import type { Viewport } from '../../shared/models';
 import { registerExportIpc } from '../export/export-ipc';
 import { registerGenerationIpc } from '../generation/generation-ipc';
+import { registerMediaToolsIpc } from '../media/media-tools-ipc';
 import { registerPackageIpc } from '../packages/package-ipc';
 import {
   isId,
@@ -46,6 +47,7 @@ export function registerDesktop(
   registerExportIpc(library, trustedWindow);
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);
+  registerMediaToolsIpc(trustedWindow);
   ipcMain.handle(IPC_CHANNELS.appInfo, (event) => {
     trustedWindow(event);
     return {

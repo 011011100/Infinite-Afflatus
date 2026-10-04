@@ -180,6 +180,9 @@ test('real FFmpeg exports saved trim/order, mixed dimensions/fps, audio and sile
       const current = service.list()[0];
       if (!current) return;
       phases.add(current.status);
+      if (current.status === 'encoding' || current.status === 'finalizing') {
+        void service.cancelPreparation();
+      }
       if (current.status === 'encoding' && !migration) {
         migration = (async () => {
           const target = join(f.base, 'moved-projects');

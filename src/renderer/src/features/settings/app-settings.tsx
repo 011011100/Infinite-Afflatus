@@ -4,6 +4,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useContentMotion } from '@/components/ui/use-surface-motion';
 import type { LibraryState } from '../../../../shared/models';
 import { InteractionSettings } from './interaction-settings';
+import { MediaToolsSettings } from './media-tools-settings';
 import { StorageSettings } from './storage-settings';
 
 export function AppSettings({
@@ -21,19 +22,22 @@ export function AppSettings({
   beforeMigration?: (() => Promise<boolean>) | undefined;
   initialPage?: 'interactions' | 'storage';
 }) {
-  const [page, setPage] = useState<'interactions' | 'storage'>(initialPage);
+  const [page, setPage] = useState<'interactions' | 'storage' | 'media'>(
+    initialPage,
+  );
   const content = useRef<HTMLDivElement>(null);
   useContentMotion(content, page);
   return (
     <Modal title="设置" onClose={onClose} error={error}>
       <nav className="mb-6 flex gap-2 border-b pb-4" aria-label="设置分类">
         <SegmentedControl
-          className="w-72"
+          className="w-full max-w-96"
           label="设置分类"
           value={page}
           options={[
             { value: 'interactions', label: '交互与快捷键' },
             { value: 'storage', label: '保存与存储' },
+            { value: 'media', label: '视频处理' },
           ]}
           onChange={setPage}
         />
@@ -48,6 +52,9 @@ export function AppSettings({
             run={run}
             beforeMigration={beforeMigration}
           />
+        </div>
+        <div hidden={page !== 'media'}>
+          <MediaToolsSettings />
         </div>
       </div>
     </Modal>

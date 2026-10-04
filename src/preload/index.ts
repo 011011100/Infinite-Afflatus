@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  checkMediaTools: () => ipcRenderer.invoke(IPC_CHANNELS.checkMediaTools),
   scanProjectHealth: (projectId, mode) =>
     ipcRenderer.invoke(IPC_CHANNELS.scanProjectHealth, projectId, mode),
   restoreMissingAsset: (projectId, assetId) =>
@@ -56,6 +57,8 @@ const desktop: DesktopBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.startExport, projectId, cardId, options),
   listExports: () => ipcRenderer.invoke(IPC_CHANNELS.listExports),
   cancelExport: (id) => ipcRenderer.invoke(IPC_CHANNELS.cancelExport, id),
+  cancelExportPreparation: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelExportPreparation),
   revealExport: (id) => ipcRenderer.invoke(IPC_CHANNELS.revealExport, id),
   onExportsChanged: (listener) => {
     const changed = () => listener();

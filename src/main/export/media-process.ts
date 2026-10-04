@@ -1,19 +1,25 @@
 import { spawn } from 'node:child_process';
+import type { MediaToolLocation } from '../../shared/media-tools';
+import { mediaToolStartError } from '../media/media-tools';
 
 /** Bounded diagnostics and process lifetime; never invokes a command shell. */
 export function mediaProcess(
-  executable: string,
+  executable: string | MediaToolLocation,
   args: string[],
   signal: AbortSignal,
   progress?: (seconds: number) => void,
 ): Promise<string> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, {
-      shell: false,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      typeof executable === 'string' ? executable : executable.command,
+      args,
+      {
+        shell: false,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     let output = '';
     let diagnostic = '';
     let buffered = '';
@@ -52,9 +58,9 @@ export function mediaProcess(
     });
     child.on('error', (error: NodeJS.ErrnoException) => {
       failure =
-        error.code === 'ENOENT'
-          ? new Error('未找到 FFmpeg 或 FFprobe，请在设置中查看媒体工具说明')
-          : error;
+        typeof executable === 'string'
+          ? error
+          : mediaToolStartError(executable, error);
     });
     child.once('close', (code) => {
       clearTimeout(timeout);

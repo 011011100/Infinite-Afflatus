@@ -34,6 +34,7 @@ export function useSaveLifecycle() {
           await Promise.all([
             window.desktop?.cancelProjectHealth?.(),
             window.desktop?.cancelProjectPackage?.(),
+            window.desktop?.cancelExportPreparation?.(),
           ]);
           // A timed-out pass may already have scanned an editor that the user has
           // since changed. Drain it, then scan every editor again while frozen.

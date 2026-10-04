@@ -54,14 +54,24 @@ export async function safeFile(root: string, path: string): Promise<string> {
   return file;
 }
 
-export async function fingerprint(file: string): Promise<Fingerprint> {
+export async function fingerprint(
+  file: string,
+  signal?: AbortSignal,
+): Promise<Fingerprint> {
+  signal?.throwIfAborted();
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const before = await handle.stat();
     if (!before.isFile()) throw new Error('只支持普通文件');
     const hash = createHash('sha256');
-    for await (const chunk of handle.createReadStream({ autoClose: false }))
+    for await (const chunk of handle.createReadStream({
+      autoClose: false,
+      signal,
+    })) {
+      signal?.throwIfAborted();
       hash.update(chunk);
+    }
+    signal?.throwIfAborted();
     const after = await handle.stat();
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
       throw new Error('文件正在被其他程序修改，请稍后重试');

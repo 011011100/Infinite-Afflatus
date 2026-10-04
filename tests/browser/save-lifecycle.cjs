@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
       'unsaved draft',
     );
     console.log(
-      'PASS navigation cancels gated media checks and package copying before flushing drafts',
+      'PASS navigation cancels gated media checks, package copying and export preparation before flushing drafts',
     );
 
     await load();

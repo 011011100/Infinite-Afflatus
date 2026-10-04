@@ -1,4 +1,5 @@
 import type { SequenceExportOptions } from '../../shared/export';
+import { resolveMediaTool } from '../media/media-tools';
 import { mediaProcess } from './media-process';
 
 export interface ExportMedia {
@@ -25,7 +26,7 @@ export async function probeExportMedia(
 ): Promise<ExportMedia> {
   const result = JSON.parse(
     await mediaProcess(
-      process.env.FFPROBE_PATH || 'ffprobe',
+      resolveMediaTool('ffprobe'),
       [
         '-v',
         'error',

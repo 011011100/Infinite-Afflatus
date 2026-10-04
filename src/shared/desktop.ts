@@ -6,6 +6,7 @@ import type {
 } from './generation/draft';
 import type { GenerationWorkspace } from './generation/workspace';
 import type { InteractionSettings } from './interaction/settings';
+import type { MediaToolsReport } from './media-tools';
 import type {
   LibraryState,
   MigrationPreview,
@@ -20,6 +21,7 @@ import type {
 import type { ProjectPackageInfo } from './project-package';
 
 export const IPC_CHANNELS = {
+  checkMediaTools: 'media:check-tools',
   scanProjectHealth: 'health:scan',
   restoreMissingAsset: 'health:restore',
   cancelProjectHealth: 'health:cancel',
@@ -35,6 +37,7 @@ export const IPC_CHANNELS = {
   startExport: 'export:start',
   listExports: 'export:list',
   cancelExport: 'export:cancel',
+  cancelExportPreparation: 'export:cancel-preparation',
   revealExport: 'export:reveal',
   exportsChanged: 'export:changed',
   getGenerationWorkspace: 'generation:workspace',
@@ -74,6 +77,7 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  checkMediaTools: () => Promise<MediaToolsReport>;
   scanProjectHealth: (
     projectId: string,
     mode: ProjectHealthMode,
@@ -100,6 +104,7 @@ export interface DesktopBridge {
   ) => Promise<SequenceExportJob | null>;
   listExports: () => Promise<SequenceExportJob[]>;
   cancelExport: (id: string) => Promise<void>;
+  cancelExportPreparation: () => Promise<void>;
   revealExport: (id: string) => Promise<void>;
   onExportsChanged: (listener: () => void) => () => void;
   getGenerationWorkspace: (projectId: string) => Promise<GenerationWorkspace>;

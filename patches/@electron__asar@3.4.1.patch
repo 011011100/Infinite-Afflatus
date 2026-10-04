@@ -1,0 +1,36 @@
+diff --git a/lib/disk.js b/lib/disk.js
+index 2a477720ef1ae97015829ff7192672433453bfb7..d4ebf2a9dae34a963f7a444d88f12096eaf01fba 100644
+--- a/lib/disk.js
++++ b/lib/disk.js
+@@ -46,6 +46,7 @@ const pickle_1 = require("./pickle");
+ const filesystem_1 = require("./filesystem");
+ const util_1 = require("util");
+ const stream = __importStar(require("stream"));
++const { finished } = require("node:stream/promises");
+ const pipeline = (0, util_1.promisify)(stream.pipeline);
+ let filesystemCache = Object.create(null);
+ async function copyFile(dest, src, filename) {
+@@ -85,7 +86,10 @@ const writeFileListToStream = async function (dest, filesystem, out, lists, meta
+         const link = await wrapped_fs_1.default.readlink(file.filename);
+         await createSymlink(dest, filename, link);
+     }
+-    return out.end();
++    const completed = finished(out, { cleanup: true });
++    out.end();
++    await completed;
++    return out;
+ };
+ async function writeFilesystem(dest, filesystem, lists, metadata) {
+     const out = await createFilesystemWriteStream(filesystem, dest);
+@@ -123,7 +127,10 @@ async function streamFilesystem(dest, filesystem, lists) {
+         // the symlink needs to be recreated outside in .unpacked
+         await createSymlink(dest, file.filename, file.link);
+     }
+-    return out.end();
++    const completed = finished(out, { cleanup: true });
++    out.end();
++    await completed;
++    return out;
+ }
+ function readArchiveHeaderSync(archivePath) {
+     const fd = wrapped_fs_1.default.openSync(archivePath, 'r');

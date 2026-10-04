@@ -37,6 +37,7 @@ export function registerExportIpc(
       const window = trustedWindow(event);
       const project = library.projects.summary(id(projectId));
       const validatedCardId = id(cardId);
+      const cancellationVersion = library.exports.cancellationVersion;
       const name = outputName(project.name);
       const choice = await dialog.showSaveDialog(window, {
         title: '导出视频',
@@ -45,19 +46,34 @@ export function registerExportIpc(
         filters: [{ name: 'MP4 视频', extensions: ['mp4'] }],
         properties: ['createDirectory', 'showOverwriteConfirmation'],
       });
-      if (choice.canceled || !choice.filePath) return null;
+      if (
+        choice.canceled ||
+        !choice.filePath ||
+        cancellationVersion !== library.exports.cancellationVersion
+      )
+        return null;
       trustedWindow(event);
-      return library.exports.start(
-        project.id,
-        validatedCardId,
-        choice.filePath,
-        options,
-      );
+      try {
+        return await library.exports.start(
+          project.id,
+          validatedCardId,
+          choice.filePath,
+          options,
+        );
+      } catch (error) {
+        if (cancellationVersion !== library.exports.cancellationVersion)
+          return null;
+        throw error;
+      }
     },
   );
   ipcMain.handle(IPC_CHANNELS.cancelExport, (event, jobId: unknown) => {
     trustedWindow(event);
     library.exports.cancel(id(jobId));
+  });
+  ipcMain.handle(IPC_CHANNELS.cancelExportPreparation, (event) => {
+    trustedWindow(event);
+    return library.exports.cancelPreparation();
   });
   ipcMain.handle(IPC_CHANNELS.revealExport, async (event, jobId: unknown) => {
     trustedWindow(event);

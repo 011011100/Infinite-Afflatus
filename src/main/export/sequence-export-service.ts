@@ -41,6 +41,8 @@ export class SequenceExportService {
   private work: ExportWork;
   private task: Promise<void> | null = null;
   private abort: AbortController | null = null;
+  private preparation: AbortController | null = null;
+  private cancellationEpoch = 0;
   private starting = false;
   private startingDone: Promise<void> | null = null;
   private closed = false;
@@ -52,8 +54,34 @@ export class SequenceExportService {
     private store: AppStore,
     private userData: string,
     private changed: () => void = () => {},
+    private media = { probe: probeExportMedia, encode: encodeSequence },
   ) {
     this.work = new ExportWork(store, join(userData, 'export-work'));
+  }
+
+  /** Native file selections opened before a leave request cannot start later. */
+  get cancellationVersion(): number {
+    return this.cancellationEpoch;
+  }
+
+  async cancelPreparation(): Promise<void> {
+    this.cancellationEpoch += 1;
+    const controller = this.preparation;
+    if (!controller) return;
+    // Capture only this attempt. Encoding/finalizing has already released the
+    // write gate and must continue when macOS merely closes its window.
+    const starting = this.startingDone;
+    const task = this.task;
+    controller.abort();
+    await starting;
+    // A synchronous job notification may cancel just before start assigns task.
+    // Join that same controller's cleanup, never a later export attempt.
+    await (task ?? (this.abort === controller ? this.task : null));
+  }
+
+  private releaseController(controller: AbortController): void {
+    if (this.abort === controller) this.abort = null;
+    if (this.preparation === controller) this.preparation = null;
   }
 
   list(): SequenceExportJob[] {
@@ -101,6 +129,10 @@ export class SequenceExportService {
     if (this.starting || this.task)
       throw new Error('已有视频正在导出，请完成或取消后重试');
     this.starting = true;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    this.abort = controller;
+    this.preparation = controller;
     let finishStarting!: () => void;
     this.startingDone = new Promise<void>((resolve) => {
       finishStarting = resolve;
@@ -112,8 +144,11 @@ export class SequenceExportService {
         this.store.root,
         this.userData,
       );
+      signal.throwIfAborted();
       const { project, snapshot } = await this.gate.run(async () => {
+        signal.throwIfAborted();
         const current = await this.projects.open(projectId);
+        signal.throwIfAborted();
         const card = current.canvas.cards.find((item) => item.id === cardId);
         if (!card) throw new Error('要导出的视频组合不存在，请重新打开');
         const assets = card.assetIds.map((id) => {
@@ -126,6 +161,7 @@ export class SequenceExportService {
         if (!assets.length) throw new Error('组合中没有可导出的视频');
         return { project: current.project, snapshot: { card, assets } };
       });
+      signal.throwIfAborted();
       if (this.closed) throw new Error('应用正在关闭');
       const job: SequenceExportJob = {
         id: randomUUID(),
@@ -142,17 +178,16 @@ export class SequenceExportService {
         duration: 0,
         options,
       };
-      this.abort = new AbortController();
-      const signal = this.abort.signal;
       this.lastProgress = 0;
       this.update(job);
       this.task = this.run(job, snapshot, signal).finally(() => {
         this.task = null;
-        this.abort = null;
+        this.releaseController(controller);
       });
       return { ...job };
     } finally {
       this.starting = false;
+      if (!this.task) this.releaseController(controller);
       finishStarting();
       this.startingDone = null;
     }
@@ -180,6 +215,7 @@ export class SequenceExportService {
     signal: AbortSignal,
   ): Promise<string[]> {
     return this.gate.whenOpen(async () => {
+      signal.throwIfAborted();
       const root = dirname(await this.projects.databasePath(job.projectId));
       const bytes = snapshot.assets.reduce((sum, asset) => sum + asset.size, 0);
       // Encoding needs additional space, checked after media durations are known.
@@ -194,7 +230,7 @@ export class SequenceExportService {
           createWriteStream(output, { flags: 'r+' }),
           { signal },
         );
-        if (!sameContent(await fingerprint(output), asset))
+        if (!sameContent(await fingerprint(output, signal), asset))
           throw new Error(`素材内容已变化：${asset.name}`);
         files.push(output);
         copied += asset.size;
@@ -211,12 +247,14 @@ export class SequenceExportService {
   ): Promise<void> {
     try {
       const files = await this.copyInputs(job, snapshot, signal);
+      signal.throwIfAborted();
       const clips: ExportClip[] = [];
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         const asset = snapshot.assets[index];
         if (!file || !asset) throw new Error('导出素材准备失败');
-        const media = await probeExportMedia(file, signal);
+        signal.throwIfAborted();
+        const media = await this.media.probe(file, signal);
         const range = clipRange(
           media.duration,
           snapshot.card.trims?.[asset.id],
@@ -231,8 +269,11 @@ export class SequenceExportService {
       );
       // Approximate reserve for normalized video, PCM intermediates and the final MP4.
       await checkSpace(this.userData, Math.ceil(duration * 5_000_000));
+      signal.throwIfAborted();
+      // Phase transition and cancellation boundary are synchronous.
+      this.preparation = null;
       this.update(job, { duration, status: 'encoding', progress: 0.1 });
-      const output = await encodeSequence(
+      const output = await this.media.encode(
         clips,
         exportDimensions(first.media, job.options),
         job.options,
@@ -245,7 +286,7 @@ export class SequenceExportService {
             finalizing ? 'finalizing' : 'encoding',
           ),
       );
-      const result = await probeExportMedia(output, signal);
+      const result = await this.media.probe(output, signal);
       const tolerance = Math.max(
         0.12,
         clips.length / job.options.frameRate + 0.05,
@@ -274,6 +315,7 @@ export class SequenceExportService {
 
   async close(): Promise<void> {
     this.closed = true;
+    this.cancellationEpoch += 1;
     this.abort?.abort();
     await this.startingDone;
     await this.task;

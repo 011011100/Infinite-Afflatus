@@ -23,9 +23,11 @@ let writes = 0;
 let gate: Promise<unknown> | null = null;
 let releaseHealth: (() => void) | null = null;
 let releasePackage: (() => void) | null = null;
+let releaseExport: (() => void) | null = null;
 window.desktop = {
   cancelProjectHealth: async () => releaseHealth?.(),
   cancelProjectPackage: async () => releasePackage?.(),
+  cancelExportPreparation: async () => releaseExport?.(),
   getGenerationWorkspace: async () => structuredClone(stored),
   saveGenerationWorkspace: async (_projectId, workspace) => {
     writes += 1;
@@ -126,6 +128,9 @@ function Check() {
             }),
             new Promise<void>((resolve) => {
               releasePackage = resolve;
+            }),
+            new Promise<void>((resolve) => {
+              releaseExport = resolve;
             }),
           ]);
         }}
