@@ -23,7 +23,7 @@ import {
   emptyWorkspace,
   newShot,
 } from '../../src/shared/generation/workspace.ts';
-import { connect, freePort, waitFor } from './desktop-client.mjs';
+import { connect, freePort, sleep, waitFor } from './desktop-client.mjs';
 
 const require = createRequire(import.meta.url);
 const executable = require('electron');
@@ -173,6 +173,31 @@ const hash = async (file) =>
     .update(await readFile(file))
     .digest('hex');
 
+async function moveDatabaseOffline(database, heldDatabase) {
+  // This process injects the fault while Electron is alive. Windows can reject
+  // rename during a short native SQLite read even after the editor is visible.
+  const deadline = Date.now() + 5000;
+  let busyRetries = 0;
+  for (;;) {
+    try {
+      await rename(database, heldDatabase);
+      console.log(
+        `Injected unavailable database after ${busyRetries} Windows EBUSY retries`,
+      );
+      return;
+    } catch (error) {
+      if (
+        process.platform !== 'win32' ||
+        error.code !== 'EBUSY' ||
+        Date.now() >= deadline
+      )
+        throw error;
+      busyRetries++;
+      await sleep(40);
+    }
+  }
+}
+
 try {
   const library = await Library.open(profile, projects);
   const { project } = await library.projects.create(projectName);
@@ -193,6 +218,13 @@ try {
   const originalBytes = await readFile(database);
   phase = 'protect text while the project is unavailable';
   const first = await launch();
+  await first.run(`(() => {
+    window.draftFixtureHealthComplete = false;
+    window.draftFixtureStopHealth = window.desktop.onProjectHealthProgress(state => {
+      if (state?.projectId === ${JSON.stringify(project.id)} && state.progress === 1)
+        window.draftFixtureHealthComplete = true;
+    });
+  })()`);
   await openProject(first);
   await click(first, '素材画布');
   await waitFor(
@@ -202,7 +234,15 @@ try {
       ),
     'text card',
   );
-  await rename(database, heldDatabase);
+  await waitFor(
+    () => first.run('window.draftFixtureHealthComplete === true'),
+    'initial project health database check completed',
+  );
+  await first.run('window.draftFixtureStopHealth()');
+  await moveDatabaseOffline(database, heldDatabase);
+  // Do not continue the crash scenario unless its missing-database fault exists.
+  await assert.rejects(readFile(database), { code: 'ENOENT' });
+  assert.deepEqual(await readFile(heldDatabase), originalBytes);
   await first.run(
     `(() => { const input = document.querySelector('textarea[aria-label="文本卡片内容"]'); input.focus(); input.select(); })()`,
   );
