@@ -209,6 +209,7 @@ window.desktop = {
   cancelProjectHealth: async () => {},
   cancelProjectPackage: async () => {},
   cancelExportPreparation: async () => {},
+  cancelStagingOperations: async () => {},
   onSaveBeforeLeave: (listener) => {
     nativeSave = listener;
     return () => {

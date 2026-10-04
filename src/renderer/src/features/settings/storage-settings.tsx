@@ -2,6 +2,7 @@ import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { LibraryState, MigrationPreview } from '../../../../shared/models';
+import { StagingCleanupPanel } from './staging-cleanup-panel';
 
 const phaseLabels = {
   copying: '正在复制项目',
@@ -154,8 +155,9 @@ export function StorageSettings({
         </section>
       )}
       <p className="mt-8 text-xs leading-5 text-muted-foreground">
-        暂存文件与项目目录分开保存。只有项目保存成功后，才会清除对应的暂存结果。
+        暂存文件与项目目录分开保存。完整结果只有在项目保存成功后，才会自动清除对应暂存文件。
       </p>
+      <StagingCleanupPanel />
     </>
   );
 }

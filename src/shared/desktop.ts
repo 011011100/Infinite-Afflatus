@@ -21,6 +21,11 @@ import type {
 } from './project-health';
 import type { ProjectPackageInfo } from './project-package';
 import type {
+  StagingCleanupPreview,
+  StagingCleanupResult,
+  StagingInspection,
+} from './staging-cleanup';
+import type {
   WorkspaceDraftExport,
   WorkspaceDraftInput,
   WorkspaceDraftKey,
@@ -79,6 +84,10 @@ export const IPC_CHANNELS = {
   cancelMigration: 'storage:cancel',
   retryCleanup: 'storage:cleanup',
   retrySave: 'save:retry',
+  inspectStaging: 'staging:inspect',
+  previewStagingCleanup: 'staging:preview-cleanup',
+  executeStagingCleanup: 'staging:execute-cleanup',
+  cancelStagingOperations: 'staging:cancel',
   revealRoot: 'storage:reveal',
 } as const;
 
@@ -178,5 +187,9 @@ export interface DesktopBridge {
   cancelMigration: () => Promise<void>;
   retryCleanup: () => Promise<void>;
   retrySave: (id: string) => Promise<void>;
+  inspectStaging: () => Promise<StagingInspection>;
+  previewStagingCleanup: () => Promise<StagingCleanupPreview>;
+  executeStagingCleanup: (token: string) => Promise<StagingCleanupResult>;
+  cancelStagingOperations: () => Promise<void>;
   revealRoot: () => Promise<void>;
 }

@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readdir, rename, unlink } from 'node:fs/promises';
+import {
+  link,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rename,
+  unlink,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { SaveJob } from '../../shared/models';
@@ -12,6 +20,12 @@ import {
   sameContent,
   syncDirectory,
 } from '../storage/files';
+import {
+  identity,
+  type PartOwnership,
+  StagingOwnership,
+  sameIdentity,
+} from './staging-ownership';
 
 export interface GeneratedResult {
   projectId: string;
@@ -37,12 +51,21 @@ export const STAGING_CANCELLED = '接收结果已取消';
 /** Every result goes to durable userData staging, including results received outside migration. */
 export class Staging {
   private receiving: Promise<unknown> = Promise.resolve();
+  readonly ownership: StagingOwnership;
   constructor(
     readonly directory: string,
     private readonly store: AppStore,
     private readonly notify: () => void,
     private readonly quota = 20 * 1024 ** 3,
-  ) {}
+  ) {
+    this.ownership = new StagingOwnership(directory, store);
+  }
+
+  exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const work = this.receiving.then(operation);
+    this.receiving = work.catch(() => undefined);
+    return work;
+  }
 
   path(id: string): string {
     return join(this.directory, `${id}.ready`);
@@ -70,12 +93,11 @@ export class Staging {
       );
       if (!started) cancelQueued?.(controls.signal?.reason);
     };
-    const work = this.receiving.then(() => {
+    const work = this.exclusive(() => {
       controls.signal?.throwIfAborted();
       started = true;
       return this.write(result, stream, controls);
     });
-    this.receiving = work.catch(() => undefined);
     const cleanup = () => controls.signal?.removeEventListener('abort', abort);
     void work.then(cleanup, cleanup);
     controls.signal?.addEventListener('abort', abort, { once: true });
@@ -125,6 +147,7 @@ export class Staging {
       throw new Error('结果所属项目不存在');
     }
     await mkdir(this.directory, { recursive: true });
+    const directoryIdentity = await this.ownership.directoryIdentity();
     const job: SaveJob = {
       ...result,
       id: randomUUID(),
@@ -154,6 +177,12 @@ export class Staging {
       );
       const hash = createHash('sha256');
       try {
+        if (job.usage === 'reference' && job.resultKey.startsWith('reference:'))
+          await this.ownership.registerCreated(
+            job.id,
+            handle,
+            directoryIdentity,
+          );
         for await (const chunk of stream) {
           signal?.throwIfAborted();
           const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -169,17 +198,37 @@ export class Staging {
               bytes.length - offset,
             );
             if (!bytesWritten) throw new Error('暂存文件写入中断');
+            hash.update(bytes.subarray(offset, offset + bytesWritten));
             offset += bytesWritten;
             job.size += bytesWritten;
             progress('receiving', job.size);
           }
-          hash.update(bytes);
         }
         signal?.throwIfAborted();
         if (!job.size) throw new Error('生成结果为空');
         progress('finalizing', job.size);
         signal?.throwIfAborted();
         await handle.sync();
+      } catch (error) {
+        if (
+          job.usage === 'reference' &&
+          job.resultKey.startsWith('reference:')
+        ) {
+          try {
+            await this.ownership.sealIncomplete(
+              job.id,
+              handle,
+              job.size,
+              hash.copy().digest('hex'),
+            );
+          } catch (sealError) {
+            console.warn(
+              '未完成暂存已保留，不能自动认领清理:',
+              errorMessage(sealError),
+            );
+          }
+        }
+        throw error;
       } finally {
         await handle.close();
       }
@@ -193,6 +242,9 @@ export class Staging {
       // cancellation arrives, so a completed result keeps its stable ID.
       await syncDirectory(this.directory);
       job.status = 'ready';
+      if (job.usage === 'reference' && job.resultKey.startsWith('reference:')) {
+        this.forgetPublishedOwnership(job.id);
+      }
     } catch (error) {
       stream.destroy();
       job.status = 'failed';
@@ -217,16 +269,35 @@ export class Staging {
       } else if (job.status === 'receiving') {
         try {
           if (!job.sha256) throw new Error('下载未完成');
-          try {
-            await fingerprint(this.path(job.id));
-          } catch {
+          const owned =
+            job.usage === 'reference' && job.resultKey.startsWith('reference:')
+              ? this.ownership.get(job.id)
+              : null;
+          const ready = await lstat(this.path(job.id)).catch(
+            (error: NodeJS.ErrnoException) => {
+              if (error.code !== 'ENOENT') throw error;
+              return null;
+            },
+          );
+          if (!ready) {
             const partial = join(this.directory, `${job.id}.part`);
+            if (owned) await this.verifyOwnedFile(owned, partial);
             if (!sameContent(await fingerprint(partial), job))
               throw new Error('暂存文件不完整');
-            await rename(partial, this.path(job.id));
+            if (owned) {
+              await this.verifyOwnedFile(owned, partial);
+              // Exclusive publication cannot replace a file that appeared
+              // after the missing-ready check. Keep either link on a fault.
+              await link(partial, this.path(job.id));
+              await this.verifyOwnedFile(owned, partial);
+              await unlink(partial);
+              await syncDirectory(this.directory);
+            } else await rename(partial, this.path(job.id));
           }
+          if (owned) await this.verifyOwnedFile(owned, this.path(job.id));
           if (!sameContent(await fingerprint(this.path(job.id)), job))
             throw new Error('暂存文件校验失败');
+          if (owned) this.forgetPublishedOwnership(job.id);
           job.status = 'ready';
           job.error = null;
         } catch {
@@ -239,6 +310,31 @@ export class Staging {
         job.status = 'ready';
         this.store.putJob(job);
       }
+    }
+  }
+
+  private async verifyOwnedFile(
+    owned: PartOwnership,
+    file: string,
+  ): Promise<void> {
+    await this.ownership.verifyDirectory(owned);
+    const info = await lstat(file, { bigint: true });
+    if (
+      !info.isFile() ||
+      info.isSymbolicLink() ||
+      !sameIdentity(identity(info), owned.fileIdentity)
+    )
+      throw new Error('暂存文件与创建记录不匹配，原文件已保留');
+  }
+
+  private forgetPublishedOwnership(id: string): void {
+    try {
+      const owned = this.ownership.get(id);
+      if (owned) this.ownership.forget(owned);
+    } catch (error) {
+      // Complete publication remains accepted even if optional cleanup metadata
+      // cannot be compacted. The ready file excludes it from partial cleanup.
+      console.warn('完整结果已保留，暂存归属记录待收尾:', errorMessage(error));
     }
   }
 

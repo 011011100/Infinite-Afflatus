@@ -10,6 +10,7 @@ export function referenceImportMock() {
     | 'cancelReferenceImport'
     | 'prepareReferenceImportsForLeave'
     | 'resumeReferenceSaves'
+    | 'cancelStagingOperations'
   > = {
     importReferences: async () => ({
       assetIds: [],
@@ -19,6 +20,7 @@ export function referenceImportMock() {
     }),
     onReferenceImportProgress: () => () => {},
     cancelReferenceImport: async () => {},
+    cancelStagingOperations: async () => {},
     prepareReferenceImportsForLeave: async () => {
       const token = crypto.randomUUID();
       pauses.add(token);

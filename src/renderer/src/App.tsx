@@ -152,6 +152,10 @@ export function App() {
           migrating={library.writeBlocked}
           run={run}
           blockedProjectId={state.projectUnavailable?.projectId}
+          onManageStaging={() => {
+            setSettingsPage('storage');
+            setSettings(true);
+          }}
         />
       )}
       {unavailableNotice}

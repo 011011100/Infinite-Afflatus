@@ -1,0 +1,6 @@
+{
+  "name": "staging-before-ownership",
+  "scenario": "image-workspace",
+  "commit": "57c753cb92893671ae0ae76c285563b189fbc1c8",
+  "description": "Failed and cancelled local-reference partials written before durable file ownership; current cleanup must not claim them"
+}

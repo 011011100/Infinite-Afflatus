@@ -135,6 +135,13 @@ const desktop: DesktopBridge = {
   cancelMigration: () => ipcRenderer.invoke(IPC_CHANNELS.cancelMigration),
   retryCleanup: () => ipcRenderer.invoke(IPC_CHANNELS.retryCleanup),
   retrySave: (id) => ipcRenderer.invoke(IPC_CHANNELS.retrySave, id),
+  inspectStaging: () => ipcRenderer.invoke(IPC_CHANNELS.inspectStaging),
+  previewStagingCleanup: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.previewStagingCleanup),
+  executeStagingCleanup: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.executeStagingCleanup, token),
+  cancelStagingOperations: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelStagingOperations),
   revealRoot: () => ipcRenderer.invoke(IPC_CHANNELS.revealRoot),
 };
 

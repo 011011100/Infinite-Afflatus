@@ -361,8 +361,20 @@ async function electronCase() {
         'material page closes after successful recovery',
       );
       // The existing visible queue is the user's explicit retry for copies that failed while offline.
+      const failedCount = (
+        await run('window.desktop.getLibrary()')
+      ).jobs.filter(
+        (job) => job.projectId === project.id && job.status === 'failed',
+      ).length;
+      await waitFor(
+        () =>
+          run(
+            `[...document.querySelectorAll('aside[aria-label="保存任务"] button')].filter(button => button.textContent.trim()==='重试保存' && !button.disabled).length === ${failedCount}`,
+          ),
+        'complete failed results expose verified retry actions',
+      );
       await run(
-        `document.querySelectorAll('aside[aria-label="保存任务"] button').forEach(button => { if(!button.disabled) button.click(); })`,
+        `document.querySelectorAll('aside[aria-label="保存任务"] button').forEach(button => { if(button.textContent.trim()==='重试保存' && !button.disabled) button.click(); })`,
       );
       await waitFor(
         async () =>

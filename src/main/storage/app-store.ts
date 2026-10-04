@@ -83,6 +83,10 @@ export class AppStore {
     return (key === 'root' ? row.value : JSON.parse(String(row.value))) as T;
   }
 
+  hasSetting(key: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM settings WHERE key = ?').get(key);
+  }
+
   set(key: string, value: unknown): void {
     this.db
       .prepare('INSERT OR REPLACE INTO settings VALUES (?, ?)')
@@ -124,6 +128,13 @@ export class AppStore {
         `INSERT INTO saves VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload`,
       )
       .run(job.id, `${job.projectId}:${job.resultKey}`, JSON.stringify(job));
+  }
+
+  deleteJob(id: string, expectedPayload: string): void {
+    const result = this.db
+      .prepare('DELETE FROM saves WHERE id = ? AND payload = ?')
+      .run(id, expectedPayload);
+    if (result.changes !== 1) throw new Error('保存任务已变化，未移除任务记录');
   }
 
   commitLocation(root: string, journal: unknown): void {

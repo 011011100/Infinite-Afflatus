@@ -22,6 +22,7 @@ import {
   validateViewport,
 } from '../projects/project-service';
 import { registerRecoveryIpc } from '../recovery/recovery-ipc';
+import { registerStagingCleanupIpc } from '../saving/staging-cleanup-ipc';
 import { localFileStream } from '../storage/files';
 import type { Library } from '../storage/library';
 
@@ -49,6 +50,7 @@ export function registerDesktop(
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);
   registerMediaToolsIpc(trustedWindow);
+  registerStagingCleanupIpc(library.stagingCleanup, trustedWindow);
   registerWorkspaceDraftIpc(
     library.drafts,
     {

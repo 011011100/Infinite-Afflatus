@@ -48,6 +48,7 @@ export function useSaveLifecycle() {
             window.desktop?.cancelProjectHealth?.(),
             window.desktop?.cancelProjectPackage?.(),
             window.desktop?.cancelExportPreparation?.(),
+            window.desktop.cancelStagingOperations(),
           ]);
           const failed = cancellations.find(
             (result) => result.status === 'rejected',

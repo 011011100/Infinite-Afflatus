@@ -17,6 +17,7 @@ import {
   Staging,
   type StagingReceiveControls,
 } from '../saving/staging';
+import { StagingCleanupService } from '../saving/staging-cleanup-service';
 import { InteractionSettingsStore } from '../settings/interaction-settings';
 import { AppStore } from './app-store';
 import { readAppStoreRoot } from './app-store-guard';
@@ -35,6 +36,7 @@ export class Library {
   readonly generation: GenerationService;
   readonly interactions: InteractionSettingsStore;
   readonly staging: Staging;
+  readonly stagingCleanup: StagingCleanupService;
   readonly saves: SaveQueue;
   readonly migration: MigrationService;
   readonly proxies: ProxyService;
@@ -95,6 +97,9 @@ export class Library {
       this.staging,
       () => this.emit(),
     );
+    this.stagingCleanup = new StagingCleanupService(this.staging, store, () =>
+      this.emit(),
+    );
     this.referenceImports = new ReferenceImportService(
       {
         acceptResult: (result, stream, controls) =>
@@ -152,6 +157,7 @@ export class Library {
       await library.health.recover();
       await library.projects.discover();
       await library.staging.recover();
+      await library.stagingCleanup.recover();
       await library.proxies.recover();
       await library.exports.recover();
       library.saves.start();
@@ -221,6 +227,7 @@ export class Library {
     // Fully received results remain durable and resume on the next library open.
     const stopped = await Promise.allSettled([
       this.referenceImports.close(),
+      this.stagingCleanup.close(),
       this.health.close(),
       this.packages.close(),
       this.exports.close(),

@@ -62,6 +62,7 @@ if (!app.requestSingleInstanceLock()) {
         () => {
           library?.packages.cancel();
           library?.health.cancel();
+          library?.stagingCleanup.cancel();
           void library?.exports.cancelPreparation().catch((error: unknown) => {
             console.warn('Export preparation cleanup failed:', error);
           });
