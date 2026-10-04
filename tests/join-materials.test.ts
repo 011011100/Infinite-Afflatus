@@ -12,6 +12,12 @@ import {
   newShot,
   validateWorkspace,
 } from '../src/shared/generation/workspace';
+import type { GenerationGroup } from '../src/shared/generation/workspace-types';
+
+function videoGroup(group: GenerationGroup | undefined) {
+  assert.ok(group && group.kind !== 'image');
+  return group;
+}
 
 function required<T>(value: T | undefined): T {
   assert.ok(value !== undefined);
@@ -44,7 +50,7 @@ function sample() {
 
 test('hover join retains target identity, settings and existing coordinates; appends references in order', () => {
   const original = sample();
-  required(original.groups[0]).parameters.duration = 12;
+  videoGroup(original.groups[0]).parameters.duration = 12;
   const before = structuredClone(original);
   const next = joinMaterials(original, ['outside'], 'target');
   assert.deepEqual(original, before);

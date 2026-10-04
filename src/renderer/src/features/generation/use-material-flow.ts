@@ -1,5 +1,6 @@
 import type { NodeChange, NodePositionChange } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
+import { imageInputError } from '../../../../shared/generation/image-generation';
 import { joinMaterials } from '../../../../shared/generation/join-materials';
 import {
   detachMaterial,
@@ -206,21 +207,42 @@ export function useMaterialFlow(
     }));
     setPositions({});
   };
-  const grouping = useMemo(
-    () => materialSelection(shot, selected),
-    [shot, selected],
-  );
+  const grouping = useMemo(() => {
+    const selection = materialSelection(shot, selected);
+    const imageError = imageInputError(selection.materials, assets);
+    const groupError = selection.mixedKinds
+      ? '图片组和视频组不能直接合并'
+      : selection.groups[0]?.kind === 'image'
+        ? imageError
+        : null;
+    return {
+      ...selection,
+      canGroup: selection.canGroup && !groupError,
+      imageError,
+      groupError,
+    };
+  }, [shot, selected, assets]);
   const join = (ids: string[], groupId: string) => {
     if (blocked) return;
-    update((current) => joinMaterials(current, ids, groupId));
+    update((current) => joinMaterials(current, ids, groupId, assets));
     setPositions({});
     setSelected([groupId]);
     setActiveGroup(null);
   };
-  const group = () => {
-    if (!grouping.canGroup || blocked) return;
+  const group = (kind?: 'image' | 'video') => {
+    if (
+      !grouping.canGroup ||
+      blocked ||
+      (kind === 'image' && grouping.imageError)
+    )
+      return;
     const id = crypto.randomUUID();
-    update((current) => groupMaterials(current, selected, id, activeGroup));
+    update((current) =>
+      groupMaterials(current, selected, id, activeGroup, {
+        ...(kind ? { kind } : {}),
+        assets,
+      }),
+    );
     setPositions({});
     setSelected([id]);
     setActiveGroup(null);

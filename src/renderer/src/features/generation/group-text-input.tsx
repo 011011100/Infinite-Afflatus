@@ -10,6 +10,7 @@ export function GroupTextInput({
   disabled,
   focus,
   onChange,
+  placeholder = '描述画面、动作、镜头和对白…',
 }: {
   node: MaterialNode;
   projectId: string;
@@ -17,6 +18,7 @@ export function GroupTextInput({
   disabled: boolean;
   focus: boolean;
   onChange: (text: string) => void;
+  placeholder?: string;
 }) {
   const assetId = node.type === 'asset' ? node.assetId : null;
   const input = useRef<HTMLTextAreaElement>(null);
@@ -50,9 +52,7 @@ export function GroupTextInput({
         aria-label={`文本块 ${index + 1}`}
         ref={input}
         value={value ?? ''}
-        placeholder={
-          value === null ? '读取文本…' : '描述画面、动作、镜头和对白…'
-        }
+        placeholder={value === null ? '读取文本…' : placeholder}
         disabled={disabled || value === null}
         maxLength={10000}
         className="group-text-input"

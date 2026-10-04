@@ -1,5 +1,5 @@
 import type { Node, NodeProps } from '@xyflow/react';
-import { Expand, Sparkles, Ungroup } from 'lucide-react';
+import { Expand, Image, Sparkles, Ungroup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { GenerationGroup } from '../../../../shared/generation/workspace';
@@ -24,6 +24,7 @@ export function GenerationGroupCard({
   return (
     <div
       data-generation-group-frame
+      data-generation-kind={data.group.kind ?? 'video'}
       data-receiving={data.receiving || undefined}
       className={cn(
         'h-full rounded-2xl border-2 border-primary/60 bg-primary/5 shadow-sm',
@@ -32,8 +33,14 @@ export function GenerationGroupCard({
       )}
     >
       <header className="material-handle flex h-10 items-center gap-2 px-4 text-xs text-primary">
-        <Sparkles className="size-4" />
-        <span className="font-medium">视频生成</span>
+        {data.group.kind === 'image' ? (
+          <Image className="size-4" />
+        ) : (
+          <Sparkles className="size-4" />
+        )}
+        <span className="font-medium">
+          {data.group.kind === 'image' ? '图片生成' : '视频生成'}
+        </span>
         <span className="text-muted-foreground">{data.count} 个素材</span>
         <div className="nodrag nopan ml-auto flex gap-1">
           <Button

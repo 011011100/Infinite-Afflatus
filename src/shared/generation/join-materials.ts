@@ -1,3 +1,4 @@
+import { type ImageInputAsset, imageInputError } from './image-generation';
 import { materialSize } from './node-geometry';
 import type { MaterialNode, Point, ShotWorkspace } from './workspace-types';
 
@@ -5,17 +6,20 @@ export function canJoinMaterials(
   shot: ShotWorkspace,
   ids: string[],
   groupId: string,
+  assets: ImageInputAsset[] = [],
 ): boolean {
   const selected = new Set(ids);
   const incoming = shot.nodes.filter((node) => selected.has(node.id));
+  const group = shot.groups.find((item) => item.id === groupId);
+  const members = shot.nodes.filter((node) => node.groupId === groupId);
   return (
     selected.size > 0 &&
     incoming.length === selected.size &&
     incoming.every((node) => !node.groupId) &&
-    shot.groups.some((group) => group.id === groupId) &&
-    shot.nodes.filter((node) => node.groupId === groupId).length +
-      incoming.length <=
-      32
+    !!group &&
+    members.length + incoming.length <= 32 &&
+    (group.kind !== 'image' ||
+      imageInputError([...members, ...incoming], assets) === null)
   );
 }
 
@@ -24,6 +28,7 @@ export function materialHoverGroup(
   shot: ShotWorkspace,
   ids: string[],
   point: Point,
+  assets: ImageInputAsset[] = [],
 ) {
   const target = [...shot.groups]
     .reverse()
@@ -34,7 +39,9 @@ export function materialHoverGroup(
         point.y >= group.position.y &&
         point.y <= group.position.y + group.height,
     );
-  return target && canJoinMaterials(shot, ids, target.id) ? target : undefined;
+  return target && canJoinMaterials(shot, ids, target.id, assets)
+    ? target
+    : undefined;
 }
 
 /** Fill available space, extending downwards without moving existing members. */
@@ -73,8 +80,9 @@ export function joinMaterials(
   shot: ShotWorkspace,
   ids: string[],
   groupId: string,
+  assets: ImageInputAsset[] = [],
 ): ShotWorkspace {
-  if (!canJoinMaterials(shot, ids, groupId)) return shot;
+  if (!canJoinMaterials(shot, ids, groupId, assets)) return shot;
   const group = shot.groups.find((item) => item.id === groupId);
   if (!group) return shot;
   const selected = new Set(ids);

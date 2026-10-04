@@ -1,7 +1,9 @@
 import { readFile, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { validateGenerationDraft } from '../../shared/generation/draft';
+import { imageInputError } from '../../shared/generation/image-generation';
 import { validateWorkspace } from '../../shared/generation/workspace';
+import type { Asset } from '../../shared/models';
 import {
   readGenerationDraft,
   writeGenerationDraft,
@@ -27,15 +29,18 @@ export class GenerationService {
     const workspace = validateWorkspace(input);
     return this.gate.run(async () => {
       const snapshot = await this.projects.open(projectId);
-      const available = new Set(snapshot.assets.map((asset) => asset.id));
+      const available = new Map<string, Asset['kind']>(
+        snapshot.assets.map((asset) => [asset.id, asset.kind]),
+      );
       for (const job of this.store.jobs()) {
         if (
           job.projectId === projectId &&
           job.usage === 'reference' &&
           job.sha256
         )
-          available.add(job.id);
+          available.set(job.id, job.kind);
       }
+      const references = [...available].map(([id, kind]) => ({ id, kind }));
       for (const shot of workspace.shots) {
         if (
           shot.sourceAssetId &&
@@ -51,6 +56,14 @@ export class GenerationService {
           )
         )
           throw new Error('素材不属于当前项目');
+        for (const group of shot.groups) {
+          if (group.kind !== 'image') continue;
+          const error = imageInputError(
+            shot.nodes.filter((node) => node.groupId === group.id),
+            references,
+          );
+          if (error) throw new Error(error);
+        }
       }
       const result = writeWorkspace(
         await this.projects.databasePath(projectId),

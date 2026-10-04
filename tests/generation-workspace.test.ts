@@ -21,6 +21,12 @@ import {
   validateWorkspace,
   workspaceFromDraft,
 } from '../src/shared/generation/workspace';
+import type { GenerationGroup } from '../src/shared/generation/workspace-types';
+
+function videoGroup(group: GenerationGroup | undefined) {
+  assert.ok(group && group.kind !== 'image');
+  return group;
+}
 
 function sample() {
   const shot = newShot('shot', '镜头', { x: 40, y: 80 });
@@ -39,11 +45,11 @@ test('group only selected materials; moving and dissolving a group preserves abs
   assert.deepEqual(grouped.nodes[2], original.nodes[2]);
   assert.equal(grouped.nodes[0]?.groupId, 'group-one');
   const both = groupMaterials(grouped, ['three'], 'group-two');
-  const first = both.groups[0];
+  const first = videoGroup(both.groups[0]);
   assert.ok(first);
   first.position = { x: 700, y: 800 };
   first.parameters.duration = 12;
-  assert.equal(both.groups[1]?.parameters.duration, 5);
+  assert.equal(videoGroup(both.groups[1]).parameters.duration, 5);
   const dissolved = ungroupMaterials(both, 'group-one');
   assert.deepEqual(dissolved.nodes[0]?.position, { x: 720, y: 852 });
   assert.deepEqual(dissolved.nodes[1]?.position, { x: 996, y: 852 });
@@ -84,7 +90,10 @@ test('legacy drafts convert every reference and prompt while preserving model pa
   const workspace = workspaceFromDraft('project', draft);
   assert.deepEqual(validateWorkspace(workspace), workspace);
   assert.equal(workspace.shots[0]?.nodes.length, 25);
-  assert.equal(workspace.shots[0]?.groups[0]?.parameters.duration, 9);
+  assert.equal(
+    videoGroup(workspace.shots[0]?.groups[0]).parameters.duration,
+    9,
+  );
   assert.ok(
     workspace.shots[0]?.nodes.some(
       (node) => node.type === 'text' && node.text === draft.prompt,
@@ -125,7 +134,7 @@ test('workspace validation rejects duplicate identities, dangling groups and inv
     /无效/,
   );
   const bad = structuredClone(base);
-  const first = bad.shots[0]?.groups[0];
+  const first = videoGroup(bad.shots[0]?.groups[0]);
   assert.ok(first);
   first.parameters.duration = 100;
   assert.throws(() => validateWorkspace(bad), /无效/);
@@ -218,7 +227,7 @@ test('merged groups and detached materials survive SQLite reopen with their cont
   const { project } = await f.library.projects.create('拆出与合并');
   let shot = groupMaterials(sample(), ['one', 'two'], 'first');
   shot = groupMaterials(shot, ['three'], 'second');
-  const group = shot.groups[0];
+  const group = videoGroup(shot.groups[0]);
   assert.ok(group);
   group.parameters.duration = 12;
   let saved = await f.library.generation.saveWorkspace(project.id, {
@@ -247,7 +256,7 @@ test('merged groups and detached materials survive SQLite reopen with their cont
       await reopened.generation.readWorkspace(project.id),
       saved,
     );
-    assert.equal(saved.shots[0]?.groups[0]?.parameters.duration, 12);
+    assert.equal(videoGroup(saved.shots[0]?.groups[0]).parameters.duration, 12);
     assert.deepEqual(
       saved.shots[0]?.nodes.map((node) => node.id),
       ['three', 'two', 'one'],

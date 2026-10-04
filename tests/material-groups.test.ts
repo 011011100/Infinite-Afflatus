@@ -12,6 +12,12 @@ import {
   newShot,
   validateWorkspace,
 } from '../src/shared/generation/workspace';
+import type { GenerationGroup } from '../src/shared/generation/workspace-types';
+
+function videoGroup(group: GenerationGroup | undefined) {
+  assert.ok(group && group.kind !== 'image');
+  return group;
+}
 
 function required<T>(value: T | undefined): T {
   assert.ok(value !== undefined);
@@ -35,12 +41,12 @@ test('group plus material includes all members once and retains existing paramet
     ['material-0', 'material-1'],
     'first',
   );
-  required(original.groups[0]).parameters.duration = 12;
+  videoGroup(original.groups[0]).parameters.duration = 12;
   const ids = ['first', 'material-0', 'material-2', 'first'];
   assert.equal(materialSelection(original, ids).materials.length, 3);
   const merged = groupMaterials(original, ids, 'merged');
   assert.equal(merged.groups.length, 1);
-  assert.equal(merged.groups[0]?.parameters.duration, 12);
+  assert.equal(videoGroup(merged.groups[0]).parameters.duration, 12);
   assert.deepEqual(
     merged.nodes.filter((n) => n.groupId === 'merged').map((n) => n.id),
     ['material-0', 'material-1', 'material-2'],
@@ -62,8 +68,8 @@ test('two moved groups flatten into one, prefer active settings, and leave other
   );
   original = groupMaterials(original, ['material-2', 'material-3'], 'second');
   original = groupMaterials(original, ['material-4'], 'other');
-  const first = required(original.groups[0]);
-  const second = required(original.groups[1]);
+  const first = videoGroup(original.groups[0]);
+  const second = videoGroup(original.groups[1]);
   first.position = { x: -500, y: 400 };
   second.position = { x: 200, y: 600 };
   first.parameters.duration = 6;
@@ -74,7 +80,7 @@ test('two moved groups flatten into one, prefer active settings, and leave other
     'merged',
     'second',
   );
-  const result = required(merged.groups.find((g) => g.id === 'merged'));
+  const result = videoGroup(merged.groups.find((g) => g.id === 'merged'));
   assert.equal(result.parameters.duration, 13);
   assert.deepEqual(result.position, first.position);
   assert.deepEqual(
@@ -86,7 +92,8 @@ test('two moved groups flatten into one, prefer active settings, and leave other
   assert.equal(merged.groups.length, 2);
   const fallback = groupMaterials(original, ['second', 'first'], 'fallback');
   assert.equal(
-    fallback.groups.find((g) => g.id === 'fallback')?.parameters.duration,
+    videoGroup(fallback.groups.find((g) => g.id === 'fallback')).parameters
+      .duration,
     6,
   );
   result.parameters.duration = 9;
@@ -145,7 +152,7 @@ test('detaching a middle material preserves siblings, original group settings, a
     'group',
   );
   required(original.groups[0]).position = { x: 100, y: 200 };
-  required(original.groups[0]).parameters.duration = 11;
+  videoGroup(original.groups[0]).parameters.duration = 11;
   const split = detachMaterial(original, 'material-1');
   assert.deepEqual(split.groups, original.groups);
   assert.deepEqual(

@@ -6,6 +6,7 @@ import {
   editMaterialText,
   reorderGroupMembers,
 } from '../../../../shared/generation/group-editing';
+import { imageReferenceCount } from '../../../../shared/generation/image-generation';
 import type {
   GenerationGroup,
   ShotWorkspace,
@@ -13,6 +14,7 @@ import type {
 import type { Asset } from '../../../../shared/models';
 import { GenerationSettings } from './generation-parameters';
 import { GroupTextStack } from './group-text-stack';
+import { ImageGenerationSettings } from './image-generation-parameters';
 import { MaterialArc } from './material-arc';
 import { useGroupStageMotion } from './use-group-stage-motion';
 import './group-stage.css';
@@ -84,7 +86,9 @@ export function GroupStage({
     <dialog
       ref={dialog}
       className="group-stage"
-      aria-label="视频生成组合编辑"
+      aria-label={
+        group.kind === 'image' ? '图片生成组合编辑' : '视频生成组合编辑'
+      }
       onCancel={(event) => {
         event.preventDefault();
         requestClose();
@@ -134,6 +138,12 @@ export function GroupStage({
         </div>
         <div data-stage-panel className="group-stage-text">
           <GroupTextStack
+            title={group.kind === 'image' ? '图片描述' : '镜头文本'}
+            placeholder={
+              group.kind === 'image'
+                ? '描述主体、场景、风格，或需要修改的内容…'
+                : '描述画面、动作、镜头和对白…'
+            }
             nodes={textNodes}
             projectId={projectId}
             disabled={disabled}
@@ -159,17 +169,36 @@ export function GroupStage({
           className="group-stage-parameters"
           disabled={disabled}
         >
-          <GenerationSettings
-            value={group.parameters}
-            onChange={(parameters) =>
-              update((current) => ({
-                ...current,
-                groups: current.groups.map((item) =>
-                  item.id === group.id ? { ...item, parameters } : item,
-                ),
-              }))
-            }
-          />
+          {group.kind === 'image' ? (
+            <ImageGenerationSettings
+              value={group.parameters}
+              references={imageReferenceCount(members, assets)}
+              onChange={(parameters) =>
+                update((current) => ({
+                  ...current,
+                  groups: current.groups.map((item) =>
+                    item.id === group.id && item.kind === 'image'
+                      ? { ...item, parameters }
+                      : item,
+                  ),
+                }))
+              }
+            />
+          ) : (
+            <GenerationSettings
+              value={group.parameters}
+              onChange={(parameters) =>
+                update((current) => ({
+                  ...current,
+                  groups: current.groups.map((item) =>
+                    item.id === group.id && item.kind !== 'image'
+                      ? { ...item, parameters }
+                      : item,
+                  ),
+                }))
+              }
+            />
+          )}
         </fieldset>
       </div>
     </dialog>

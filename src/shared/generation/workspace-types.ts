@@ -1,5 +1,6 @@
 import type { Viewport } from '../models';
 import type { GenerationParameters } from './draft';
+import type { ImageGenerationParameters } from './image-generation';
 
 export type Point = { x: number; y: number };
 export type MaterialNode = {
@@ -13,13 +14,15 @@ export type MaterialNode = {
   | { type: 'text'; text: string }
   | { type: 'asset'; assetId: string; textOverride?: string }
 );
-export interface GenerationGroup {
+export type GenerationGroup = {
   id: string;
   position: Point;
   width: number;
   height: number;
-  parameters: GenerationParameters;
-}
+} & (
+  | { kind?: 'video'; parameters: GenerationParameters }
+  | { kind: 'image'; parameters: ImageGenerationParameters }
+);
 export interface CanvasLabel {
   id: string;
   position: Point;

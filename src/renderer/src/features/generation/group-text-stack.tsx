@@ -29,6 +29,8 @@ export function GroupTextStack({
   reorder,
   detach,
   onViewCanvas,
+  title = '镜头文本',
+  placeholder = '描述画面、动作、镜头和对白…',
 }: {
   nodes: MaterialNode[];
   projectId: string;
@@ -40,6 +42,8 @@ export function GroupTextStack({
   reorder: (ids: string[]) => void;
   detach: (id: string, at?: { x: number; y: number }) => void;
   onViewCanvas: () => void;
+  title?: string;
+  placeholder?: string;
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -113,7 +117,7 @@ export function GroupTextStack({
         <header className="group-text-heading">
           <span className="flex items-center gap-2 text-sm font-medium">
             <Type className="size-4 text-primary" />
-            镜头文本
+            {title}
           </span>
           <Button
             size="icon-sm"
@@ -197,6 +201,7 @@ export function GroupTextStack({
                     </div>
                   </div>
                   <GroupTextInput
+                    placeholder={placeholder}
                     node={node}
                     index={index}
                     projectId={projectId}
@@ -210,9 +215,9 @@ export function GroupTextStack({
           })}
           {!nodes.length && (
             <Textarea
-              aria-label="镜头文本"
+              aria-label={title}
               className="group-text-empty"
-              placeholder="描述画面、动作、镜头和对白…"
+              placeholder={placeholder}
               disabled={disabled || full}
               maxLength={10000}
               onChange={(event) => add(event.target.value)}

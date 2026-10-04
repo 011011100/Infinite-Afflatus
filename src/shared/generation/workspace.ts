@@ -3,6 +3,7 @@ import {
   type GenerationDraft,
   validateGenerationDraft,
 } from './draft';
+import { validateImageParameters } from './image-generation';
 import { groupMaterials } from './material-groups';
 import { MAX_MATERIAL_SIZE, MIN_MATERIAL_SIZE } from './node-geometry';
 import type {
@@ -139,10 +140,13 @@ export function validateWorkspace(value: unknown): GenerationWorkspace {
         group.height > 10000
       )
         throw new Error('生成组无效');
-      validateGenerationDraft({
-        ...emptyGenerationDraft(),
-        parameters: group.parameters,
-      });
+      if (group.kind === 'image') validateImageParameters(group.parameters);
+      else if (group.kind === undefined || group.kind === 'video')
+        validateGenerationDraft({
+          ...emptyGenerationDraft(),
+          parameters: group.parameters,
+        });
+      else throw new Error('生成组类型无效');
       ids.add(group.id);
       const members = shot.nodes.filter((node) => node?.groupId === group.id);
       if (!members.length || members.length > 32)

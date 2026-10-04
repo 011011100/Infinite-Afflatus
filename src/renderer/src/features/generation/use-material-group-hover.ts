@@ -18,6 +18,7 @@ import {
   HOLD_HINT_DELAY_MS,
   LONG_PRESS_MS,
 } from '../../../../shared/interaction/long-press';
+import type { Asset } from '../../../../shared/models';
 import type { MaterialCanvasNode } from './use-material-flow';
 
 type DragEvent = MouseEvent | TouchEvent | ReactMouseEvent;
@@ -31,6 +32,7 @@ const movedBeyondHold = (point: Point, origin: Point) =>
 /** Like hold-to-split: show confirmation first, commit on release, cancel on movement. */
 export function useMaterialGroupHover({
   shot,
+  assets,
   disabled,
   flow,
   area,
@@ -39,6 +41,7 @@ export function useMaterialGroupHover({
   finishMove,
 }: {
   shot: ShotWorkspace;
+  assets: Asset[];
   disabled: boolean;
   flow: RefObject<ReactFlowInstance<MaterialCanvasNode> | null>;
   area: RefObject<HTMLDivElement | null>;
@@ -47,8 +50,15 @@ export function useMaterialGroupHover({
   finishMove: OnNodeDrag<MaterialCanvasNode>;
 }) {
   const show = useHoldFeedback();
-  const latest = useRef({ shot, disabled, join, onChanges, finishMove });
-  latest.current = { shot, disabled, join, onChanges, finishMove };
+  const latest = useRef({
+    shot,
+    assets,
+    disabled,
+    join,
+    onChanges,
+    finishMove,
+  });
+  latest.current = { shot, assets, disabled, join, onChanges, finishMove };
   const drag = useRef<{ ids: string[]; point: Point } | null>(null);
   const hover = useRef<{
     id: string;
@@ -94,6 +104,7 @@ export function useMaterialGroupHover({
         latest.current.shot,
         ids,
         instance.screenToFlowPosition(point),
+        latest.current.assets,
       );
     },
     [area, flow],

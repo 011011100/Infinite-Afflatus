@@ -1,4 +1,9 @@
 import { emptyGenerationDraft } from './draft';
+import {
+  defaultImageParameters,
+  type ImageInputAsset,
+  imageInputError,
+} from './image-generation';
 import { materialPosition } from './material-layout';
 import { groupGrid, materialSize } from './node-geometry';
 import type {
@@ -24,10 +29,14 @@ export function materialSelection(shot: ShotWorkspace, ids: string[]) {
         a.position.y - b.position.y ||
         a.id.localeCompare(b.id),
     );
+  const mixedKinds =
+    new Set(groups.map((group) => group.kind ?? 'video')).size > 1;
   return {
     materials,
     groups,
+    mixedKinds,
     canGroup:
+      !mixedKinds &&
       materials.length > 0 &&
       materials.length <= 32 &&
       (groups.length > 1 || materials.some((node) => !node.groupId)),
@@ -47,20 +56,30 @@ export function groupMaterials(
   ids: string[],
   groupId: string,
   preferredGroupId?: string | null,
+  options: { kind?: 'video' | 'image'; assets?: ImageInputAsset[] } = {},
 ): ShotWorkspace {
   const selection = materialSelection(shot, ids);
   const selected = selection.materials;
   if (!selected.length || selected.length > 32)
     throw new Error('请选择 1–32 张素材卡片（包含所选组内素材）');
+  if (selection.mixedKinds)
+    throw new Error('图片生成组与视频生成组不能直接合并');
+  const seed =
+    selection.groups.find((group) => group.id === preferredGroupId) ??
+    selection.groups[0];
+  const kind = options.kind ?? seed?.kind ?? 'video';
+  if (seed && kind !== (seed.kind ?? 'video'))
+    throw new Error('不能通过合并更改已有组的生成类型');
+  if (kind === 'image') {
+    const error = imageInputError(selected, options.assets ?? []);
+    if (error) throw new Error(error);
+  }
   if (!selection.canGroup) return shot;
   if (
     shot.groups.some((group) => group.id === groupId) ||
     shot.nodes.some((node) => node.id === groupId)
   )
     throw new Error('生成组标识重复');
-  const seed =
-    selection.groups.find((group) => group.id === preferredGroupId) ??
-    selection.groups[0];
   const positions = selected.map((node) => absolutePosition(shot, node));
   const layout = groupGrid(selected);
   const group: GenerationGroup = {
@@ -71,7 +90,24 @@ export function groupMaterials(
     },
     width: layout.width,
     height: layout.height,
-    parameters: { ...(seed?.parameters ?? emptyGenerationDraft().parameters) },
+    ...(kind === 'image'
+      ? {
+          kind: 'image' as const,
+          parameters: {
+            ...(seed?.kind === 'image'
+              ? seed.parameters
+              : defaultImageParameters()),
+          },
+        }
+      : {
+          // Preserve legacy video JSON: a missing kind remains missing.
+          ...(seed?.kind === 'video' ? { kind: 'video' as const } : {}),
+          parameters: {
+            ...(seed?.kind !== 'image' && seed
+              ? seed.parameters
+              : emptyGenerationDraft().parameters),
+          },
+        }),
   };
   const indices = new Map(selected.map((node, index) => [node.id, index]));
   const nodes = shot.nodes.map((node) => {

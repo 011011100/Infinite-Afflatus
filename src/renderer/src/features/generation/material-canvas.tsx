@@ -11,7 +11,6 @@ import {
   FolderOpen,
   LoaderCircle,
   Plus,
-  Sparkles,
   Tag,
   Type,
   Ungroup,
@@ -38,6 +37,7 @@ import { GroupStage } from './group-stage';
 import { LabelCard } from './label-node';
 import { LabelLocator } from './labels/label-locator';
 import { useLabelFlight } from './labels/use-label-flight';
+import { MaterialGenerationActions } from './material-generation-actions';
 import { MaterialCard } from './material-node';
 import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferencePicker } from './reference-picker';
@@ -141,13 +141,22 @@ export function MaterialCanvas({
     model.selected.length === 1
       ? shot.nodes.find((node) => node.id === model.selected[0] && node.groupId)
       : undefined;
-  const groupLabel = model.grouping.groups.length ? '合并成组' : '生成视频';
   const disabled = blocked || importing || closing;
+  const groupActions = {
+    count: model.grouping.materials.length,
+    hasGroups: model.grouping.groups.length > 0,
+    canGroup: model.grouping.canGroup,
+    imageError: model.grouping.imageError,
+    groupError: model.grouping.groupError,
+    disabled,
+    group: model.group,
+  };
   const editingGroup = shot.groups.find(
     (group) => group.id === model.activeGroup,
   );
   const hoverGroup = useMaterialGroupHover({
     shot,
+    assets: snapshot.assets,
     disabled: disabled || picker || !!editingGroup,
     flow,
     area,
@@ -321,19 +330,10 @@ export function MaterialCanvas({
             </Panel>
             {model.grouping.materials.length > 0 &&
               (model.grouping.canGroup ||
+                model.grouping.groupError ||
                 model.grouping.materials.length > 32) && (
                 <Panel position="bottom-center">
-                  <Button
-                    className="shadow-md"
-                    disabled={disabled || !model.grouping.canGroup}
-                    onClick={model.group}
-                  >
-                    <Sparkles />
-                    {groupLabel}
-                    <span className="ml-1 opacity-70">
-                      {model.grouping.materials.length}
-                    </span>
-                  </Button>
+                  <MaterialGenerationActions {...groupActions} />
                 </Panel>
               )}
           </ReactFlow>
@@ -375,13 +375,7 @@ export function MaterialCanvas({
           )}
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem
-            disabled={disabled || !model.grouping.canGroup}
-            onClick={model.group}
-          >
-            <Sparkles />
-            {groupLabel}
-          </ContextMenuItem>
+          <MaterialGenerationActions menu {...groupActions} />
           {selectedMaterial && (
             <ContextMenuItem
               disabled={disabled}
