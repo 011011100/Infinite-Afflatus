@@ -43,6 +43,7 @@
 - `tests/workspace-draft-queue.test.ts`：慢写下持续输入的固定序号等待、保护失败仍保留最新内容、重试和旧回执隔离。
 - `tests/browser/save-lifecycle.cjs`：使用独立恢复记录的模拟接口，验证正常返回前排空项目保存与恢复清理、失败留页、原生关闭和超时重试。
 - `tests/browser/draft-recovery.mjs`：隔离生产 Electron／IPC／SQLite，项目离线期间输入后强杀进程，重启遇到同 ID／同 revision 的变化数据库时保留冲突，再放回原库并显式恢复文字。
+- `tests/browser/draft-recovery-controls.cjs`：真实 React／React Flow 配合延迟的模拟接口，核对数据库提交、IPC 回复与界面刷新三个时点之间的操作保护；现有镜头保持、返回首页和原生关闭等待、恢复失败留页。不把模拟接口用例计为真实存储或云端验证。
 - `tests/upgrade/workspace-draft-preservation.test.ts`：固定提交 `29f19980b993a4462d3c97605ea55be51806a037` 为恢复格式 v1 的历史写入基线。独立进程仅加载该提交的 Git 归档业务代码，分别创建普通未提交草稿和 A 已提交、B 带 `lastSubmitted` 的记录；当前版本恢复后，再用两个独立进程核对完整内容、参数、分组与素材引用、原媒体哈希及确认清理边界。既有存储与项目包基线不变，随 `pnpm test:upgrade` 执行，详见[版本升级数据回归](data-upgrade-testing.md)。
 
 这些验证属于本地代码和桌面恢复链路。它们不代表云端生成 API、Windows 安装环境或签名安装包验证。

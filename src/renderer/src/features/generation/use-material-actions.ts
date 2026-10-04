@@ -127,7 +127,12 @@ export function useMaterialActions(
         const imported = await window.desktop.importReferences(projectId);
         addAssets(imported.assetIds);
         setLocalError(
-          imported.errors.length ? imported.errors.join('\n') : null,
+          imported.errors.length
+            ? [
+                `已添加 ${imported.assetIds.length} 个素材；${imported.errors.length} 个未添加。`,
+                ...imported.errors,
+              ].join('\n')
+            : null,
         );
         return true;
       } catch (reason) {

@@ -47,7 +47,7 @@ pnpm package:verify release/mac-arm64
 
 构建脚本强制 `--publish never`，清除传入的签名环境变量并禁用证书自动发现。macOS 明确设置 `identity: null`、`notarize: false`、`hardenedRuntime: false`；Windows 使用 v26 的 `signExecutable: false` 保留图标／版本资源编辑，同时跳过签名。依据 [macOS 配置](https://www.electron.build/v26/docs/mac/) 与 [Windows 配置](https://www.electron.build/v26/docs/win/)，这些是内部未签名产物，不能据此宣称通过 Gatekeeper、SmartScreen 或正式发布验证。
 
-手动触发的 `Desktop package validation` 工作流在 Windows/macOS 原生构建，上传内部 ZIP／NSIS 构建物，不发布 Release。CI 的包检查与隔离启动、保存、重启读取测试，仍只是未签名内部包验证，不等于证书、公证、用户安装、安装升级、卸载保留数据或不同系统版本的兼容性验收。
+手动触发的 `Desktop package validation` 工作流在 Windows/macOS 原生构建，上传内部 ZIP／NSIS 构建物，不发布 Release。包检查与隔离启动、保存、重启读取测试，分别与生产入口故障恢复、强杀草稿恢复、部分参考素材导入和 Windows 安装回归执行；这些仍不等于证书、公证、历史版本升级或不同系统版本的兼容性验收。
 
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
 
@@ -57,6 +57,6 @@ pnpm package:verify release/mac-arm64
 
 测试使用安装后的真实程序与默认用户数据目录，创建项目、保存镜头文字、修改设置并保护未提交草稿；正常退出后执行同一版本覆盖安装，再次启动核对原内容。卸载后核对默认应用数据与项目文件的全部字节保持不变，并确认安装的主程序和 ASAR 已移除。清理只作用于带本次所有权标记且文件身份未变化的测试目录。
 
-这项回归验证同版本覆盖，不代表从历史安装版升级；测试脚本存在也不代表执行成功。首次成功的 CI 证据另行记录，签名、系统信任提示与历史版本升级仍分别验收。
+2026-10-05，提交 `1ee25bcbceea9047ee464b3d1f5d7202d4485b77` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37218359821) 首次完成上述 Windows 安装／同版本覆盖／卸载保留数据实测；该次两端包内启动、三类启动故障与强杀草稿恢复也通过。测试验证同版本覆盖，不代表从历史安装版升级；签名、系统信任提示与历史版本升级仍分别验收。
 
 正式分发前仍需确定支持平台与最低系统版本，补齐发行者信息、第三方许可审查、媒体工具分发方案、签名／公证、安装升级与卸载回归。云端 API 与账号计费没有因打包而接入；云端实测应单独记录。

@@ -87,6 +87,8 @@ export function validateGenerationDraft(value: unknown): GenerationDraft {
 }
 
 export interface ReferenceImportResult {
+  /** Complete, protected intake IDs; the project save queue may still be pending. */
   assetIds: string[];
+  /** Per-file intake failures; their IDs must never be added to a workspace. */
   errors: string[];
 }

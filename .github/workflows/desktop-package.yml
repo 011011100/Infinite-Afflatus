@@ -36,6 +36,8 @@ jobs:
         run: node tests/browser/startup-recovery.cjs
       - name: Verify abrupt process termination, conflict protection and explicit shot recovery
         run: node --import tsx tests/browser/draft-recovery.mjs
+      - name: Verify partial reference imports preserve successful files and continued editing
+        run: node tests/browser/reference-import.cjs
       - name: Verify Windows installation, same-version overwrite and retained user data after uninstall
         if: runner.os == 'Windows'
         timeout-minutes: 8
