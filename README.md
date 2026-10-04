@@ -79,7 +79,7 @@ pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔�
 | [本地创作交付](docs/local-delivery.md) | MP4 导出、任务、项目包与副本、验证边界 |
 | [素材检查与恢复](docs/media-recovery.md) | 缺失素材诊断、完整校验、精确原文件恢复 |
 | [视频处理组件配置与诊断](docs/media-tools.md) | FFmpeg／FFprobe 选择、任务配置、版本检测、缺失组件排查 |
-| [启动失败保护](docs/startup-recovery.md) | 原保存盘重试、应用数据库校验与缺失库保护 |
+| [启动失败保护](docs/startup-recovery.md) | 原保存盘重试、原目录重新定位、数据库校验与缺失库保护 |
 | [应用索引与设置备份](docs/application-backups.md) | 本机一致快照、启动恢复、原资料保留与迁移代际 |
 | [大项目媒体资源](docs/media-performance.md) | 缩略图并发、离屏释放、缓存预算与真实媒体量测 |
 | [项目名称与裁剪恢复](docs/project-edit-recovery.md) | 原始名称输入、完成的裁剪、独立副本与显式恢复 |

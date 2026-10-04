@@ -72,6 +72,8 @@ pnpm package:verify release/mac-arm64
 
 `tests/browser/root-relocation.mjs` 使用七次隔离生产启动验证原目录重新定位：真实同盘改名、取消选择／确认、复制目录拒绝、选择框未结束时退出、明确确认与两次独立重开。只控制原生选择和制造完整暂存遗留的最后删除失败，目录和数据库校验均使用生产代码；项目、源素材、两类草稿及保留的原数据库按字节核对。原保存任务保持，缺失目标的最后完整暂存继续保留，正常目标仍由原启动规则清理。该脚本随两端桌面验收运行，不等同于外接盘全型号、跨盘认领或历史安装器升级测试。
 
+提交 `368eb9caaa2b94e3f85ad470d69454100ad0c1d6` 的[目录定位验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112)在 Windows／macOS 均通过上述七进程流程；两端各 81 项界面回归、100／1000 视频资源和编辑、原有启动／恢复／导入／清理及包内保存重开继续通过。Windows 安装、同版本覆盖和卸载保留资料也通过。[macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112/artifacts/11318646221)与[Windows 内部安装包](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112/artifacts/11318438006)为未签名验收构建物；相同提交三系统历史升级各 53 项通过，正式签名及跨历史安装版升级仍未验证。
+
 `tests/browser/media-resource-profile.mjs` 用生产构建和独立项目验证 100／1000 个真实合成视频：主画布媒体并发、离屏释放、长组合完整时长、裁剪和局部拆分撤销，以及源素材哈希。Chromium Media 事件、canvas 像素和真实进程工作集分别记录；不以模拟解码或像素推算冒充内存实测。两端桌面工作流均执行资源限制断言，细节与性能适用范围见 [大项目媒体资源](media-performance.md)。
 
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
