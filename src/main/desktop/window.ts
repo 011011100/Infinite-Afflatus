@@ -1,13 +1,16 @@
 import { join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
+import appIcon from '../../shared/assets/app-icon.png?asset';
 
 export function createWindow(): BrowserWindow {
+  app.dock?.setIcon(appIcon);
   const window = new BrowserWindow({
     width: 1440,
     height: 960,
     minWidth: 960,
     minHeight: 640,
     title: 'Infinite Afflatus',
+    icon: appIcon,
     backgroundColor: '#f8fafc',
     show: false,
     webPreferences: {

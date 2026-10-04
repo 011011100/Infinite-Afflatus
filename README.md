@@ -10,6 +10,7 @@
 
 - 已建立 React、TypeScript、React Flow、Electron 和 electron-vite 工程。
 - 已接入窗口、受限 preload/IPC、画布平移和缩放。
+- 已接入蓝色无限符号应用图标，供 Electron 窗口、macOS Dock 和浏览器标签页使用；正式安装包图标待打包阶段配置。
 - 已接入 shadcn/ui、Tailwind CSS，以及共用按钮和悬浮提示。
 - 已实现项目首页、新建／打开／改名，每项目独立 SQLite 保存素材与画布视口。
 - 已实现视频导入和单卡片放大播放、统一保存目录、迁移预览／取消／恢复／精确清理。

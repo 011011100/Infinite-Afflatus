@@ -1,6 +1,13 @@
 # Infinite Afflatus 应用图标设计稿
 
-最新修订：[第三版：右侧弧面修整](v3-notes.md)，图稿为 `infinite-afflatus-icon-v3.png`。
+用户已确认采用[第三版：右侧弧面修整](v3-notes.md)，图稿为 `infinite-afflatus-icon-v3.png`。应用源资产位于 `src/shared/assets/app-icon.png`，与第三版 PNG 完全一致。
+
+## 应用接入
+
+- Electron 窗口与 macOS Dock 使用同一个 PNG。
+- 开发与构建后的 renderer 共用该 PNG 作为 favicon，构建时自动复制到输出目录。
+- 历史草稿保留用于对比，不作为运行时资源。
+- 正式安装包尚未配置；`.icns`／`.ico`、小尺寸及透明边缘整理在安装包阶段处理。
 
 ## 设计方向
 
@@ -8,7 +15,7 @@
 
 - 文件：`infinite-afflatus-icon.png`，透明背景 PNG。
 - 使用内置 imagegen 生成，并进行一次边缘修整。
-- 当前为设计原稿，尚未接入应用或制作安装包图标。正式使用前需对透明边缘和小尺寸辨识度做生产检查。
+- 第一版为历史设计原稿，正式采用的第三版接入范围见上文。
 - 不包含文字，以便在不同语言环境下使用。
 
 ## 第二版：增加层次

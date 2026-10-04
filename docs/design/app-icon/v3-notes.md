@@ -4,7 +4,7 @@
 - 用户指出第二版右侧内弯不协调，本次去掉右下额外的月牙形折面和亮边，让右环以连续弧面接回中央缎带。
 - 保留第二版的蓝色、中央交叠、底板与流动纹理；旧版保留以便对比。
 - 使用内置 imagegen 编辑，参考图为 `infinite-afflatus-icon-v2.png`。
-- 当前仍是设计稿，未接入应用。透明外沿仍需正式使用前清理，并检查小尺寸效果。
+- 用户已确认采用，原 PNG 已接入 Electron 窗口、macOS Dock 和 renderer favicon。正式安装包图标尚未制作；透明外沿与小尺寸效果留待安装包阶段整理。
 
 ## 最终编辑提示词
 
@@ -15,4 +15,3 @@ The problem is ONLY the RIGHT loop's inner bend and lower-right ribbon surface (
 
 Do not redesign the entire icon. Do not add or remove decorative background elements. No text, annotations or red circles. Keep transparency outside the tile and retain the same square framing. Final image should look like the same icon with a more harmonious, physically coherent right ribbon bend.
 ```
-

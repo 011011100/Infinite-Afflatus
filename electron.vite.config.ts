@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    publicDir: fileURLToPath(new URL('./src/shared/assets', import.meta.url)),
     resolve: {
       dedupe: ['react', 'react-dom', 'gsap'],
       alias: {
