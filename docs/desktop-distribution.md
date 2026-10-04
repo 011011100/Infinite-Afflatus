@@ -88,4 +88,6 @@ pnpm package:verify release/mac-arm64
 
 提交 `dd0a849ac0407ea81fe9c38ebcf1982ce373128e` 的[名称与裁剪恢复验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190)在两端通过：各 57 项严格界面场景和新增 5 条生产恢复链路，原有包内启动、磁盘故障、导入取消、草稿恢复与暂存清理继续通过。Windows NSIS 首次安装、同版本覆盖、重开及卸载均验证独立名称恢复记录的原字节保留。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190/artifacts/11312759166)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37230345190/artifacts/11313379646)，仍是未签名内部包。相同提交的三系统固定历史升级各 34 项通过；正式签名、历史安装版升级和云端 API 仍未验证。
 
+提交 `2cb8bf1d621bcf7de4fce2fd4f8d8ce02105feac` 的[应用备份验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37234864451)在两端全部通过：各 67 项严格界面场景、新增六进程备份恢复与保留暂存素材找回，以及原有启动、强杀、导入和清理回归。Windows NSIS 安装、同版本覆盖及卸载后，默认应用资料与项目字节保持。已上传 [macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37234864451/artifacts/11314893546)和 [Windows 内部构建物](https://github.com/011011100/Infinite-Afflatus/actions/runs/37234864451/artifacts/11314863823)。相同提交三系统历史升级各 38 项通过。一次 Windows 名称恢复测试的只读观察遇到真实提交写锁，已按应用原有规则添加有限 5 秒等待并保留全部断言，最终完整运行通过；未修改该名称保存业务来规避测试。
+
 正式分发前仍需确定支持平台与最低系统版本，补齐发行者信息、第三方许可审查、媒体工具分发方案、签名／公证、安装升级与卸载回归。云端 API 与账号计费没有因打包而接入；云端实测应单独记录。
