@@ -9,6 +9,23 @@
 - 当前为设计原稿，尚未接入应用或制作安装包图标。正式使用前需对透明边缘和小尺寸辨识度做生产检查。
 - 不包含文字，以便在不同语言环境下使用。
 
+## 第二版：增加层次
+
+用户认可蓝色方向，希望减少素净感。第二版保留无限符号，强化缎带交叠光影，在浅蓝底板加入光晕与柔和的流动轮廓。
+
+- 文件：`infinite-afflatus-icon-v2.png`，由内置 imagegen 基于第一版编辑，保留第一版便于对比。
+- 仍是设计稿，未替换应用图标；透明边缘尚有零散像素，正式使用前需清理，并检查深浅背景和小尺寸效果。
+
+### 第二版提示词
+
+```text
+Edit this icon into a richer, more memorable second design for the desktop creative app Infinite Afflatus. User feedback: the blue palette matches the product and should stay, but the design feels a little too plain. Keep the unmistakable horizontal infinity symbol ♾️ and the centered rounded-square application tile. One icon only.
+
+Art direction: a beautifully sculpted, broad continuous satin-blue ribbon, azure to royal blue #2563EB to deep cobalt. Add visible, elegant thickness and a refined bevel to the ribbon, with clear lit upper surfaces, darker blue side faces, deeper crossover occlusion and subtle blue reflected light. The infinity should feel tangible and dimensional, like an expertly crafted folded strip, while its two holes and continuous silhouette remain extremely legible at small sizes. Soft controlled studio light, not excessive shiny plastic.
+
+Enrich the pale rounded-square tile with a soft icy-blue translucent ceramic appearance and a broad, subtle blue halo behind the infinity mark. A delicate luminous edge around the tile is enough. A few broad flowing tonal contours within the tile can echo the continuous ribbon and the idea of a boundless creative canvas, but must be restrained and barely visible. Keep the main symbol bold, uncluttered and dominant. Increase the visual richness through material and light, not added objects. No extra stars, sparkles, dots, decorative text, play symbols, letters, checkerboard, or rainbow colors. Front-on orthographic composition. Generous consistent transparent margin, one clean rounded-square silhouette with pristine smooth antialiased alpha edges; no flecks or stray pixels outside it. High-resolution square app-icon art, not a mockup, no surrounding scene. Preserve transparent background outside the tile.
+```
+
 ## 初稿提示词
 
 ```text
@@ -26,4 +43,3 @@ Center the large infinity mark on a warm-white / very pale cool-white rounded-sq
 ```text
 Refine this app icon for final delivery. Preserve the beautiful central blue ribbon infinity symbol exactly in spirit, its two open loops, its light cyan to cobalt blue colors, its dimensional crossover, and the pale white rounded-square tile. Make the outer tile boundary perfectly smooth, clean, geometric and continuous. Remove ALL ragged fringes, tiny stray white pixels, floating flecks, wispy white artifacts, and noisy speckle outside the tile. Transparent background beyond the tile. Use a very restrained soft shadow or no external shadow so the silhouette is absolutely pristine. Precisely center the icon on a square canvas with consistent transparent margin on all four sides. Do not add text, new symbols, or alter this into a mockup. One polished high-resolution icon only.
 ```
-
