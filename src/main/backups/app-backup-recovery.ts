@@ -15,6 +15,7 @@ import type {
   AppBackupRestorePreview,
   AppBackupRestoreResult,
 } from '../../shared/app-backup';
+import { RELOCATION_FILE } from '../relocation/root-relocation-types';
 import { verifyAppStore } from '../storage/app-store-guard';
 import { openDatabase, transaction } from '../storage/database';
 import { syncDirectory } from '../storage/files';
@@ -282,6 +283,8 @@ export class AppBackupRecovery {
     if (this.busy) throw new Error('应用恢复正在进行');
     if (!(await info(this.userData))) return;
     await this.location();
+    if (await info(join(this.userData, RELOCATION_FILE)))
+      throw new Error('目录重定位尚未完成，不能同时恢复应用索引');
     const file = join(this.userData, RESTORE_FILE);
     if (!(await info(file))) return;
     this.busy = true;

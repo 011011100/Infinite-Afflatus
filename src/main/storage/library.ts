@@ -17,6 +17,7 @@ import { MigrationService } from '../migration/migration-service';
 import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { ProjectHealthService } from '../recovery/project-health-service';
+import { RootRelocationService } from '../relocation/root-relocation-service';
 import { SaveQueue } from '../saving/save-queue';
 import { savedResultVerifier } from '../saving/saved-result-verifier';
 import {
@@ -175,6 +176,7 @@ export class Library {
     try {
       await mkdir(userData, { recursive: true });
       const canonicalUserData = await canonicalDirectory(userData);
+      await new RootRelocationService(canonicalUserData).resumePending();
       await new AppBackupRecovery(
         canonicalUserData,
         appVersion,

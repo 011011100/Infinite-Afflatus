@@ -29,8 +29,11 @@ const time = (value: string) => new Date(value).toLocaleString('zh-CN');
 export async function restoreAppBackupFromDialogs(
   recovery: BackupRecovery,
   dialogs: NativeDialogs,
+  signal?: AbortSignal,
 ): Promise<boolean> {
+  if (signal?.aborted) return false;
   const list = await recovery.list();
+  if (signal?.aborted) return false;
   const latest = [...list.backups].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt),
   )[0];
@@ -64,7 +67,7 @@ export async function restoreAppBackupFromDialogs(
     cancelId: 2,
     noLink: true,
   });
-  if (selection.response === 2) return false;
+  if (signal?.aborted || selection.response === 2) return false;
   let id = latest.id;
   if (selection.response === 1) {
     const picked = await dialogs.showOpenDialog({
@@ -73,7 +76,7 @@ export async function restoreAppBackupFromDialogs(
       buttonLabel: '检查此备份',
       properties: ['openDirectory'],
     });
-    if (picked.canceled) return false;
+    if (signal?.aborted || picked.canceled) return false;
     if (picked.filePaths.length !== 1 || !picked.filePaths[0])
       throw new Error('请选择一个本机备份文件夹');
     const selectedPath = await realpath(picked.filePaths[0]);
@@ -87,7 +90,9 @@ export async function restoreAppBackupFromDialogs(
       throw new Error('此文件夹不属于当前应用的本机备份，未替换任何资料');
     id = selected.id;
   } else if (selection.response !== 0) return false;
+  if (signal?.aborted) return false;
   const preview = await recovery.preview(id);
+  if (signal?.aborted) return false;
   const confirmation = await dialogs.showMessageBox({
     type: 'warning',
     title: '确认恢复应用索引与设置',
@@ -104,8 +109,9 @@ export async function restoreAppBackupFromDialogs(
     cancelId: 1,
     noLink: true,
   });
-  if (confirmation.response !== 0) return false;
+  if (signal?.aborted || confirmation.response !== 0) return false;
   const result = await recovery.restore(preview.token);
+  if (signal?.aborted) return false;
   await dialogs.showMessageBox({
     type: 'info',
     title: '应用索引与设置已恢复',

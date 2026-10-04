@@ -176,3 +176,33 @@ test('startup loop retries only after successful explicit restore; cancelled or 
   assert.equal(restores, 3);
   assert.deepEqual(messages, [null, null, '备份恢复未完成：原文件已变化']);
 });
+
+test('an exit during backup confirmation prevents its late response from restoring or reopening storage', async () => {
+  const f = fixture([0]);
+  const controller = new AbortController();
+  let release!: () => void;
+  let entered!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const original = f.dialogs.showMessageBox;
+  f.dialogs.showMessageBox = async (options) => {
+    if (options.title !== '确认恢复应用索引与设置') return original(options);
+    entered();
+    await pending;
+    return { response: 0, checkboxChecked: false };
+  };
+  const restoring = restoreAppBackupFromDialogs(
+    f.service,
+    f.dialogs,
+    controller.signal,
+  );
+  await waiting;
+  controller.abort();
+  release();
+  assert.equal(await restoring, false);
+  assert.deepEqual(f.events, ['preview:one']);
+});

@@ -58,6 +58,8 @@ jobs:
         run: node --import tsx tests/browser/packaged-delivery.mjs
       - name: Verify production startup failures preserve the original library
         run: node tests/browser/startup-recovery.cjs
+      - name: Verify explicit original-directory relocation and cancelled startup preserve data
+        run: node tests/browser/root-relocation.mjs
       - name: Verify abrupt process termination, conflict protection and explicit shot recovery
         run: node --import tsx tests/browser/draft-recovery.mjs
       - name: Verify abrupt termination preserves project names and completed trim gestures

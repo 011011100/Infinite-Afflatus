@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MigrationJournal } from '../migration/manifest';
+import { RELOCATION_FILE } from '../relocation/root-relocation-types';
 import { verifyAppStore } from '../storage/app-store-guard';
 import { openDatabase } from '../storage/database';
 import { GENERATION_KEY, generationToken, readAnchor } from './backup-anchor';
@@ -9,6 +10,8 @@ import { ANCHOR_FILE, info } from './backup-files';
 
 /** Reject stale routing before AppStore can apply writable PRAGMAs to an old database. */
 export async function preflightBackupAnchor(userData: string, file: string) {
+  if (await info(join(userData, RELOCATION_FILE)))
+    throw new Error('目录重定位尚未完成，未打开可写数据库');
   if (!(await info(join(userData, ANCHOR_FILE)))) return;
   const anchor = await readAnchor(userData);
   const db = openDatabase(file, true);

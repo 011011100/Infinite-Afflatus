@@ -2,6 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isAbsolute, join } from 'node:path';
 import type { MigrationPreview } from '../../shared/models';
 import type { MigrationJournal } from '../migration/manifest';
+import {
+  RELOCATION_DIRECTORY,
+  RELOCATION_FILE,
+} from '../relocation/root-relocation-types';
 import type { AppStore } from '../storage/app-store';
 import { fingerprint, safeFile, sameContent } from '../storage/files';
 import { verifyCutover } from './backup-cutover';
@@ -103,6 +107,8 @@ export async function readAnchor(userData: string): Promise<BackupAnchor> {
   return anchor;
 }
 export async function stableAnchor(userData: string) {
+  if (await info(join(userData, RELOCATION_FILE)))
+    throw new Error('目录重定位尚未完成，不能恢复历史应用索引');
   const anchor = await readAnchor(userData);
   if (anchor.migration || anchor.initializing)
     throw new Error('目录迁移或恢复标记尚未稳定，不能恢复历史应用索引');
@@ -134,11 +140,19 @@ export class BackupAnchorStore {
     return writeJson(join(this.userData, ANCHOR_FILE), value, previous);
   }
   async initialize() {
+    if (await info(join(this.userData, RELOCATION_FILE)))
+      throw new Error('目录重定位尚未完成，未重放应用记录');
     const path = join(this.userData, ANCHOR_FILE);
     if (!(await info(path))) {
       if (this.store.hasSetting(GENERATION_KEY))
         throw new Error('独立应用恢复标记缺失，未重新认领旧数据库');
-      for (const name of [BACKUP_DIRECTORY, RETAINED_DIRECTORY, RESTORE_FILE])
+      for (const name of [
+        BACKUP_DIRECTORY,
+        RETAINED_DIRECTORY,
+        RESTORE_FILE,
+        RELOCATION_FILE,
+        RELOCATION_DIRECTORY,
+      ])
         if (await info(join(this.userData, name)))
           throw new Error('存在应用备份资料但独立恢复标记缺失，未重新认领');
       const legacy = this.store.get<MigrationJournal>('migration');
