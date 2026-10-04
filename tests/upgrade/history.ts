@@ -20,7 +20,7 @@ const exec = promisify(execFile);
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 export interface Baseline {
   name: string;
-  scenario: 'legacy-draft' | 'material-workspace';
+  scenario: 'legacy-draft' | 'material-workspace' | 'image-workspace';
   commit: string;
   description: string;
 }

@@ -9,7 +9,9 @@ import { pathToFileURL } from 'node:url';
 
 const [source, directory, mode] = process.argv.slice(2);
 assert.ok(source && directory);
-assert.ok(['legacy-draft', 'material-workspace'].includes(mode));
+assert.ok(
+  ['legacy-draft', 'material-workspace', 'image-workspace'].includes(mode),
+);
 const { Library } = await import(
   pathToFileURL(join(source, 'src/main/storage/library.ts')).href
 );
@@ -95,7 +97,7 @@ try {
     parameters,
   });
   let workspace = null;
-  if (mode === 'material-workspace') {
+  if (mode === 'material-workspace' || mode === 'image-workspace') {
     const shot = {
       id: 'shot-one',
       name: '已生成镜头',
@@ -164,6 +166,73 @@ try {
         },
       ],
     };
+    if (mode === 'image-workspace') {
+      // Add to the established material scenario without changing its video groups,
+      // source references, labels, node order, or missing legacy kind fields.
+      shot.groups.push(
+        {
+          id: 'image-text-group',
+          kind: 'image',
+          position: { x: 1100, y: 0 },
+          width: 700,
+          height: 360,
+          parameters: {
+            model: 'seedream-5.0-lite',
+            ratio: '3:2',
+            resolution: '3K',
+          },
+        },
+        {
+          id: 'image-reference-group',
+          kind: 'image',
+          position: { x: 1100, y: 500 },
+          width: 900,
+          height: 440,
+          parameters: {
+            model: 'seedream-4.5',
+            ratio: '9:16',
+            resolution: '4K',
+          },
+        },
+      );
+      shot.nodes.push(
+        {
+          id: 'image-text-prompt',
+          type: 'text',
+          text: '文生图：雨后的街道\n保留画面描述 🎨',
+          name: '图片提示词',
+          width: 400,
+          height: 280,
+          position: { x: 20, y: 60 },
+          groupId: 'image-text-group',
+        },
+        {
+          id: 'image-reference',
+          type: 'asset',
+          assetId: references[0],
+          name: '图片组的独立参考名',
+          width: 320,
+          height: 320,
+          position: { x: 20, y: 60 },
+          groupId: 'image-reference-group',
+        },
+        {
+          id: 'image-reference-prompt',
+          type: 'text',
+          text: '图生图：保持参考构图，改为黄昏。',
+          position: { x: 360, y: 60 },
+          groupId: 'image-reference-group',
+        },
+        {
+          id: 'image-reference-text-file',
+          type: 'asset',
+          assetId: references[2],
+          textOverride: '图片组文本覆盖，与视频组和源文件独立',
+          position: { x: 640, y: 60 },
+          groupId: 'image-reference-group',
+        },
+      );
+    }
     workspace = await library.generation.saveWorkspace(project.id, {
       version: 1,
       revision: 0,
@@ -179,12 +248,18 @@ try {
         },
       ],
     });
+    if (mode === 'image-workspace') {
+      // Fail if the pinned writer already loses image fields; a broken historical
+      // round trip must never become the expected manifest for the current reader.
+      assert.deepEqual(workspace.shots[0], shot);
+    }
   }
   const settings = library.interactions.get();
   settings.longPressSplit = false;
   settings.shortcuts.play = { key: 'p', mod: false, shift: false, alt: false };
   settings.shortcuts.redo = null;
-  if (mode === 'material-workspace') settings.shortcuts.locateLabels = null;
+  if (mode === 'material-workspace' || mode === 'image-workspace')
+    settings.shortcuts.locateLabels = null;
   library.interactions.save(settings);
   await mkdir(join(root, '用户自己放的文件'));
   await writeFile(

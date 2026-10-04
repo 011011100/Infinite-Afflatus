@@ -12,6 +12,7 @@ export function assertWorkspace(
 ) {
   if (expected.workspace) {
     assert.deepEqual(actual, expected.workspace);
+    if (expected.mode === 'image-workspace') assertImageGroups(actual);
     return;
   }
   // Explicit expected legacy conversion, independent of the current converter.
@@ -31,6 +32,73 @@ export function assertWorkspace(
   assert.ok(group);
   assert.deepEqual(group.parameters, expected.draft.parameters);
   assert.ok(shot.nodes.every((node) => node.groupId === group.id));
+}
+
+function assertImageGroups(workspace: GenerationWorkspace) {
+  const shot = workspace.shots.find((entry) => entry.id === 'shot-one');
+  assert.ok(shot);
+  assert.equal(shot.groups.length, 4);
+  assert.deepEqual(
+    shot.groups.map((group) => ({
+      id: group.id,
+      kind: group.kind,
+      parameters: group.parameters,
+    })),
+    [
+      {
+        id: 'group-one',
+        kind: undefined,
+        parameters: {
+          model: 'seedance-2.0',
+          ratio: '9:16',
+          resolution: '1080p',
+          duration: 12,
+          generateAudio: false,
+        },
+      },
+      {
+        id: 'group-two',
+        kind: undefined,
+        parameters: {
+          model: 'seedance-2.0-fast',
+          ratio: '16:9',
+          resolution: '480p',
+          duration: 4,
+          generateAudio: true,
+        },
+      },
+      {
+        id: 'image-text-group',
+        kind: 'image',
+        parameters: {
+          model: 'seedream-5.0-lite',
+          ratio: '3:2',
+          resolution: '3K',
+        },
+      },
+      {
+        id: 'image-reference-group',
+        kind: 'image',
+        parameters: {
+          model: 'seedream-4.5',
+          ratio: '9:16',
+          resolution: '4K',
+        },
+      },
+    ],
+  );
+  assert.deepEqual(
+    shot.nodes
+      .filter((node) => node.groupId === 'image-text-group')
+      .map((node) => node.id),
+    ['image-text-prompt'],
+  );
+  assert.deepEqual(
+    shot.nodes
+      .filter((node) => node.groupId === 'image-reference-group')
+      .map((node) => node.id),
+    ['image-reference', 'image-reference-prompt', 'image-reference-text-file'],
+  );
 }
 
 export function withoutTimestamp(snapshot: ProjectSnapshot) {

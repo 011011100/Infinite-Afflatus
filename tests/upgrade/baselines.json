@@ -10,5 +10,11 @@
     "scenario": "material-workspace",
     "commit": "e0c58b3033e0bd4973d2da5797cb7247a8b962bc",
     "description": "Shot workspaces, independent groups, card sizes, labels and shortcuts"
+  },
+  {
+    "name": "image-workspace",
+    "scenario": "image-workspace",
+    "commit": "2b1064c82a5a5fe898fe3d9241a26cd80fbc5482",
+    "description": "Independent image and video groups, Seedream parameters, text and shared references"
   }
 ]
