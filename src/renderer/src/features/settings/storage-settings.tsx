@@ -14,15 +14,18 @@ const phaseLabels = {
 export function StorageSettings({
   library,
   run,
+  beforeMigration,
 }: {
   library: LibraryState;
   run: (operation: () => Promise<unknown>) => Promise<void>;
+  beforeMigration?: (() => Promise<boolean>) | undefined;
 }) {
   const [preview, setPreview] = useState<MigrationPreview | null>(null);
   const [choosing, setChoosing] = useState(false);
   const migration = library.migration;
   const choose = () =>
     run(async () => {
+      if (beforeMigration && !(await beforeMigration())) return;
       setChoosing(true);
       try {
         setPreview(await window.desktop.chooseDirectory());
@@ -79,6 +82,7 @@ export function StorageSettings({
               disabled={library.writeBlocked}
               onClick={() => {
                 void run(async () => {
+                  if (beforeMigration && !(await beforeMigration())) return;
                   await window.desktop.startMigration(preview.token);
                   setPreview(null);
                 });

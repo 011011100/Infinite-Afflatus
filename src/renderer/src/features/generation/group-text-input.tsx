@@ -56,7 +56,8 @@ export function GroupTextInput({
         ref={input}
         value={value ?? ''}
         placeholder={value === null ? '读取文本…' : placeholder}
-        disabled={disabled || value === null}
+        disabled={value === null}
+        readOnly={disabled}
         maxLength={10000}
         className="group-text-input"
         onChange={(event) => onChange(event.target.value)}

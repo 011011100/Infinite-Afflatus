@@ -1,40 +1,54 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LibraryState, ProjectSnapshot } from '../../../../shared/models';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { LibrarySession, projectErrorMessage } from './library-session';
+import { projectRecoveryGuards } from './project-recovery-guards';
 
 export function useLibrary() {
-  const [library, setLibrary] = useState<LibraryState | null>(null);
-  const [project, setProject] = useState<ProjectSnapshot | null>(null);
+  const [session] = useState(
+    () =>
+      new LibrarySession(
+        {
+          getLibrary: () => window.desktop.getLibrary(),
+          openProject: (id) => window.desktop.openProject(id),
+        },
+        (id, snapshot) => projectRecoveryGuards.verify(id, snapshot),
+      ),
+  );
+  const { library, project, projectUnavailable } = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+  );
   const [error, setError] = useState<string | null>(null);
   const [operations, setOperations] = useState(0);
+  const activeOperations = useRef(0);
   const [importingPackage, setImportingPackage] = useState(false);
-  const activeId = useRef<string | null>(null);
-  const revision = useRef(0);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const report = useCallback((reason: unknown) => {
-    setError(
-      reason instanceof Error
-        ? reason.message.replace(
-            /^Error invoking remote method '[^']+': (Error: )?/,
-            '',
-          )
-        : String(reason),
-    );
-  }, []);
+  const report = useCallback(
+    (reason: unknown) => {
+      setError(projectErrorMessage(reason));
+      if (checkTimer.current) clearTimeout(checkTimer.current);
+      // A rejected write emits no library change. Diagnose once without creating a report/refresh loop.
+      checkTimer.current = setTimeout(() => {
+        void session.refreshProject();
+      }, 50);
+    },
+    [session],
+  );
 
   const refresh = useCallback(async () => {
-    const current = ++revision.current;
-    const state = await window.desktop.getLibrary();
-    const id = activeId.current;
-    const snapshot = id ? await window.desktop.openProject(id) : null;
-    if (current === revision.current && id === activeId.current) {
-      setLibrary(state);
-      setProject(snapshot);
-    }
-  }, []);
+    await session.refresh();
+  }, [session]);
 
   const run = useCallback(
     async (operation: () => Promise<unknown>) => {
       setError(null);
+      activeOperations.current++;
       setOperations((count) => count + 1);
       try {
         await operation();
@@ -42,6 +56,7 @@ export function useLibrary() {
       } catch (reason) {
         report(reason);
       } finally {
+        activeOperations.current--;
         setOperations((count) => count - 1);
       }
     },
@@ -56,47 +71,54 @@ export function useLibrary() {
     void refresh().catch(report);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = window.desktop.onLibraryChanged(() => {
+      session.noteLibraryChange();
       clearTimeout(timer);
       timer = setTimeout(() => {
         void refresh().catch(report);
       }, 50);
     });
+    const focus = () => {
+      // Native import dialogs also return focus while their expected library mutation is in flight.
+      void session.refresh(activeOperations.current === 0).catch(report);
+    };
+    const visible = () => {
+      if (!document.hidden) focus();
+    };
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visible);
     return () => {
       stop();
       clearTimeout(timer);
-      revision.current += 1;
+      if (checkTimer.current) clearTimeout(checkTimer.current);
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', visible);
+      session.dispose();
     };
-  }, [refresh, report]);
+  }, [refresh, report, session]);
 
-  const open = (id: string) =>
-    run(async () => {
-      const snapshot = await window.desktop.openProject(id);
-      activeId.current = id;
-      setProject(snapshot);
-    });
+  const open = (id: string) => run(() => session.open(id));
   const create = (name: string) =>
     run(async () => {
       const snapshot = await window.desktop.createProject(name);
-      activeId.current = snapshot.project.id;
-      setProject(snapshot);
+      session.activate(snapshot);
     });
   const importPackage = () => {
     setImportingPackage(true);
     return run(async () => {
       const snapshot = await window.desktop.importProjectPackage();
       if (!snapshot) return;
-      activeId.current = snapshot.project.id;
-      setProject(snapshot);
+      session.activate(snapshot);
     }).finally(() => setImportingPackage(false));
   };
   const home = () => {
-    activeId.current = null;
-    revision.current += 1;
-    setProject(null);
+    session.home();
   };
   return {
     library,
     project,
+    projectUnavailable,
+    retryProject: () => session.refreshProject(true),
+    reportProjectFailure: (reason: unknown) => session.failProject(reason),
     error,
     busy: operations > 0,
     run,

@@ -1,5 +1,6 @@
 import { Pencil } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { usePendingSave } from '@/features/lifecycle/use-pending-save';
 import { cn } from '@/lib/utils';
 import { Input } from './input';
 
@@ -27,9 +28,14 @@ export function EditableName({
   }, [editing]);
   const commit = () => {
     const name = draft?.trim();
-    if (name && name !== value) onChange(name);
+    if (name && name !== value) {
+      if (disabled) return false;
+      onChange(name);
+    }
     setDraft(null);
+    return true;
   };
+  usePendingSave(`名称输入:${label}`, () => Promise.resolve(commit()), -20);
   if (draft !== null)
     return (
       <Input
@@ -41,7 +47,7 @@ export function EditableName({
         )}
         value={draft}
         maxLength={100}
-        disabled={disabled}
+        readOnly={disabled}
         onFocus={(event) => event.target.select()}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}

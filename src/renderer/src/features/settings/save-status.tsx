@@ -5,10 +5,12 @@ export function SaveStatus({
   jobs,
   migrating,
   run,
+  blockedProjectId,
 }: {
   jobs: SaveJob[];
   migrating: boolean;
   run: (operation: () => Promise<unknown>) => Promise<void>;
+  blockedProjectId?: string | undefined;
 }) {
   const pending = jobs.filter((job) => job.status !== 'saved');
   if (!pending.length && !migrating) return null;
@@ -33,6 +35,7 @@ export function SaveStatus({
             <Button
               variant="ghost"
               size="sm"
+              disabled={job.projectId === blockedProjectId}
               onClick={() => {
                 void run(() => window.desktop.retrySave(job.id));
               }}

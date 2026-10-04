@@ -1,11 +1,23 @@
 import { DatabaseSync } from 'node:sqlite';
 
-export function openDatabase(path: string, readOnly = false): DatabaseSync {
+export function openDatabase(
+  path: string,
+  readOnly = false,
+  beforeWrite?: (db: DatabaseSync) => void,
+): DatabaseSync {
   const db = new DatabaseSync(path, { readOnly, timeout: 5_000 });
-  db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
-  if (!readOnly)
-    db.exec('PRAGMA journal_mode = DELETE; PRAGMA synchronous = FULL;');
-  return db;
+  try {
+    db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
+    if (!readOnly) {
+      // Validate the actual writable connection before changing the file's journal mode.
+      beforeWrite?.(db);
+      db.exec('PRAGMA journal_mode = DELETE; PRAGMA synchronous = FULL;');
+    }
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 export function transaction<T>(db: DatabaseSync, operation: () => T): T {

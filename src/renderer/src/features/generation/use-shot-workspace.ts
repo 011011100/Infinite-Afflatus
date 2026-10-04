@@ -12,16 +12,24 @@ import {
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
 import { usePendingSave } from '../lifecycle/use-pending-save';
+import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 import { message } from './errors';
 
 /** One project-scoped save stream, including edits made while an earlier write is pending. */
-export function useShotWorkspace(projectId: string, blocked: boolean) {
+export function useShotWorkspace(
+  projectId: string,
+  blocked: boolean,
+  report?: (reason: unknown) => void,
+) {
   const [workspace, setWorkspace] = useState<GenerationWorkspace | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedEdit, setSavedEdit] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const current = useRef<GenerationWorkspace | null>(null);
+  const confirmed = useRef<GenerationWorkspace | null>(null);
+  const reportError = useRef(report);
+  reportError.current = report;
   const edit = useRef(0);
   const saved = useRef(0);
   const pending = useRef<Promise<boolean> | null>(null);
@@ -43,6 +51,7 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
             projectId,
             current.current,
           );
+          confirmed.current = result;
           current.current = { ...current.current, revision: result.revision };
           saved.current = version;
           setSavedEdit(version);
@@ -51,6 +60,7 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
         return true;
       } catch (reason) {
         setError(message(reason));
+        reportError.current?.(reason);
         return false;
       } finally {
         pending.current = null;
@@ -60,6 +70,21 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
     return pending.current;
   }, [projectId]);
   usePendingSave(`镜头草稿:${projectId}`, flush);
+  useProjectRecoveryGuard(projectId, async () => {
+    await pending.current;
+    const remote = await window.desktop.getGenerationWorkspace(projectId);
+    if (
+      confirmed.current &&
+      JSON.stringify(remote) !== JSON.stringify(confirmed.current)
+    )
+      return '磁盘上的镜头草稿与本页最后确认的版本不同。当前输入和撤销记录仍保留，请先恢复原项目文件；未自动覆盖或合并。';
+    if (!current.current) {
+      current.current = remote;
+      confirmed.current = remote;
+      setWorkspace(remote);
+    }
+    return null;
+  });
   useEffect(() => {
     let active = true;
     void window.desktop
@@ -67,10 +92,16 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
       .then((value) => {
         if (active) {
           current.current = value;
+          confirmed.current = value;
           setWorkspace(value);
         }
       })
-      .catch((reason) => active && setError(message(reason)));
+      .catch((reason) => {
+        if (active) {
+          setError(message(reason));
+          reportError.current?.(reason);
+        }
+      });
     return () => {
       active = false;
       void flush();
@@ -181,11 +212,13 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
       try {
         const loaded = await window.desktop.getGenerationWorkspace(projectId);
         current.current = loaded;
+        confirmed.current = loaded;
         setWorkspace(loaded);
         setError(null);
         return true;
       } catch (reason) {
         setError(message(reason));
+        reportError.current?.(reason);
         return false;
       }
     },

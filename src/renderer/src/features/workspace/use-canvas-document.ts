@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/canvas/operations';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { usePendingSave } from '../lifecycle/use-pending-save';
+import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 
 /** One short transaction at a time; failed writes restore the authoritative project. */
 export function useCanvasDocument(
@@ -15,6 +16,9 @@ export function useCanvasDocument(
   prepareTransition: (patch: CanvasPatch) => (saved: boolean) => void,
 ) {
   const [snapshot, setSnapshot] = useState(initial);
+  const confirmed = useRef(initial);
+  const locked = useRef(blocked);
+  locked.current = blocked;
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<{
     past: CanvasPatch[];
@@ -26,19 +30,32 @@ export function useCanvasDocument(
     `主画布:${initial.project.id}`,
     () => pending.current ?? Promise.resolve(true),
   );
+  useProjectRecoveryGuard(initial.project.id, async (remote) => {
+    await pending.current;
+    if (
+      JSON.stringify(remote.canvas) !==
+        JSON.stringify(confirmed.current.canvas) ||
+      JSON.stringify(remote.assets) !== JSON.stringify(confirmed.current.assets)
+    )
+      return '磁盘上的画布或素材记录与本页最后确认的版本不同。已保留当前页面和撤销记录，请先恢复原项目文件；未自动覆盖或合并。';
+    return null;
+  });
   useEffect(() => {
     if (saving || writing.current) return;
-    setSnapshot((current) =>
-      initial.canvas.revision >= current.canvas.revision &&
-      initial.assets.length >= current.assets.length
-        ? initial
-        : current,
-    );
+    setSnapshot((current) => {
+      const next =
+        initial.canvas.revision >= current.canvas.revision &&
+        initial.assets.length >= current.assets.length
+          ? initial
+          : current;
+      confirmed.current = next;
+      return next;
+    });
   }, [initial, saving]);
 
   const commit = useCallback(
     async (patch: CanvasPatch, action: 'edit' | 'undo' | 'redo' = 'edit') => {
-      if (writing.current || blocked) return false;
+      if (writing.current || locked.current) return false;
       writing.current = true;
       let resolveSave!: (saved: boolean) => void;
       pending.current = new Promise<boolean>((resolve) => {
@@ -52,6 +69,7 @@ export function useCanvasDocument(
           initial.project.id,
           patch,
         );
+        confirmed.current = saved;
         setSnapshot(saved);
         finishTransition(true);
         setHistory((current) => {
@@ -72,13 +90,8 @@ export function useCanvasDocument(
       } catch (error) {
         finishTransition(false);
         report(error);
-        // An import/migration/external writer may have changed the project. Never overwrite it.
-        try {
-          setSnapshot(await window.desktop.openProject(initial.project.id));
-        } catch (refreshError) {
-          report(refreshError);
-        }
-        setHistory({ past: [], future: [] });
+        // Recovery must compare against this confirmed baseline. A successful read
+        // after a failed acknowledgement is not permission to adopt another version.
         return false;
       } finally {
         writing.current = false;
@@ -87,7 +100,7 @@ export function useCanvasDocument(
         resolveSave(successful);
       }
     },
-    [initial.project.id, blocked, report, prepareTransition],
+    [initial.project.id, report, prepareTransition],
   );
 
   const undo = useCallback(() => {

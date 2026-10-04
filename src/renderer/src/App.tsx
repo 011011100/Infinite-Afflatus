@@ -6,10 +6,12 @@ import { Modal } from '@/components/ui/modal';
 import { useContentMotion } from '@/components/ui/use-surface-motion';
 import { ExportTaskButton } from '@/features/export/export-dialog';
 import { SaveLifecycleStatus } from '@/features/lifecycle/save-lifecycle-status';
+import { usePendingSave } from '@/features/lifecycle/use-pending-save';
 import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
 import { ProjectHealthButton } from '@/features/projects/project-health';
 import { ProjectHome } from '@/features/projects/project-home';
 import { ProjectPackageActions } from '@/features/projects/project-package-actions';
+import { ProjectUnavailableNotice } from '@/features/projects/project-unavailable-notice';
 import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
@@ -22,8 +24,29 @@ export function App() {
   const state = useLibrary();
   const lifecycle = useSaveLifecycle();
   const [settings, setSettings] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<'interactions' | 'storage'>(
+    'interactions',
+  );
   const [newName, setNewName] = useState<string | null>(null);
   const { library, project, busy, run } = state;
+  usePendingSave(
+    '项目名称输入',
+    async () => newName === null || newName.trim() === project?.project.name,
+    -20,
+  );
+  const projectBlocked =
+    library?.writeBlocked === true || !!state.projectUnavailable;
+  const unavailableNotice = state.projectUnavailable ? (
+    <ProjectUnavailableNotice
+      state={state.projectUnavailable}
+      retry={state.retryProject}
+      migrating={library?.writeBlocked === true}
+      openSettings={() => {
+        setSettingsPage('storage');
+        setSettings(true);
+      }}
+    />
+  ) : undefined;
   const content = useRef<HTMLDivElement>(null);
   useContentMotion(
     content,
@@ -49,7 +72,7 @@ export function App() {
             </Button>
             <button
               type="button"
-              disabled={library?.writeBlocked}
+              disabled={projectBlocked}
               className="max-w-96 truncate rounded px-1 py-2 text-sm font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
               title="修改项目名称"
               onClick={() => setNewName(project.project.name)}
@@ -69,9 +92,7 @@ export function App() {
             <ProjectHealthButton
               key={`health:${project.project.id}`}
               projectId={project.project.id}
-              disabled={
-                busy || library?.writeBlocked === true || lifecycle.saving
-              }
+              disabled={busy || projectBlocked || lifecycle.saving}
             />
           )}
           {project && (
@@ -79,14 +100,14 @@ export function App() {
               key={project.project.id}
               projectId={project.project.id}
               projectName={project.project.name}
-              disabled={busy || library?.writeBlocked === true}
+              disabled={busy || projectBlocked}
               report={state.report}
             />
           )}
           {project && (
             <Button
               variant="outline"
-              disabled={busy}
+              disabled={busy || projectBlocked}
               onClick={() => {
                 void run(() => window.desktop.importVideos(project.project.id));
               }}
@@ -100,7 +121,10 @@ export function App() {
             size="icon"
             aria-label="设置"
             disabled={!library}
-            onClick={() => setSettings(true)}
+            onClick={() => {
+              setSettingsPage('interactions');
+              setSettings(true);
+            }}
           >
             <Settings2 />
           </Button>
@@ -127,8 +151,10 @@ export function App() {
           jobs={library.jobs}
           migrating={library.writeBlocked}
           run={run}
+          blockedProjectId={state.projectUnavailable?.projectId}
         />
       )}
+      {unavailableNotice}
       <div ref={content} className="flex min-h-0 flex-1 flex-col">
         {!library ? (
           <main className="grid flex-1 place-items-center text-sm text-muted-foreground">
@@ -141,10 +167,12 @@ export function App() {
           >
             <ProjectCanvas
               snapshot={project}
-              blocked={library.writeBlocked}
+              blocked={projectBlocked}
+              projectUnavailable={!!state.projectUnavailable}
+              unavailableNotice={unavailableNotice}
               interactions={library.interactions}
               inactive={settings || newName !== null || lifecycle.saving}
-              report={state.report}
+              report={state.reportProjectFailure}
             />
           </CanvasErrorBoundary>
         ) : (
@@ -164,9 +192,9 @@ export function App() {
         <AppSettings
           library={library}
           error={state.error}
-          run={async (operation) => {
-            if (await lifecycle.prepare()) await run(operation);
-          }}
+          run={run}
+          beforeMigration={() => lifecycle.prepare()}
+          initialPage={settingsPage}
           onClose={() => setSettings(false)}
         />
       )}
@@ -181,6 +209,7 @@ export function App() {
               onSubmit={(event) => {
                 event.preventDefault();
                 void run(async () => {
+                  if (projectBlocked) return;
                   await window.desktop.renameProject(
                     project.project.id,
                     newName,
@@ -192,6 +221,7 @@ export function App() {
               <Input
                 aria-label="项目名称"
                 value={newName}
+                readOnly={projectBlocked}
                 maxLength={100}
                 onChange={(event) => setNewName(event.target.value)}
               />
@@ -201,7 +231,7 @@ export function App() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={busy || !newName.trim() || library?.writeBlocked}
+                  disabled={busy || !newName.trim() || projectBlocked}
                 >
                   保存
                 </Button>

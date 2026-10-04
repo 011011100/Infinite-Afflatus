@@ -22,7 +22,10 @@ export class GenerationService {
   ) {}
 
   async readWorkspace(projectId: string) {
-    return readWorkspace(await this.projects.databasePath(projectId));
+    return readWorkspace(
+      await this.projects.databasePath(projectId),
+      this.projects.summary(projectId),
+    );
   }
 
   async saveWorkspace(projectId: string, input: unknown) {
@@ -68,6 +71,7 @@ export class GenerationService {
       const result = writeWorkspace(
         await this.projects.databasePath(projectId),
         workspace,
+        this.projects.summary(projectId),
       );
       this.store.putProject(result.project);
       return result.workspace;
@@ -76,7 +80,10 @@ export class GenerationService {
 
   async read(projectId: string) {
     return validateGenerationDraft(
-      readGenerationDraft(await this.projects.databasePath(projectId)),
+      readGenerationDraft(
+        await this.projects.databasePath(projectId),
+        this.projects.summary(projectId),
+      ),
     );
   }
 
@@ -99,6 +106,7 @@ export class GenerationService {
       const result = writeGenerationDraft(
         await this.projects.databasePath(projectId),
         draft,
+        this.projects.summary(projectId),
       );
       this.store.putProject(result.project);
       return result.draft;

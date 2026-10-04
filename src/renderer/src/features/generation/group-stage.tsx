@@ -1,7 +1,8 @@
 import { ArrowLeft, Check, LoaderCircle } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { HistoryActions } from '@/components/canvas/history-actions';
 import { Button } from '@/components/ui/button';
+import { flushPendingChanges } from '@/features/lifecycle/pending-saves';
 import { isMac } from '@/lib/platform';
 import {
   appendGroupText,
@@ -45,6 +46,7 @@ export function GroupStage({
   detach,
   onClose,
   history,
+  unavailableNotice,
 }: {
   shot: ShotWorkspace;
   group: GenerationGroup;
@@ -58,9 +60,16 @@ export function GroupStage({
   history?: ShotHistoryActions | undefined;
   detach: (id: string, at?: { x: number; y: number }) => void;
   onClose: () => void;
+  unavailableNotice?: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const requestClose = useGroupStageMotion(dialog, origin, onClose);
+  const closeMotion = useGroupStageMotion(dialog, origin, onClose);
+  const requestClose = () => {
+    // Local name inputs must join the retained draft before their editor unmounts.
+    void flushPendingChanges().then((saved) => {
+      if (saved) closeMotion();
+    });
+  };
   const placeholderId = useRef(crypto.randomUUID());
   const checkedPlaceholder = useRef(false);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -154,6 +163,11 @@ export function GroupStage({
                 : '已保存'}
         </span>
       </header>
+      {unavailableNotice && (
+        <div className="absolute inset-x-8 top-20 z-20 rounded-lg overflow-hidden shadow-sm">
+          {unavailableNotice}
+        </div>
+      )}
       {error && (
         <p role="alert" className="group-stage-error">
           {error}

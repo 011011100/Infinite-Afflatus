@@ -55,6 +55,7 @@ export function SequenceEditor(props: EditorProps) {
               返回画布
             </Button>
           </header>
+          {props.unavailableNotice}
           <div className="flex flex-1 items-center justify-center gap-3 text-sm text-muted-foreground">
             {error ? (
               <>
@@ -147,7 +148,9 @@ function EditorContent(
           )}
           <span role="status" className="mr-3 text-xs text-muted-foreground">
             {blocked
-              ? '迁移中，暂不可编辑'
+              ? props.projectUnavailable
+                ? '项目不可用，暂停编辑与保存'
+                : '迁移中，暂不可编辑'
               : pending
                 ? '正在保存…'
                 : gesturing
@@ -190,6 +193,7 @@ function EditorContent(
           />
         </div>
       </header>
+      {props.unavailableNotice}
       {(saveError || playback.error) && (
         <div
           role="alert"

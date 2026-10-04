@@ -60,10 +60,12 @@ export async function buildManifest(
         relativePath: asset.relativePath,
         expected: asset,
       })),
-      ...readProxies(await projects.databasePath(id)).map((proxy) => ({
-        relativePath: proxy.relativePath,
-        expected: proxy,
-      })),
+      ...readProxies(await projects.databasePath(id), projects.summary(id)).map(
+        (proxy) => ({
+          relativePath: proxy.relativePath,
+          expected: proxy,
+        }),
+      ),
     ];
     for (const entry of entries) {
       const relativePath = `${snapshot.project.folder}/${entry.relativePath}`;

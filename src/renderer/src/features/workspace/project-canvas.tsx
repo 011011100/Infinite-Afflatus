@@ -8,7 +8,7 @@ import {
   ViewportPortal,
 } from '@xyflow/react';
 import { Plus, RotateCw } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,8 @@ type WorkspaceNode = VideoCardNode | ShotCardNode;
 type ProjectCanvasProps = {
   snapshot: ProjectSnapshot;
   blocked: boolean;
+  projectUnavailable?: boolean;
+  unavailableNotice?: ReactNode;
   interactions: InteractionSettings;
   inactive: boolean;
   report: (error: unknown) => void;
@@ -55,12 +57,14 @@ export function ProjectCanvas(props: ProjectCanvasProps) {
 function CanvasContent({
   snapshot,
   blocked,
+  projectUnavailable,
+  unavailableNotice,
   interactions,
   inactive,
   report,
 }: ProjectCanvasProps) {
-  const shots = useShotWorkspace(snapshot.project.id, blocked);
-  const saveViewport = useViewportSave(snapshot.project.id, report);
+  const shots = useShotWorkspace(snapshot.project.id, blocked, report);
+  const saveViewport = useViewportSave(snapshot.project.id, blocked, report);
   const [shotPositions, setShotPositions] = useState<
     Record<string, { x: number; y: number }>
   >({});
@@ -466,6 +470,8 @@ function CanvasContent({
           history={shots.historyFor(shots.activeShot.id)}
           snapshot={document.snapshot}
           blocked={blocked}
+          projectUnavailable={projectUnavailable}
+          unavailableNotice={unavailableNotice}
           saving={shots.saving}
           error={shots.error}
           onChange={(update, options) => {
@@ -483,6 +489,8 @@ function CanvasContent({
           assets={playingAssets}
           projectName={snapshot.project.name}
           blocked={blocked}
+          projectUnavailable={projectUnavailable}
+          unavailableNotice={unavailableNotice}
           saving={document.saving}
           shortcuts={interactions.shortcuts}
           canUndo={

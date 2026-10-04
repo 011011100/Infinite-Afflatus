@@ -16,7 +16,7 @@ import {
   Ungroup,
   Upload,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HistoryActions } from '@/components/canvas/history-actions';
@@ -28,6 +28,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
+import { flushPendingChanges } from '@/features/lifecycle/pending-saves';
 import { isMac } from '@/lib/platform';
 import type {
   ShotHistoryActions,
@@ -67,6 +68,8 @@ export function MaterialCanvas({
   shot,
   snapshot,
   blocked,
+  projectUnavailable,
+  unavailableNotice,
   longPressSplit,
   labelShortcut = defaultInteractionSettings().shortcuts.locateLabels,
   shortcuts = defaultInteractionSettings().shortcuts,
@@ -81,6 +84,8 @@ export function MaterialCanvas({
   shot: ShotWorkspace;
   snapshot: ProjectSnapshot;
   blocked: boolean;
+  projectUnavailable?: boolean | undefined;
+  unavailableNotice?: ReactNode;
   longPressSplit: boolean;
   labelShortcut?: Shortcut | null;
   shortcuts?: Shortcuts;
@@ -96,7 +101,10 @@ export function MaterialCanvas({
   const page = useRef<HTMLElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState(false);
-  const { closing, requestClose } = usePageMotion(page, onClose, beforeClose);
+  const { closing, requestClose } = usePageMotion(page, onClose, async () => {
+    if (!(await flushPendingChanges())) return false;
+    return beforeClose();
+  });
   const model = useMaterialFlow(
     shot,
     snapshot.assets,
@@ -238,7 +246,9 @@ export function MaterialCanvas({
         >
           {saving && <LoaderCircle className="size-3 animate-spin" />}
           {blocked
-            ? '迁移中'
+            ? projectUnavailable
+              ? '项目不可用，未保存输入仍在本页'
+              : '迁移中'
             : error
               ? '保存失败'
               : saving
@@ -246,6 +256,7 @@ export function MaterialCanvas({
                 : '已保存'}
         </span>
       </header>
+      {unavailableNotice}
       {(error || localError) && (
         <div
           role="alert"
@@ -487,6 +498,7 @@ export function MaterialCanvas({
           disabled={disabled}
           saving={saving}
           error={error}
+          unavailableNotice={unavailableNotice}
           update={onChange}
           history={historyActions}
           onClose={() => model.setActiveGroup(null)}

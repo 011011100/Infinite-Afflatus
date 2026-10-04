@@ -60,7 +60,7 @@ async function fixture() {
       };
       await mkdir(dirname(join(root, relativePath)), { recursive: true });
       await writeFile(join(root, relativePath), bytes);
-      recordAsset(database, id, asset);
+      recordAsset(database, id, asset, snapshot.project);
       return { asset, path: join(root, relativePath), bytes };
     },
     async dispose() {

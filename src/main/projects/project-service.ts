@@ -35,9 +35,7 @@ export class ProjectService {
   }
 
   async open(id: string): Promise<ProjectSnapshot> {
-    const snapshot = readProject(await this.databasePath(id));
-    if (snapshot.project.id !== id) throw new Error('项目文件与索引不匹配');
-    return snapshot;
+    return readProject(await this.databasePath(id), this.summary(id));
   }
 
   async create(name: string): Promise<ProjectSnapshot> {
@@ -70,14 +68,18 @@ export class ProjectService {
     if (changes.viewport) validateViewport(changes.viewport);
     await this.gate.run(async () => {
       this.store.putProject(
-        updateProject(await this.databasePath(id), changes),
+        updateProject(await this.databasePath(id), changes, this.summary(id)),
       );
     });
   }
 
   async patchCanvas(id: string, patch: CanvasPatch): Promise<ProjectSnapshot> {
     return this.gate.run(async () => {
-      const snapshot = patchProjectCanvas(await this.databasePath(id), patch);
+      const snapshot = patchProjectCanvas(
+        await this.databasePath(id),
+        patch,
+        this.summary(id),
+      );
       this.store.putProject(snapshot.project);
       return snapshot;
     });

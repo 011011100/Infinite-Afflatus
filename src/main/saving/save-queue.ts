@@ -141,7 +141,14 @@ export class SaveQueue {
       kind: job.kind,
       ...(job.usage ? { usage: job.usage } : {}),
     };
-    this.store.putProject(recordAsset(database, job.resultKey, asset));
+    this.store.putProject(
+      recordAsset(
+        database,
+        job.resultKey,
+        asset,
+        this.projects.summary(job.projectId),
+      ),
+    );
     job.status = 'saved';
     this.store.putJob(job);
     this.notify();

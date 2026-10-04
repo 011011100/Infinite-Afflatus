@@ -206,6 +206,7 @@ export class MigrationService {
       for (const project of projects)
         verifyProjectDatabase(
           await safeFile(preview.target, `${project.folder}/project.sqlite`),
+          project,
         );
       for (const entry of files) {
         this.checkCancellation();

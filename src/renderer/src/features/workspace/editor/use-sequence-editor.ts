@@ -1,4 +1,5 @@
 import {
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -28,6 +29,8 @@ export interface EditorProps {
   projectId: string;
   projectName: string;
   blocked: boolean;
+  projectUnavailable?: boolean | undefined;
+  unavailableNotice?: ReactNode;
   saving: boolean;
   shortcuts: Shortcuts;
   canUndo: boolean;
@@ -55,6 +58,11 @@ export function useSequenceEditor(
     () => new TrimSaveQueue(card, (patch) => write.current(patch)),
   );
   const edits = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
+  const wasBlocked = useRef(blocked);
+  useEffect(() => {
+    if (wasBlocked.current && !blocked) void queue.flush();
+    wasBlocked.current = blocked;
+  }, [blocked, queue]);
   useEffect(() => {
     queue.accept(card);
   }, [queue, card]);

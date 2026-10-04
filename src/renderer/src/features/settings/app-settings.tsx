@@ -11,13 +11,17 @@ export function AppSettings({
   onClose,
   run,
   error,
+  beforeMigration,
+  initialPage = 'interactions',
 }: {
   library: LibraryState;
   onClose: () => void;
   run: (operation: () => Promise<unknown>) => Promise<void>;
   error: string | null;
+  beforeMigration?: (() => Promise<boolean>) | undefined;
+  initialPage?: 'interactions' | 'storage';
 }) {
-  const [page, setPage] = useState<'interactions' | 'storage'>('interactions');
+  const [page, setPage] = useState<'interactions' | 'storage'>(initialPage);
   const content = useRef<HTMLDivElement>(null);
   useContentMotion(content, page);
   return (
@@ -39,7 +43,11 @@ export function AppSettings({
           <InteractionSettings settings={library.interactions} run={run} />
         </div>
         <div hidden={page !== 'storage'}>
-          <StorageSettings library={library} run={run} />
+          <StorageSettings
+            library={library}
+            run={run}
+            beforeMigration={beforeMigration}
+          />
         </div>
       </div>
     </Modal>

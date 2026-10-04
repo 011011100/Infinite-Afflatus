@@ -51,7 +51,10 @@ export class ProxyService {
     );
     if (!asset) return null;
     const database = await this.projects.databasePath(projectId);
-    const records = readProxies(database).filter(
+    const records = readProxies(
+      database,
+      this.projects.summary(projectId),
+    ).filter(
       (item) =>
         item.assetId === assetId &&
         item.sourceHash === asset.sha256 &&
@@ -132,6 +135,13 @@ export class ProxyService {
         throw new Error('预览文件超出大小限制');
       await this.gate.whenOpen(async () => {
         signal.throwIfAborted();
+        const current = await this.projects.open(projectId);
+        if (
+          !current.assets.some(
+            (asset) => asset.id === source.id && asset.sha256 === source.sha256,
+          )
+        )
+          throw new Error('视频素材已经变化，预览文件未保存');
         const database = await this.projects.databasePath(projectId);
         const root = dirname(database);
         const relativePath = `cache/proxy-v${PROXY_VERSION}-${randomUUID()}.mp4`;
@@ -147,13 +157,17 @@ export class ProxyService {
         const copied = await fingerprint(await safeFile(root, relativePath));
         if (!sameContent(copied, generated))
           throw new Error('预览保存校验失败');
-        recordProxy(database, {
-          ...copied,
-          assetId,
-          sourceHash: source.sha256,
-          version: PROXY_VERSION,
-          relativePath,
-        });
+        recordProxy(
+          database,
+          {
+            ...copied,
+            assetId,
+            sourceHash: source.sha256,
+            version: PROXY_VERSION,
+            relativePath,
+          },
+          this.projects.summary(projectId),
+        );
       }, signal);
     } finally {
       await this.work.clean(temporary);
