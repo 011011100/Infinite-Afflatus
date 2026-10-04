@@ -13,6 +13,7 @@ import type { DesktopBridge } from '../../src/shared/desktop';
 import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { LibraryState, ProjectSnapshot } from '../../src/shared/models';
+import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
 const projectId = 'bc258d23-ac6d-403b-981a-4983fb3346ef';
@@ -57,6 +58,7 @@ const validate = () => {
   if (!available) throw new Error('测试项目数据库离线');
 };
 window.desktop = {
+  ...workspaceDraftMock(() => workspace).bridge,
   getLibrary: async () => structuredClone(globalState),
   openProject: async () => {
     validate();

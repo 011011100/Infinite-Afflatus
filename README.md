@@ -72,6 +72,9 @@ pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔�
 | [本地创作交付](docs/local-delivery.md) | MP4 导出、任务、项目包与副本、验证边界 |
 | [素材检查与恢复](docs/media-recovery.md) | 缺失素材诊断、完整校验、精确原文件恢复 |
 | [视频处理组件诊断](docs/media-tools.md) | FFmpeg／FFprobe 路径、版本检测、缺失组件排查 |
+| [启动失败保护](docs/startup-recovery.md) | 原保存盘重试、应用数据库校验与缺失库保护 |
+| [镜头草稿恢复](docs/workspace-draft-recovery.md) | 独立恢复快照、冲突保护、只读救援文件与范围 |
+| [桌面内部包](docs/desktop-distribution.md) | macOS／Windows 打包、包内验证与正式分发边界 |
 | [离开前保存](docs/saving-on-leave.md) | 草稿提交、失败留页、关闭握手与测试 |
 | [商业可用性推进](docs/commercial-readiness.md) | 当前质量差距与后续验收清单 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |

@@ -412,18 +412,26 @@ test('a newer project schema is rejected without modifying its database', async 
   }
 });
 
-test('the project index can be reconstructed from project folders', async () => {
+test('a missing recent-project index can be reconstructed while the original application database is retained', async () => {
   const f = await fixture();
   try {
     const { project } = await f.library.projects.create('独立项目');
-    await addResult(f.library, project.id);
+    const saved = await addResult(f.library, project.id);
+    const preferences = {
+      ...f.library.interactions.get(),
+      longPressSplit: false,
+    };
+    f.library.interactions.save(preferences);
     await f.library.close();
-    const alternate = await Library.open(
-      join(f.base, 'recreated-app-data'),
-      f.root,
-    );
+    // Discovery repairs the recent list, never a missing app database with lost queue/recovery metadata.
+    const index = new DatabaseSync(join(f.data, 'app.sqlite'));
+    index.exec('DELETE FROM projects');
+    index.close();
+    const alternate = await Library.open(f.data, f.root);
     try {
       assert.equal(alternate.state().projects[0]?.id, project.id);
+      assert.deepEqual(alternate.state().interactions, preferences);
+      assert.deepEqual(alternate.store.job(saved.id), saved);
       assert.equal(
         (await alternate.projects.open(project.id)).assets.length,
         1,

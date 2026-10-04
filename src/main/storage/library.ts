@@ -1,7 +1,8 @@
-import { lstat, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
 import { ProxyService } from '../media/proxy-service';
@@ -13,7 +14,14 @@ import { SaveQueue } from '../saving/save-queue';
 import { type GeneratedResult, Staging } from '../saving/staging';
 import { InteractionSettingsStore } from '../settings/interaction-settings';
 import { AppStore } from './app-store';
+import { readAppStoreRoot } from './app-store-guard';
 import { canonicalDirectory, overlaps } from './files';
+import { LibraryOpenError } from './library-open-error';
+import {
+  pathInfo,
+  requireCleanProfile,
+  requireWritableDirectory,
+} from './startup-checks';
 import { WriteGate } from './write-gate';
 
 /** Main-process composition root. Feature modules depend on narrow services, never on Electron. */
@@ -28,6 +36,7 @@ export class Library {
   readonly exports: SequenceExportService;
   readonly packages: ProjectPackageService;
   readonly health: ProjectHealthService;
+  readonly drafts: WorkspaceDraftService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
   private exportListeners = new Set<() => void>();
@@ -41,6 +50,7 @@ export class Library {
     userData: string,
     quota?: number,
   ) {
+    this.drafts = new WorkspaceDraftService(userData);
     this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
     this.health = new ProjectHealthService(
@@ -94,28 +104,36 @@ export class Library {
     defaultRoot: string,
     quota?: number,
   ): Promise<Library> {
-    await mkdir(userData, { recursive: true });
-    const appFile = join(userData, 'app.sqlite');
-    const existing = await lstat(appFile).catch(
-      (error: NodeJS.ErrnoException) => {
-        if (error.code !== 'ENOENT') throw error;
-        return null;
-      },
-    );
-    if (existing?.isSymbolicLink()) throw new Error('应用数据库不能是符号链接');
-    if (!existing) await mkdir(defaultRoot, { recursive: true });
-    const canonicalUserData = await canonicalDirectory(userData);
-    const store = new AppStore(appFile, defaultRoot);
+    let store: AppStore | null = null;
+    let recordedRoot: string | null = null;
+    let stage: LibraryOpenError['stage'] = 'application';
     try {
+      await mkdir(userData, { recursive: true });
+      const canonicalUserData = await canonicalDirectory(userData);
+      const appFile = join(canonicalUserData, 'app.sqlite');
+      const existing = await pathInfo(appFile);
+      if (existing) recordedRoot = readAppStoreRoot(appFile, existing);
+      else {
+        await requireCleanProfile(canonicalUserData, defaultRoot);
+        await mkdir(defaultRoot, { recursive: true });
+      }
+      stage = 'projects';
       // Never silently replace an unavailable chosen volume with an empty folder.
-      const root = await canonicalDirectory(store.root);
-      store.set('root', root);
+      const root = await canonicalDirectory(recordedRoot ?? defaultRoot);
       if (
         overlaps(root, canonicalUserData) ||
         overlaps(canonicalUserData, root)
       )
         throw new Error('项目目录不能与应用数据目录相互包含');
+      await requireWritableDirectory(root);
+      stage = 'application';
+      store = new AppStore(appFile, root, {
+        mode: existing ? 'existing' : 'create',
+        ...(existing ? { expected: existing } : {}),
+      });
+      if (store.root !== root) store.set('root', root);
       const library = new Library(store, canonicalUserData, quota);
+      stage = 'recovery';
       await library.migration.recover();
       await library.packages.recover();
       await library.health.recover();
@@ -126,8 +144,8 @@ export class Library {
       library.saves.start();
       return library;
     } catch (error) {
-      store.close();
-      throw error;
+      store?.close();
+      throw new LibraryOpenError(error, userData, recordedRoot, stage);
     }
   }
 
@@ -190,6 +208,7 @@ export class Library {
     await this.migration.idle();
     await this.saves.idle();
     await this.gate.idle();
+    await this.drafts.close();
     this.store.close();
   }
 }

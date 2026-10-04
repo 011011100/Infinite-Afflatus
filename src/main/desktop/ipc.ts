@@ -11,6 +11,7 @@ import {
 import type { CanvasPatch } from '../../shared/canvas/model';
 import { IPC_CHANNELS } from '../../shared/desktop';
 import type { Viewport } from '../../shared/models';
+import { registerWorkspaceDraftIpc } from '../drafts/draft-ipc';
 import { registerExportIpc } from '../export/export-ipc';
 import { registerGenerationIpc } from '../generation/generation-ipc';
 import { registerMediaToolsIpc } from '../media/media-tools-ipc';
@@ -48,6 +49,16 @@ export function registerDesktop(
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);
   registerMediaToolsIpc(trustedWindow);
+  registerWorkspaceDraftIpc(
+    library.drafts,
+    {
+      summary: (projectId) => library.projects.summary(projectId),
+      read: (projectId) => library.generation.readWorkspace(projectId),
+      restore: (projectId, baseline, workspace) =>
+        library.generation.saveWorkspace(projectId, workspace, baseline),
+    },
+    trustedWindow,
+  );
   ipcMain.handle(IPC_CHANNELS.appInfo, (event) => {
     trustedWindow(event);
     return {

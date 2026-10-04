@@ -11,6 +11,7 @@ import {
 } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { ProjectSnapshot } from '../../src/shared/models';
+import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
 const initial = newShot('one', '镜头一', { x: 10, y: 20 });
@@ -50,6 +51,7 @@ let stored = {
 let failing = false;
 let writes = 0;
 window.desktop = {
+  ...workspaceDraftMock(() => stored).bridge,
   getGenerationWorkspace: async () => structuredClone(stored),
   saveGenerationWorkspace: async (_id, workspace) => {
     await new Promise((resolve) => setTimeout(resolve, 25));

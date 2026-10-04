@@ -19,8 +19,19 @@ import type {
   ProjectHealthReport,
 } from './project-health';
 import type { ProjectPackageInfo } from './project-package';
+import type {
+  WorkspaceDraftExport,
+  WorkspaceDraftInput,
+  WorkspaceDraftKey,
+  WorkspaceDraftList,
+} from './workspace-draft';
 
 export const IPC_CHANNELS = {
+  protectWorkspaceDraft: 'draft:protect-workspace',
+  listWorkspaceDrafts: 'draft:list-workspaces',
+  acknowledgeWorkspaceDraft: 'draft:acknowledge-workspace',
+  recoverWorkspaceDraft: 'draft:recover-workspace',
+  exportWorkspaceDraft: 'draft:export-workspace',
   checkMediaTools: 'media:check-tools',
   scanProjectHealth: 'health:scan',
   restoreMissingAsset: 'health:restore',
@@ -77,6 +88,23 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  protectWorkspaceDraft: (
+    projectId: string,
+    input: WorkspaceDraftInput,
+  ) => Promise<number>;
+  listWorkspaceDrafts: (projectId: string) => Promise<WorkspaceDraftList>;
+  acknowledgeWorkspaceDraft: (
+    projectId: string,
+    key: WorkspaceDraftKey,
+  ) => Promise<boolean>;
+  recoverWorkspaceDraft: (
+    projectId: string,
+    key: WorkspaceDraftKey,
+  ) => Promise<GenerationWorkspace>;
+  exportWorkspaceDraft: (
+    projectId: string,
+    input: WorkspaceDraftExport,
+  ) => Promise<string | null>;
   checkMediaTools: () => Promise<MediaToolsReport>;
   scanProjectHealth: (
     projectId: string,

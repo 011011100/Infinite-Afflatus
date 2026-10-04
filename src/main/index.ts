@@ -7,8 +7,9 @@ import {
 } from './desktop/media-protocol';
 import { SaveLifecycle } from './desktop/save-lifecycle';
 import { createWindow } from './desktop/window';
+import { openLibraryWithRecovery } from './startup/open-library-with-recovery';
 import { errorMessage } from './storage/database';
-import { Library } from './storage/library';
+import type { Library } from './storage/library';
 
 app.setName('Infinite Afflatus');
 // Isolated desktop smoke checks do not touch the user's library.
@@ -47,7 +48,14 @@ if (!app.requestSingleInstanceLock()) {
       const defaultRoot =
         (!app.isPackaged && process.env.AFFLATUS_PROJECTS_DIR) ||
         join(app.getPath('documents'), 'Infinite Afflatus', 'Projects');
-      library = await Library.open(app.getPath('userData'), defaultRoot);
+      library = await openLibraryWithRecovery(
+        app.getPath('userData'),
+        defaultRoot,
+      );
+      if (!library) {
+        app.quit();
+        return;
+      }
       registerDesktop(library, () => mainWindow);
       saveLifecycle = new SaveLifecycle(
         () => mainWindow,

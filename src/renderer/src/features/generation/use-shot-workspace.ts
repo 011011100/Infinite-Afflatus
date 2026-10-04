@@ -11,6 +11,8 @@ import {
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
+import type { WorkspaceDraftRecord } from '../../../../shared/workspace-draft';
+import { useWorkspaceDrafts } from '../drafts/use-workspace-drafts';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 import { message } from './errors';
@@ -26,6 +28,10 @@ export function useShotWorkspace(
   const [saving, setSaving] = useState(false);
   const [savedEdit, setSavedEdit] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
+  const recoveringRef = useRef(false);
+  const recovery = useWorkspaceDrafts(projectId);
+  const draftQueue = recovery.queue;
   const current = useRef<GenerationWorkspace | null>(null);
   const confirmed = useRef<GenerationWorkspace | null>(null);
   const reportError = useRef(report);
@@ -35,7 +41,7 @@ export function useShotWorkspace(
   const pending = useRef<Promise<boolean> | null>(null);
   const locked = useRef(blocked);
   const history = useRef(new ShotHistory());
-  locked.current = blocked;
+  locked.current = blocked || recoveringRef.current;
   const flush = useCallback((): Promise<boolean> => {
     if (pending.current) return pending.current;
     if (!current.current || edit.current === saved.current)
@@ -47,14 +53,27 @@ export function useShotWorkspace(
         while (current.current && saved.current !== edit.current) {
           if (locked.current) return false;
           const version = edit.current;
+          const submitted = current.current;
+          draftQueue.prepareSubmission(
+            confirmed.current ?? submitted,
+            submitted,
+          );
+          // A recovery write failure is visible but must not prevent the normal
+          // project transaction from saving the user's work.
+          await draftQueue.flush();
+          if (locked.current) return false;
           const result = await window.desktop.saveGenerationWorkspace(
             projectId,
-            current.current,
+            submitted,
           );
           confirmed.current = result;
           current.current = { ...current.current, revision: result.revision };
           saved.current = version;
           setSavedEdit(version);
+          const settled = draftQueue.confirm(result, current.current);
+          await draftQueue.flush();
+          if (saved.current === edit.current)
+            await draftQueue.acknowledge(settled);
         }
         setError(null);
         return true;
@@ -68,7 +87,7 @@ export function useShotWorkspace(
       }
     })();
     return pending.current;
-  }, [projectId]);
+  }, [projectId, draftQueue]);
   usePendingSave(`镜头草稿:${projectId}`, flush);
   useProjectRecoveryGuard(projectId, async () => {
     await pending.current;
@@ -114,9 +133,10 @@ export function useShotWorkspace(
       if (next === current.current) return;
       current.current = next;
       edit.current += 1;
+      if (confirmed.current) draftQueue.stage(confirmed.current, next);
       setWorkspace(next);
     },
-    [],
+    [draftQueue],
   );
   useEffect(() => {
     if (!workspace || blocked || saved.current === edit.current) return;
@@ -125,6 +145,46 @@ export function useShotWorkspace(
     }, 350);
     return () => clearTimeout(timer);
   }, [workspace, blocked, flush]);
+  const loaded = !!workspace;
+  useEffect(() => {
+    if (!loaded || blocked) return;
+    const timer = setInterval(() => {
+      void flush();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loaded, blocked, flush]);
+  const recoverDraft = async (record: WorkspaceDraftRecord) => {
+    if (locked.current || edit.current !== saved.current || pending.current)
+      return false;
+    recoveringRef.current = true;
+    locked.current = true;
+    setRecovering(true);
+    pending.current = (async () => {
+      try {
+        const value = await window.desktop.recoverWorkspaceDraft(projectId, {
+          sessionId: record.sessionId,
+          seq: record.seq,
+        });
+        confirmed.current = value;
+        current.current = value;
+        history.current = new ShotHistory();
+        setActiveId(null);
+        setWorkspace(value);
+        setError(null);
+        await recovery.refresh();
+        return true;
+      } catch (reason) {
+        await recovery.refresh();
+        recovery.setError(message(reason));
+        return false;
+      } finally {
+        recoveringRef.current = false;
+        pending.current = null;
+        setRecovering(false);
+      }
+    })();
+    return pending.current;
+  };
   const updateShot = useCallback(
     (
       id: string,
@@ -191,6 +251,11 @@ export function useShotWorkspace(
   };
   return {
     shots: workspace?.shots ?? [],
+    recovery,
+    recoverDraft,
+    recovering,
+    baseline: confirmed.current,
+    dirty: edit.current !== saved.current,
     loaded: !!workspace,
     saving: saving || savedEdit !== edit.current,
     error,

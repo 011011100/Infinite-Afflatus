@@ -32,6 +32,10 @@ jobs:
         run: pnpm package:local
       - name: Launch packaged app against an isolated library and verify saved content after restart
         run: node --import tsx tests/browser/packaged-delivery.mjs
+      - name: Verify production startup failures preserve the original library
+        run: node tests/browser/startup-recovery.cjs
+      - name: Verify abrupt process termination, conflict protection and explicit shot recovery
+        run: node --import tsx tests/browser/draft-recovery.mjs
       - name: Preserve internal build artifacts
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

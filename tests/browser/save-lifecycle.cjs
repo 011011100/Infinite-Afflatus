@@ -47,7 +47,7 @@ app.whenReady().then(async () => {
     );
     assert.deepEqual(
       await run('JSON.parse(document.querySelector("#result").textContent)'),
-      { name: 'unsaved draft', writes: 1 },
+      { name: 'unsaved draft', writes: 1, recoveryDrafts: 0 },
     );
     console.log(
       'PASS returning home flushes the last edit before the 350 ms debounce',

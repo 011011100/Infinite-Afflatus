@@ -12,6 +12,7 @@ import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { Button } from '@/components/ui/button';
+import { WorkspaceDraftNotice } from '@/features/drafts/workspace-draft-notice';
 import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { ShotCard, type ShotCardNode } from '@/features/generation/shot-card';
 import { useShotWorkspace } from '@/features/generation/use-shot-workspace';
@@ -64,6 +65,16 @@ function CanvasContent({
   report,
 }: ProjectCanvasProps) {
   const shots = useShotWorkspace(snapshot.project.id, blocked, report);
+  const recoveryNotice = (
+    <WorkspaceDraftNotice
+      recovery={shots.recovery}
+      baseline={shots.baseline}
+      dirty={shots.dirty}
+      blocked={blocked}
+      recovering={shots.recovering}
+      restore={shots.recoverDraft}
+    />
+  );
   const saveViewport = useViewportSave(snapshot.project.id, blocked, report);
   const [shotPositions, setShotPositions] = useState<
     Record<string, { x: number; y: number }>
@@ -284,6 +295,9 @@ function CanvasContent({
       aria-label="视频创作画布"
       aria-busy={document.saving}
     >
+      {!shots.activeShot && !playing && (
+        <div className="absolute inset-x-0 top-0 z-20">{recoveryNotice}</div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -469,9 +483,14 @@ function CanvasContent({
           shortcuts={interactions.shortcuts}
           history={shots.historyFor(shots.activeShot.id)}
           snapshot={document.snapshot}
-          blocked={blocked}
+          blocked={blocked || shots.recovering}
           projectUnavailable={projectUnavailable}
-          unavailableNotice={unavailableNotice}
+          unavailableNotice={
+            <>
+              {unavailableNotice}
+              {recoveryNotice}
+            </>
+          }
           saving={shots.saving}
           error={shots.error}
           onChange={(update, options) => {

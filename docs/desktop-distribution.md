@@ -49,4 +49,6 @@ pnpm package:verify release/mac-arm64
 
 手动触发的 `Desktop package validation` 工作流在 Windows/macOS 原生构建，上传内部 ZIP／NSIS 构建物，不发布 Release。CI 的包检查与隔离启动、保存、重启读取测试，仍只是未签名内部包验证，不等于证书、公证、用户安装、安装升级、卸载保留数据或不同系统版本的兼容性验收。
 
+2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
+
 正式分发前仍需确定支持平台与最低系统版本，补齐发行者信息、第三方许可审查、媒体工具分发方案、签名／公证、安装升级与卸载回归。云端 API 与账号计费没有因打包而接入；云端实测应单独记录。

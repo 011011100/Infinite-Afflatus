@@ -1,4 +1,16 @@
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
+
+/** SQLite mode=rw atomically refuses to create a missing existing database. */
+export function existingDatabaseLocation(path: string): string {
+  const location = pathToFileURL(path);
+  if (location.hostname) {
+    location.pathname = `//${location.hostname}${location.pathname}`;
+    location.hostname = '';
+  }
+  location.searchParams.set('mode', 'rw');
+  return location.href;
+}
 
 export function openDatabase(
   path: string,

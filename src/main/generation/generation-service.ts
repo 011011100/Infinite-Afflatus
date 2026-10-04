@@ -28,8 +28,16 @@ export class GenerationService {
     );
   }
 
-  async saveWorkspace(projectId: string, input: unknown) {
+  async saveWorkspace(
+    projectId: string,
+    input: unknown,
+    expectedBaseline?: unknown,
+  ) {
     const workspace = validateWorkspace(input);
+    const baseline =
+      expectedBaseline === undefined
+        ? undefined
+        : validateWorkspace(expectedBaseline);
     return this.gate.run(async () => {
       const snapshot = await this.projects.open(projectId);
       const available = new Map<string, Asset['kind']>(
@@ -72,6 +80,7 @@ export class GenerationService {
         await this.projects.databasePath(projectId),
         workspace,
         this.projects.summary(projectId),
+        baseline,
       );
       this.store.putProject(result.project);
       return result.workspace;

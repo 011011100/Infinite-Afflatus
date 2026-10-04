@@ -9,6 +9,7 @@ import {
   workspaceFromDraft,
 } from '../../shared/generation/workspace';
 import type { ProjectSummary } from '../../shared/models';
+import { sameWorkspace } from '../../shared/workspace-draft';
 import { withProject } from '../projects/project-database';
 import type { ProjectIdentity } from '../projects/project-guard';
 
@@ -40,12 +41,16 @@ export function writeWorkspace(
   file: string,
   workspace: GenerationWorkspace,
   expected: ProjectIdentity,
+  baseline?: GenerationWorkspace,
 ) {
   return withProject(
     file,
     true,
     (db) => {
-      if (read(db).revision !== workspace.revision)
+      const current = read(db);
+      if (baseline && !sameWorkspace(current, baseline))
+        throw new Error('镜头内容已变化，恢复草稿已保留，未覆盖项目');
+      if (current.revision !== workspace.revision)
         throw new Error('素材画布已在其他窗口修改，请重新打开项目');
       const saved = { ...workspace, revision: workspace.revision + 1 };
       const project = JSON.parse(

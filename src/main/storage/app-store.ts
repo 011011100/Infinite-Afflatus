@@ -1,29 +1,73 @@
+import { closeSync, lstatSync, openSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ProjectSummary, SaveJob } from '../../shared/models';
-import { openDatabase, transaction } from './database';
+import {
+  type AppStoreIdentity,
+  readAppStoreRoot,
+  verifyAppStore,
+  verifyAppStorePath,
+} from './app-store-guard';
+import {
+  existingDatabaseLocation,
+  openDatabase,
+  transaction,
+} from './database';
 
 /** Fixed userData database: routing, queue and recovery journal survive a library move. */
 export class AppStore {
   private readonly db: DatabaseSync;
 
-  constructor(file: string, defaultRoot: string) {
-    this.db = openDatabase(file);
-    const version = Number(
-      this.db.prepare('PRAGMA user_version').get()?.user_version,
-    );
-    if (version > 1) {
-      this.db.close();
-      throw new Error('应用数据库版本较新，请使用对应版本打开');
+  constructor(
+    file: string,
+    defaultRoot: string,
+    options: { mode?: 'create' | 'existing'; expected?: AppStoreIdentity } = {},
+  ) {
+    let mode = options.mode;
+    if (!mode) {
+      try {
+        lstatSync(file);
+        mode = 'existing';
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        mode = 'create';
+      }
     }
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS saves (id TEXT PRIMARY KEY, result_key TEXT UNIQUE NOT NULL, payload TEXT NOT NULL);
-      PRAGMA user_version = 1;
-    `);
-    this.db
-      .prepare('INSERT OR IGNORE INTO settings VALUES (?, ?)')
-      .run('root', defaultRoot);
+    if (mode === 'create') closeSync(openSync(file, 'wx', 0o600));
+    const identity = verifyAppStorePath(file, options.expected);
+    if (mode === 'existing') readAppStoreRoot(file, identity);
+    const db = openDatabase(
+      existingDatabaseLocation(file),
+      false,
+      (connection) => {
+        verifyAppStorePath(file, identity);
+        if (mode === 'existing') verifyAppStore(connection);
+        else if (
+          connection.prepare('PRAGMA user_version').get()?.user_version !== 0 ||
+          connection.prepare('SELECT name FROM sqlite_schema').all().length
+        )
+          throw new Error('新应用数据库文件已被替换，未覆盖现有内容');
+      },
+    );
+    try {
+      if (mode === 'create')
+        transaction(db, () => {
+          db.exec(`
+          CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+          CREATE TABLE projects (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+          CREATE TABLE saves (id TEXT PRIMARY KEY, result_key TEXT UNIQUE NOT NULL, payload TEXT NOT NULL);
+          PRAGMA user_version = 1;
+        `);
+          db.prepare('INSERT INTO settings VALUES (?, ?)').run(
+            'root',
+            defaultRoot,
+          );
+          verifyAppStore(db);
+        });
+      this.db = db;
+    } catch (error) {
+      db.close();
+      throw error;
+    }
   }
 
   get root(): string {

@@ -6,6 +6,7 @@ import { usePendingSave } from '@/features/lifecycle/use-pending-save';
 import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
 import type { DesktopBridge } from '../../src/shared/desktop';
 import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
+import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
 const original = {
@@ -24,7 +25,9 @@ let gate: Promise<unknown> | null = null;
 let releaseHealth: (() => void) | null = null;
 let releasePackage: (() => void) | null = null;
 let releaseExport: (() => void) | null = null;
+const drafts = workspaceDraftMock(() => stored);
 window.desktop = {
+  ...drafts.bridge,
   cancelProjectHealth: async () => releaseHealth?.(),
   cancelProjectPackage: async () => releasePackage?.(),
   cancelExportPreparation: async () => releaseExport?.(),
@@ -111,7 +114,13 @@ function Check() {
     20,
   );
   const snapshot = () =>
-    setResult(JSON.stringify({ name: stored.shots[0]?.name, writes }));
+    setResult(
+      JSON.stringify({
+        name: stored.shots[0]?.name,
+        writes,
+        recoveryDrafts: drafts.records.size,
+      }),
+    );
   return (
     <>
       {open && <Editor />}
