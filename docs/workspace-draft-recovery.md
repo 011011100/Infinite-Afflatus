@@ -47,3 +47,5 @@
 - `tests/upgrade/workspace-draft-preservation.test.ts`：固定提交 `29f19980b993a4462d3c97605ea55be51806a037` 为恢复格式 v1 的历史写入基线。独立进程仅加载该提交的 Git 归档业务代码，分别创建普通未提交草稿和 A 已提交、B 带 `lastSubmitted` 的记录；当前版本恢复后，再用两个独立进程核对完整内容、参数、分组与素材引用、原媒体哈希及确认清理边界。既有存储与项目包基线不变，随 `pnpm test:upgrade` 执行，详见[版本升级数据回归](data-upgrade-testing.md)。
 
 这些验证属于本地代码和桌面恢复链路。它们不代表云端生成 API、Windows 安装环境或签名安装包验证。
+
+项目名称输入与已完成裁剪使用另一种独立恢复格式，见 [项目名称与裁剪恢复](project-edit-recovery.md)。本页的镜头工作区文件和救援格式不因此增加名称或裁剪字段。

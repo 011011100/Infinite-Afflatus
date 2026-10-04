@@ -8,10 +8,20 @@ import {
   ViewportPortal,
 } from '@xyflow/react';
 import { Plus, RotateCw } from 'lucide-react';
-import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { Button } from '@/components/ui/button';
+import { projectEditRecoveryGuards } from '@/features/drafts/project-edit-recovery-guards';
+import { TrimProtectionNotice } from '@/features/drafts/trim-protection-notice';
 import { WorkspaceDraftNotice } from '@/features/drafts/workspace-draft-notice';
 import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { ShotCard, type ShotCardNode } from '@/features/generation/shot-card';
@@ -66,6 +76,12 @@ function CanvasContent({
 }: ProjectCanvasProps) {
   const shots = useShotWorkspace(snapshot.project.id, blocked, report);
   const interactionBlocked = blocked || shots.recovering;
+  const isRecovering = useCallback(
+    () =>
+      shots.isRecovering() ||
+      projectEditRecoveryGuards.isRecovering(snapshot.project.id),
+    [shots.isRecovering, snapshot.project.id],
+  );
   const recoveryNotice = (
     <WorkspaceDraftNotice
       recovery={shots.recovery}
@@ -73,7 +89,11 @@ function CanvasContent({
       dirty={shots.dirty}
       blocked={blocked}
       recovering={shots.recovering}
-      restore={shots.recoverDraft}
+      restore={(record) => {
+        if (!projectEditRecoveryGuards.isRecovering(snapshot.project.id))
+          return shots.recoverDraft(record);
+        return Promise.resolve(false);
+      }}
     />
   );
   const saveViewport = useViewportSave(
@@ -124,16 +144,52 @@ function CanvasContent({
     document.commit,
     selectCard,
   );
+  const recoveryState = useRef({ document, shots, drag, shotPositions });
+  recoveryState.current = { document, shots, drag, shotPositions };
+  useLayoutEffect(
+    () =>
+      projectEditRecoveryGuards.register(
+        snapshot.project.id,
+        () => {
+          const current = recoveryState.current;
+          return (
+            current.document.canRecoverProjectEdits() &&
+            !current.shots.isRecovering() &&
+            !current.drag.drag &&
+            Object.keys(current.shotPositions).length === 0
+          );
+        },
+        (record, saved) =>
+          recoveryState.current.document.acceptRecoveredEdit(record, saved),
+        (record) => recoveryState.current.document.prepareRecoveredEdit(record),
+      ),
+    [snapshot.project.id],
+  );
+  useEffect(
+    () =>
+      document.trimRecovery.subscribe(() => projectEditRecoveryGuards.notify()),
+    [document.trimRecovery],
+  );
+  useEffect(() => {
+    projectEditRecoveryGuards.notify();
+  });
+  const trimNotice = (
+    <TrimProtectionNotice
+      projectId={snapshot.project.id}
+      controller={document.trimRecovery}
+      error={document.trimRecoveryError}
+    />
+  );
   const play = useCallback(
     (id: string) => {
-      if (blocked || inactive || shots.isRecovering()) return;
+      if (blocked || inactive || isRecovering()) return;
       const card = cards.find((item) => item.id === id);
       if (card) {
         selectCard(id);
         setPlaying(id);
       }
     },
-    [cards, selectCard, blocked, inactive, shots.isRecovering],
+    [cards, selectCard, blocked, inactive, isRecovering],
   );
   const selectedCard = cards.find((card) => card.id === selection?.cardId);
   const selectedAssetId = selection?.assetId;
@@ -146,7 +202,7 @@ function CanvasContent({
     (cardId: string, assetId: string) => {
       if (
         interactionBlocked ||
-        shots.isRecovering() ||
+        isRecovering() ||
         inactive ||
         shots.activeId ||
         playing ||
@@ -171,7 +227,7 @@ function CanvasContent({
     },
     [
       interactionBlocked,
-      shots.isRecovering,
+      isRecovering,
       inactive,
       shots.activeId,
       playing,
@@ -312,7 +368,10 @@ function CanvasContent({
       aria-busy={document.saving || shots.recovering}
     >
       {!shots.activeShot && !playing && (
-        <div className="absolute inset-x-0 top-0 z-20">{recoveryNotice}</div>
+        <div className="absolute inset-x-0 top-0 z-20">
+          {recoveryNotice}
+          {trimNotice}
+        </div>
       )}
       <ReactFlow
         nodes={nodes}
@@ -342,7 +401,7 @@ function CanvasContent({
             if (
               change.type === 'position' &&
               !interactionBlocked &&
-              !shots.isRecovering() &&
+              !isRecovering() &&
               change.position &&
               change.id.startsWith('shot:')
             ) {
@@ -370,7 +429,7 @@ function CanvasContent({
           event.preventDefault();
           if (
             interactionBlocked ||
-            shots.isRecovering() ||
+            isRecovering() ||
             inactive ||
             drag.drag ||
             document.saving
@@ -380,7 +439,7 @@ function CanvasContent({
           else play(node.id);
         }}
         onNodeDragStart={(_event, node) => {
-          if (interactionBlocked || shots.isRecovering()) return;
+          if (interactionBlocked || isRecovering()) return;
           if (node.type === 'video') drag.start(node.id);
         }}
         onNodeDrag={(_event, node) =>
@@ -388,7 +447,7 @@ function CanvasContent({
           drag.move(node.position, flow.current?.getZoom() ?? 1)
         }
         onNodeDragStop={(_event, node) => {
-          if (interactionBlocked || shots.isRecovering()) {
+          if (interactionBlocked || isRecovering()) {
             setShotPositions({});
             return;
           }
@@ -401,7 +460,7 @@ function CanvasContent({
           } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
         }}
         onMoveEnd={(_event, viewport) => {
-          if (!interactionBlocked && !shots.isRecovering())
+          if (!interactionBlocked && !isRecovering())
             void saveViewport(viewport);
         }}
       >
@@ -425,7 +484,7 @@ function CanvasContent({
             className="bg-background shadow-sm"
             disabled={interactionBlocked || !shots.loaded}
             onClick={() => {
-              if (shots.isRecovering()) return;
+              if (isRecovering()) return;
               const bottom = Math.max(
                 60,
                 ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
@@ -522,6 +581,7 @@ function CanvasContent({
             <>
               {unavailableNotice}
               {recoveryNotice}
+              {trimNotice}
             </>
           }
           saving={shots.saving}
@@ -545,7 +605,13 @@ function CanvasContent({
           projectName={snapshot.project.name}
           blocked={interactionBlocked}
           projectUnavailable={projectUnavailable}
-          unavailableNotice={unavailableNotice}
+          unavailableNotice={
+            <>
+              {unavailableNotice}
+              {trimNotice}
+            </>
+          }
+          trimRecovery={document.trimRecovery}
           saving={document.saving}
           shortcuts={interactions.shortcuts}
           canUndo={

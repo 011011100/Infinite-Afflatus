@@ -402,16 +402,55 @@ try {
   await first.run(
     `window.desktop.protectWorkspaceDraft(${JSON.stringify(project.project.id)}, ${JSON.stringify(draftInput)})`,
   );
+  // This fixture has no video assets. Seed a real name record through the
+  // installed preload; actual trim recovery is covered by the desktop test.
+  const nameInput = {
+    kind: 'name',
+    sessionId: randomUUID(),
+    seq: 1,
+    baseline: project.project.name,
+    target: '覆盖安装后仍可继续修改的项目名称',
+  };
+  assert.equal(
+    await first.run(
+      `window.desktop.protectProjectEditDraft(${JSON.stringify(project.project.id)}, ${JSON.stringify(nameInput)})`,
+    ),
+    nameInput.seq,
+  );
+  const editDrafts = await first.run(
+    `window.desktop.listProjectEditDrafts(${JSON.stringify(project.project.id)})`,
+  );
+  assert.deepEqual(editDrafts.issues, []);
+  assert.equal(editDrafts.drafts.length, 1);
+  assert.deepEqual(editDrafts.drafts[0], {
+    ...nameInput,
+    format: 'infinite-afflatus-project-edit-draft',
+    version: 1,
+    project: {
+      id: project.project.id,
+      folder: project.project.folder,
+      name: project.project.name,
+    },
+    updatedAt: editDrafts.drafts[0].updatedAt,
+  });
   assert.deepEqual(first.errors, []);
   await stop();
   const firstDrafts = await contentSnapshot(join(profile, 'workspace-drafts'));
   assert.ok(Object.keys(firstDrafts).length > 0);
+  const editDraftDirectory = join(profile, 'project-edit-drafts');
+  const firstEditDraftFiles = await contentSnapshot(editDraftDirectory);
+  assert.equal(Object.keys(firstEditDraftFiles).length, 1);
   const beforeReinstallProjects = await contentSnapshot(projects);
   await installSameVersion();
   assert.deepEqual(await contentSnapshot(projects), beforeReinstallProjects);
   assert.deepEqual(
     await contentSnapshot(join(profile, 'workspace-drafts')),
     firstDrafts,
+  );
+  assert.deepEqual(
+    await contentSnapshot(editDraftDirectory),
+    firstEditDraftFiles,
+    'Same-version overwrite changed a project-edit recovery file',
   );
   const second = await launch();
   const state = await second.run('window.desktop.getLibrary()');
@@ -430,14 +469,32 @@ try {
   assert.deepEqual(drafts.issues, []);
   assert.equal(drafts.drafts.length, 1);
   assert.deepEqual(drafts.drafts[0].workspace, draft);
+  assert.deepEqual(
+    await second.run(
+      `window.desktop.listProjectEditDrafts(${JSON.stringify(project.project.id)})`,
+    ),
+    editDrafts,
+    'Reopening changed the original name recovery record or its timestamp',
+  );
+  assert.equal(state.projects[0].name, project.project.name);
   assert.deepEqual(second.errors, []);
   await stop();
+  assert.deepEqual(
+    await contentSnapshot(editDraftDirectory),
+    firstEditDraftFiles,
+    'Reading project-edit recovery after reinstall rewrote its original bytes',
+  );
   console.log(
     'PASS Windows NSIS install and SAME-VERSION overwrite reopen the saved project, settings and protected draft using the default profile',
   );
   const profileBeforeUninstall = await contentSnapshot(profile);
   const projectsBeforeUninstall = await contentSnapshot(projects);
   await uninstall();
+  assert.deepEqual(
+    await contentSnapshot(editDraftDirectory),
+    firstEditDraftFiles,
+    'Uninstall changed the protected project-name recovery file',
+  );
   assert.deepEqual(
     await contentSnapshot(profile),
     profileBeforeUninstall,

@@ -1,0 +1,7 @@
+{
+  "name": "project-edit-draft-v1",
+  "scenario": "image-workspace",
+  "commit": "1f77f143f909940571a337adcc787b301933bd86",
+  "formatVersion": 1,
+  "description": "Fixed native ProjectEditDraftService v1 writer for independent name and trim streams. This commit establishes the native storage format, not the later renderer interface."
+}

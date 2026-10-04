@@ -1,3 +1,8 @@
+import {
+  applyCanvasPatch,
+  type CanvasPatch,
+} from '../../../../shared/canvas/model';
+import { isTrimPatch } from '../../../../shared/canvas/operations';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 
 function sameAsset(a: Asset, b: Asset): boolean {
@@ -47,4 +52,23 @@ export function canResumeCanvas(
     if (!acknowledged || !sameAsset(asset, acknowledged)) return false;
   }
   return true;
+}
+
+/** A lost reply authorizes exactly our protected trim result, never a newer arbitrary canvas. */
+export function canResumeSubmittedTrim(
+  confirmed: ProjectSnapshot,
+  remote: ProjectSnapshot,
+  patch: CanvasPatch,
+  references: Asset[] = [],
+): boolean {
+  if (!isTrimPatch(patch)) return false;
+  try {
+    return canResumeCanvas(
+      { ...confirmed, canvas: applyCanvasPatch(confirmed.canvas, patch) },
+      remote,
+      references,
+    );
+  } catch {
+    return false;
+  }
 }

@@ -17,10 +17,12 @@ import {
   shortcutAction,
 } from '../../../../../shared/interaction/shortcuts';
 import type { Asset } from '../../../../../shared/models';
+import { projectEditRecoveryGuards } from '../../drafts/project-edit-recovery-guards';
 import { usePendingSave } from '../../lifecycle/use-pending-save';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { useSequencePlayback } from '../playback/use-sequence-playback';
 import { buildTimeline, locateTime, totalDuration } from './timeline';
+import type { TrimDraftController } from './trim-draft-controller';
 import { TrimSaveQueue } from './trim-save-queue';
 
 export interface EditorProps {
@@ -38,6 +40,7 @@ export interface EditorProps {
   undo: () => void;
   redo: () => void;
   commit: (patch: CanvasPatch) => Promise<boolean>;
+  trimRecovery?: TrimDraftController;
   onClose: () => void;
 }
 
@@ -55,8 +58,14 @@ export function useSequenceEditor(
   const write = useRef(props.commit);
   write.current = props.commit;
   const [queue] = useState(
-    () => new TrimSaveQueue(card, (patch) => write.current(patch)),
+    () =>
+      new TrimSaveQueue(
+        card,
+        (patch) => write.current(patch),
+        props.trimRecovery?.forCard(card, assets),
+      ),
   );
+  useEffect(() => queue.connect(), [queue]);
   const edits = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
   const wasBlocked = useRef(blocked);
   useEffect(() => {
@@ -75,7 +84,17 @@ export function useSequenceEditor(
     }
   }, [edits.reset, queue, card]);
   const [selectedId, setSelectedId] = useState(assets[0]?.id);
-  const [gesturing, setGesturing] = useState(false);
+  const [gesturing, setGestureState] = useState(false);
+  const setGesturing = (active: boolean) => {
+    if (active && projectEditRecoveryGuards.isRecovering(props.projectId))
+      return;
+    props.trimRecovery?.setGesturing(card.id, active);
+    setGestureState(active);
+  };
+  useEffect(
+    () => () => props.trimRecovery?.setGesturing(card.id, false),
+    [props.trimRecovery, card.id],
+  );
   usePendingSave(
     `裁剪:${props.projectId}:${card.id}`,
     () => (gesturing ? Promise.resolve(false) : queue.flush()),
@@ -149,7 +168,7 @@ export function useSequenceEditor(
     );
   };
   const save = (index: number, range: ClipTrim) => {
-    if (blocked) {
+    if (blocked || projectEditRecoveryGuards.isRecovering(props.projectId)) {
       cancel();
       return;
     }

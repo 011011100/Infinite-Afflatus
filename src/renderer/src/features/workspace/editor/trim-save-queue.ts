@@ -4,6 +4,7 @@ import {
   sameCard,
 } from '../../../../../shared/canvas/model';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
+import type { TrimRecoveryPort } from './trim-draft-controller';
 
 type Edit = { assetId: string; range: ClipTrim };
 interface TrimSaveState {
@@ -21,13 +22,48 @@ export class TrimSaveQueue {
   private running: Promise<boolean> | null = null;
   private listeners = new Set<() => void>();
   private state: TrimSaveState;
+  private unsubscribe: (() => void) | undefined;
 
   constructor(
     card: CanvasCard,
     private write: (patch: CanvasPatch) => Promise<boolean>,
+    private recovery?: TrimRecoveryPort,
   ) {
     this.confirmed = card;
     this.state = { card, pending: false, error: null, reset: 0 };
+  }
+
+  connect() {
+    this.unsubscribe?.();
+    this.unsubscribe = this.recovery?.subscribeResolved((patch) =>
+      this.resolveSubmitted(patch),
+    );
+    return () => this.dispose();
+  }
+
+  dispose() {
+    this.unsubscribe?.();
+  }
+
+  /** Drop only the exact failed head whose durable receipt was verified by the whole project. */
+  private resolveSubmitted(patch: CanvasPatch) {
+    const edit = this.failedEdits[0];
+    const before = patch.before[0];
+    const after = patch.after[0];
+    if (
+      !edit ||
+      !before ||
+      !after ||
+      !sameCard(this.confirmed, before) ||
+      !sameCard(this.apply(this.confirmed, edit), after)
+    )
+      return;
+    this.failedEdits.shift();
+    this.confirmed = after;
+    this.emit({
+      card: after,
+      error: this.failedEdits.length ? this.state.error : null,
+    });
   }
 
   getSnapshot = (): TrimSaveState => this.state;
@@ -52,8 +88,10 @@ export class TrimSaveQueue {
     const running = this.state.pending;
     this.failedEdits = [];
     this.edits.push({ assetId, range: { ...range } });
+    const target = this.apply(this.state.card, { assetId, range });
+    this.recovery?.stage(this.confirmed, target);
     this.emit({
-      card: this.apply(this.state.card, { assetId, range }),
+      card: target,
       pending: true,
       error: null,
     });

@@ -1,23 +1,27 @@
 import { ArrowLeft, Settings2, Upload, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Modal } from '@/components/ui/modal';
 import { useContentMotion } from '@/components/ui/use-surface-motion';
+import { ProjectEditDraftNotice } from '@/features/drafts/project-edit-draft-notice';
+import { projectEditRecoveryGuards } from '@/features/drafts/project-edit-recovery-guards';
+import { useProjectEditDrafts } from '@/features/drafts/use-project-edit-drafts';
 import { ExportTaskButton } from '@/features/export/export-dialog';
 import { SaveLifecycleStatus } from '@/features/lifecycle/save-lifecycle-status';
-import { usePendingSave } from '@/features/lifecycle/use-pending-save';
 import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
 import { ProjectHealthButton } from '@/features/projects/project-health';
 import { ProjectHome } from '@/features/projects/project-home';
 import { ProjectPackageActions } from '@/features/projects/project-package-actions';
+import { ProjectRenameDialog } from '@/features/projects/project-rename-dialog';
 import { ProjectUnavailableNotice } from '@/features/projects/project-unavailable-notice';
 import { useLibrary } from '@/features/projects/use-library';
+import { useProjectRename } from '@/features/projects/use-project-rename';
 import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
 import { CanvasErrorBoundary } from '@/features/workspace/canvas-error-boundary';
 import { ProjectCanvas } from '@/features/workspace/project-canvas';
 import { useInputMethod } from '@/lib/input-method';
+import type { ProjectSnapshot } from '../../shared/models';
+import type { ProjectEditDraftRecord } from '../../shared/project-edit-draft';
 
 export function App() {
   useInputMethod();
@@ -27,15 +31,39 @@ export function App() {
   const [settingsPage, setSettingsPage] = useState<'interactions' | 'storage'>(
     'interactions',
   );
-  const [newName, setNewName] = useState<string | null>(null);
-  const { library, project, busy, run } = state;
-  usePendingSave(
-    '项目名称输入',
-    async () => newName === null || newName.trim() === project?.project.name,
-    -20,
-  );
-  const projectBlocked =
+  const { library, project, busy, run, refreshProjectAfterEdit } = state;
+  const baseProjectBlocked =
     library?.writeBlocked === true || !!state.projectUnavailable;
+  const onRestored = useCallback(
+    async (_record: ProjectEditDraftRecord, saved: ProjectSnapshot) => {
+      await refreshProjectAfterEdit(saved);
+    },
+    [refreshProjectAfterEdit],
+  );
+  const editRecovery = useProjectEditDrafts(
+    project?.project.id ?? null,
+    baseProjectBlocked,
+    onRestored,
+  );
+  const projectBlocked = baseProjectBlocked || editRecovery.restoring;
+  const rename = useProjectRename(project, {
+    blocked: projectBlocked,
+    onSaved: refreshProjectAfterEdit,
+    onDraftsChanged: editRecovery.refresh,
+  });
+  const editNotice = project ? (
+    <ProjectEditDraftNotice
+      recovery={editRecovery}
+      snapshot={project}
+      blocked={projectBlocked}
+      activeNameSession={rename.editor?.sessionId ?? null}
+      nameEditing={!!rename.editor}
+      openName={(record) => {
+        if (projectEditRecoveryGuards.canRecover(project.project.id))
+          rename.open(record);
+      }}
+    />
+  ) : null;
   const unavailableNotice = state.projectUnavailable ? (
     <ProjectUnavailableNotice
       state={state.projectUnavailable}
@@ -75,7 +103,7 @@ export function App() {
               disabled={projectBlocked}
               className="max-w-96 truncate rounded px-1 py-2 text-sm font-medium hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
               title="修改项目名称"
-              onClick={() => setNewName(project.project.name)}
+              onClick={() => rename.open()}
             >
               {project.project.name}
             </button>
@@ -159,6 +187,7 @@ export function App() {
         />
       )}
       {unavailableNotice}
+      {editNotice}
       <div ref={content} className="flex min-h-0 flex-1 flex-col">
         {!library ? (
           <main className="grid flex-1 place-items-center text-sm text-muted-foreground">
@@ -173,9 +202,14 @@ export function App() {
               snapshot={project}
               blocked={projectBlocked}
               projectUnavailable={!!state.projectUnavailable}
-              unavailableNotice={unavailableNotice}
+              unavailableNotice={
+                <>
+                  {unavailableNotice}
+                  {editNotice}
+                </>
+              }
               interactions={library.interactions}
-              inactive={settings || newName !== null || lifecycle.saving}
+              inactive={settings || !!rename.editor || lifecycle.saving}
               report={state.reportProjectFailure}
             />
           </CanvasErrorBoundary>
@@ -202,48 +236,10 @@ export function App() {
           onClose={() => setSettings(false)}
         />
       )}
-      {newName !== null && project && (
-        <Modal
-          title="修改项目名称"
-          onClose={() => setNewName(null)}
-          error={state.error}
-        >
-          {(requestClose) => (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void run(async () => {
-                  if (projectBlocked) return;
-                  await window.desktop.renameProject(
-                    project.project.id,
-                    newName,
-                  );
-                  requestClose();
-                });
-              }}
-            >
-              <Input
-                aria-label="项目名称"
-                value={newName}
-                readOnly={projectBlocked}
-                maxLength={100}
-                onChange={(event) => setNewName(event.target.value)}
-              />
-              <div className="mt-5 flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={requestClose}>
-                  取消
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={busy || !newName.trim() || projectBlocked}
-                >
-                  保存
-                </Button>
-              </div>
-            </form>
-          )}
-        </Modal>
-      )}
+      <ProjectRenameDialog
+        rename={rename}
+        unavailableNotice={unavailableNotice}
+      />
     </div>
   );
 }

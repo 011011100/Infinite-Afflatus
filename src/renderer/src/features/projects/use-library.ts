@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import type { ProjectSnapshot } from '../../../../shared/models';
 import { LibrarySession, projectErrorMessage } from './library-session';
 import { projectRecoveryGuards } from './project-recovery-guards';
 
@@ -46,6 +47,17 @@ export function useLibrary() {
   const refresh = useCallback(async () => {
     await session.refresh();
   }, [session]);
+
+  const refreshProjectAfterEdit = useCallback(
+    async (saved: ProjectSnapshot) => {
+      await session.refresh();
+      const current = session.getSnapshot();
+      if (current.project?.project.id !== saved.project.id) return;
+      if (current.projectUnavailable)
+        throw new Error(current.projectUnavailable.message);
+    },
+    [session],
+  );
 
   const run = useCallback(
     async (operation: () => Promise<unknown>) => {
@@ -120,6 +132,7 @@ export function useLibrary() {
     project,
     projectUnavailable,
     retryProject: () => session.refreshProject(true),
+    refreshProjectAfterEdit,
     reportProjectFailure: (reason: unknown) => session.failProject(reason),
     error,
     busy: operations > 0,

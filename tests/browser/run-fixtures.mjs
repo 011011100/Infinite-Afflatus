@@ -16,6 +16,9 @@ const available = [
   'media-tool-settings-controls',
   'reference-import-controls',
   'staging-cleanup-controls',
+  'project-rename-controls',
+  'trim-recovery-controls',
+  'project-edit-recovery-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

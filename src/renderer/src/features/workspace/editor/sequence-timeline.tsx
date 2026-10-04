@@ -3,6 +3,7 @@
 import { type KeyboardEvent, useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
+import { projectEditRecoveryGuards } from '../../drafts/project-edit-recovery-guards';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { mediaUrl } from '../media';
 import { mediaRevision, useMediaRevision } from '../use-media-revision';
@@ -220,6 +221,8 @@ export function SequenceTimeline({
                       onCommit(index, range);
                     }}
                     onPointerDown={(event) => {
+                      if (projectEditRecoveryGuards.isRecovering(projectId))
+                        return;
                       if (disabled || event.button !== 0 || dragging) return;
                       const rect = track.current?.getBoundingClientRect();
                       if (!rect) return;

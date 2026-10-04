@@ -8,6 +8,7 @@ export function Modal({
   children,
   onClose,
   onCloseStart,
+  beforeClose,
   wide = false,
   error,
 }: {
@@ -15,12 +16,13 @@ export function Modal({
   children: ReactNode | ((requestClose: () => void) => ReactNode);
   onClose: () => void;
   onCloseStart?: () => void;
+  beforeClose?: () => Promise<boolean>;
   wide?: boolean;
   error?: string | null;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const requestClose = useModalMotion(ref, onClose, onCloseStart);
+  const requestClose = useModalMotion(ref, onClose, onCloseStart, beforeClose);
   return (
     <dialog
       ref={ref}
