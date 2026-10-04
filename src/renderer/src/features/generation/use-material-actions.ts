@@ -1,5 +1,5 @@
 import type { ReactFlowInstance } from '@xyflow/react';
-import { type RefObject, useRef, useState } from 'react';
+import { type RefObject, useRef } from 'react';
 import { materialPosition } from '../../../../shared/generation/material-layout';
 import {
   LABEL_SIZE,
@@ -11,9 +11,9 @@ import {
   MATERIAL_WIDTH,
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
-import { usePendingSave } from '../lifecycle/use-pending-save';
-import { message } from './errors';
+import type { ReferenceImportTarget } from './reference-import-target';
 import type { MaterialCanvasNode } from './use-material-flow';
+import { useReferenceImport } from './use-reference-import';
 
 export function useMaterialActions(
   shot: ShotWorkspace,
@@ -22,16 +22,11 @@ export function useMaterialActions(
   area: RefObject<HTMLDivElement | null>,
   onChange: (update: (shot: ShotWorkspace) => ShotWorkspace) => void,
   select: (ids: string[]) => void,
+  blocked = false,
+  beginImport?: () => ReferenceImportTarget | null,
 ) {
-  const [importing, setImporting] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const pendingImport = useRef<Promise<boolean> | null>(null);
-  // Import callbacks add material references, so finish them before saving the shot draft.
-  usePendingSave(
-    `导入镜头素材:${projectId}`,
-    () => pendingImport.current ?? Promise.resolve(true),
-    -10,
-  );
+  const locked = useRef(blocked);
+  locked.current = blocked;
   const position = (count = 1, size?: Size) => {
     const rect = area.current?.getBoundingClientRect();
     const center =
@@ -50,6 +45,9 @@ export function useMaterialActions(
       height?: number;
     }[],
   ) => {
+    // Leaving freezes the page before adding the completed intake IDs. Do not
+    // start a viewport animation that could write again after that final save.
+    if (area.current?.closest('[inert]')) return;
     const rects = [...shot.nodes.filter((node) => !node.groupId), ...nodes];
     const x = Math.min(...rects.map((node) => node.position.x));
     const y = Math.min(...rects.map((node) => node.position.y));
@@ -101,10 +99,9 @@ export function useMaterialActions(
     select([id]);
     reveal([{ position: at }]);
   };
-  const addAssets = (ids: string[]) => {
-    if (!ids.length) return;
+  const assetNodes = (ids: string[]) => {
     const at = position(ids.length);
-    const nodes = ids.map((assetId, index) => ({
+    return ids.map((assetId, index) => ({
       id: crypto.randomUUID(),
       type: 'asset' as const,
       assetId,
@@ -113,6 +110,10 @@ export function useMaterialActions(
         y: at.y + Math.floor(index / 3) * (MATERIAL_HEIGHT + 24),
       },
     }));
+  };
+  const addAssets = (ids: string[]) => {
+    if (!ids.length) return;
+    const nodes = assetNodes(ids);
     onChange((current) => ({
       ...current,
       nodes: [...current.nodes, ...nodes],
@@ -120,38 +121,40 @@ export function useMaterialActions(
     select(nodes.map((node) => node.id));
     reveal(nodes);
   };
-  const importFiles = async () => {
-    setImporting(true);
-    pendingImport.current = (async () => {
-      try {
-        const imported = await window.desktop.importReferences(projectId);
-        addAssets(imported.assetIds);
-        setLocalError(
-          imported.errors.length
-            ? [
-                `已添加 ${imported.assetIds.length} 个素材；${imported.errors.length} 个未添加。`,
-                ...imported.errors,
-              ].join('\n')
-            : null,
-        );
+  const importing = useReferenceImport(projectId, () => {
+    if (locked.current) return null;
+    const target = beginImport
+      ? beginImport()
+      : {
+          append: (nodes: ReturnType<typeof assetNodes>) => {
+            if (locked.current) return false;
+            onChange((current) => ({
+              ...current,
+              nodes: [...current.nodes, ...nodes],
+            }));
+            return true;
+          },
+          finish: () => {},
+        };
+    if (!target) return null;
+    let nodes: ReturnType<typeof assetNodes> | null = null;
+    return {
+      accept: (ids) => {
+        nodes ??= assetNodes(ids);
+        if (!target.append(nodes)) return false;
+        if (nodes.length) {
+          select(nodes.map((node) => node.id));
+          if (!locked.current) reveal(nodes);
+        }
         return true;
-      } catch (reason) {
-        setLocalError(message(reason));
-        return false;
-      } finally {
-        setImporting(false);
-      }
-    })();
-    await pendingImport.current;
-    pendingImport.current = null;
-  };
+      },
+      finish: target.finish,
+    };
+  });
   return {
     addText,
     addLabel,
     addAssets,
-    importFiles,
-    importing,
-    localError,
-    setLocalError,
+    ...importing,
   };
 }

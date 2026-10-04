@@ -91,4 +91,7 @@ export interface ReferenceImportResult {
   assetIds: string[];
   /** Per-file intake failures; their IDs must never be added to a workspace. */
   errors: string[];
+  cancelled: boolean;
+  /** Current incomplete file and files not started; completed files remain accepted. */
+  cancelledCount: number;
 }

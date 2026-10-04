@@ -16,6 +16,7 @@ import { useWorkspaceDrafts } from '../drafts/use-workspace-drafts';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 import { message } from './errors';
+import type { ReferenceImportTarget } from './reference-import-target';
 
 /** One project-scoped save stream, including edits made while an earlier write is pending. */
 export function useShotWorkspace(
@@ -42,6 +43,7 @@ export function useShotWorkspace(
   const pending = useRef<Promise<boolean> | null>(null);
   const locked = useRef(blocked);
   const history = useRef(new ShotHistory());
+  const imports = useRef(new Set<symbol>());
   locked.current = blocked || recoveringRef.current;
   const flush = useCallback((): Promise<boolean> => {
     if (pending.current) return pending.current;
@@ -89,7 +91,7 @@ export function useShotWorkspace(
     })();
     return pending.current;
   }, [projectId, draftQueue]);
-  usePendingSave(`镜头草稿:${projectId}`, flush);
+  usePendingSave(`镜头草稿:${projectId}`, flush, 0, () => pending.current);
   useProjectRecoveryGuard(projectId, async () => {
     await pending.current;
     const remote = await window.desktop.getGenerationWorkspace(projectId);
@@ -127,10 +129,8 @@ export function useShotWorkspace(
       void flush();
     };
   }, [projectId, flush]);
-  const change = useCallback(
-    (update: (value: GenerationWorkspace) => GenerationWorkspace) => {
-      if (!current.current || locked.current) return;
-      const next = update(current.current);
+  const commit = useCallback(
+    (next: GenerationWorkspace) => {
       if (next === current.current) return;
       current.current = next;
       edit.current += 1;
@@ -139,6 +139,69 @@ export function useShotWorkspace(
     },
     [draftQueue],
   );
+  const change = useCallback(
+    (update: (value: GenerationWorkspace) => GenerationWorkspace) => {
+      if (!current.current || locked.current) return;
+      commit(update(current.current));
+    },
+    [commit],
+  );
+  const beginReferenceImport = (
+    shotId: string,
+  ): ReferenceImportTarget | null => {
+    if (
+      locked.current ||
+      !current.current?.shots.some((shot) => shot.id === shotId)
+    )
+      return null;
+    const token = Symbol('shot-reference-import');
+    imports.current.add(token);
+    return {
+      append: (nodes) => {
+        const doc = current.current;
+        const shot = doc?.shots.find((item) => item.id === shotId);
+        if (
+          !imports.current.has(token) ||
+          recoveringRef.current ||
+          !doc ||
+          !shot
+        )
+          return false;
+        // A retry uses the same IDs and cannot append the same result twice.
+        const existing = new Map(shot.nodes.map((node) => [node.id, node]));
+        const added = [];
+        for (const node of nodes) {
+          const previous = existing.get(node.id);
+          if (previous) {
+            if (previous.type !== 'asset' || previous.assetId !== node.assetId)
+              return false;
+            continue;
+          }
+          const next = {
+            id: node.id,
+            assetId: node.assetId,
+            position: node.position,
+            type: 'asset' as const,
+          };
+          existing.set(node.id, next);
+          added.push(next);
+        }
+        if (!added.length) return true;
+        const next = { ...shot, nodes: [...shot.nodes, ...added] };
+        history.current.record(shot, next);
+        // This is only completion of work authorized before the lock. Ordinary
+        // edits stay blocked; the independent recovery journal protects its IDs.
+        commit({
+          ...doc,
+          shots: doc.shots.map((item) => (item.id === shotId ? next : item)),
+        });
+        return true;
+      },
+      finish: () => {
+        imports.current.delete(token);
+      },
+    };
+  };
   useEffect(() => {
     if (!workspace || blocked || saved.current === edit.current) return;
     const timer = setTimeout(() => {
@@ -155,6 +218,10 @@ export function useShotWorkspace(
     return () => clearInterval(timer);
   }, [loaded, blocked, flush]);
   const recoverDraft = async (record: WorkspaceDraftRecord) => {
+    if (imports.current.size) {
+      recovery.setError('素材导入尚未结束，请完成或取消后再恢复镜头草稿。');
+      return false;
+    }
     if (
       !current.current ||
       locked.current ||
@@ -281,6 +348,7 @@ export function useShotWorkspace(
     open,
     create,
     updateShot,
+    beginReferenceImport,
     historyFor: (id: string): ShotHistoryActions => ({
       ...history.current.state(id),
       undo: () => restore(id, 'undo'),

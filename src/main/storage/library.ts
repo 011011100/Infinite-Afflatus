@@ -5,13 +5,18 @@ import type { LibraryState } from '../../shared/models';
 import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
+import { ReferenceImportService } from '../generation/reference-import-service';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { ProjectHealthService } from '../recovery/project-health-service';
 import { SaveQueue } from '../saving/save-queue';
-import { type GeneratedResult, Staging } from '../saving/staging';
+import {
+  type GeneratedResult,
+  Staging,
+  type StagingReceiveControls,
+} from '../saving/staging';
 import { InteractionSettingsStore } from '../settings/interaction-settings';
 import { AppStore } from './app-store';
 import { readAppStoreRoot } from './app-store-guard';
@@ -37,6 +42,7 @@ export class Library {
   readonly packages: ProjectPackageService;
   readonly health: ProjectHealthService;
   readonly drafts: WorkspaceDraftService;
+  readonly referenceImports: ReferenceImportService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
   private exportListeners = new Set<() => void>();
@@ -88,6 +94,13 @@ export class Library {
       this.gate,
       this.staging,
       () => this.emit(),
+    );
+    this.referenceImports = new ReferenceImportService(
+      {
+        acceptResult: (result, stream, controls) =>
+          this.acceptResult(result, stream, controls),
+      },
+      this.saves,
     );
     this.migration = new MigrationService(
       store,
@@ -183,12 +196,16 @@ export class Library {
   }
 
   /** Provider adapters hand off result bytes here; they never receive a project directory. */
-  async acceptResult(result: GeneratedResult, stream: Readable) {
+  async acceptResult(
+    result: GeneratedResult,
+    stream: Readable,
+    controls?: StagingReceiveControls,
+  ) {
     if (this.isClosing) {
       stream.destroy();
       throw new Error('应用正在关闭，请重新打开后导入');
     }
-    const job = await this.staging.receive(result, stream);
+    const job = await this.staging.receive(result, stream, controls);
     this.saves.kick();
     return job;
   }
@@ -199,10 +216,19 @@ export class Library {
   }
 
   private async shutdown(): Promise<void> {
-    this.packages.cancel();
-    await this.health.close();
-    await this.packages.close();
-    await this.exports.close();
+    // A reference save can be queued behind any of these gate holders. Signal
+    // every cancellation before waiting, and observe every cleanup outcome.
+    // Fully received results remain durable and resume on the next library open.
+    const stopped = await Promise.allSettled([
+      this.referenceImports.close(),
+      this.health.close(),
+      this.packages.close(),
+      this.exports.close(),
+    ]);
+    const errors = stopped.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (errors.length) throw new AggregateError(errors, '后台任务未能安全停止');
     await this.proxies.close();
     await this.staging.idle();
     await this.migration.idle();

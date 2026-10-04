@@ -28,7 +28,10 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
-import { flushPendingChanges } from '@/features/lifecycle/pending-saves';
+import {
+  capturePendingSaves,
+  flushPendingChanges,
+} from '@/features/lifecycle/pending-saves';
 import { isMac } from '@/lib/platform';
 import type {
   ShotHistoryActions,
@@ -41,6 +44,7 @@ import type {
   Shortcuts,
 } from '../../../../shared/interaction/shortcuts';
 import type { ProjectSnapshot } from '../../../../shared/models';
+import { message } from './errors';
 import { GenerationGroupCard } from './generation-group';
 import { GroupStage } from './group-stage';
 import { LabelCard } from './label-node';
@@ -49,6 +53,8 @@ import { useLabelFlight } from './labels/use-label-flight';
 import { MaterialGenerationActions } from './material-generation-actions';
 import { MaterialCard } from './material-node';
 import { MaterialSelectionFrame } from './material-selection-frame';
+import { ReferenceImportStatus } from './reference-import-status';
+import type { ReferenceImportTarget } from './reference-import-target';
 import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
@@ -78,6 +84,7 @@ export function MaterialCanvas({
   recovering = false,
   error,
   onChange,
+  beginImport,
   onClose,
   beforeClose,
   retry,
@@ -95,6 +102,7 @@ export function MaterialCanvas({
   recovering?: boolean;
   error: string | null;
   onChange: ShotUpdate;
+  beginImport?: () => ReferenceImportTarget | null;
   onClose: () => void;
   beforeClose: () => Promise<boolean>;
   retry: () => Promise<boolean>;
@@ -104,8 +112,26 @@ export function MaterialCanvas({
   const area = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState(false);
   const { closing, requestClose } = usePageMotion(page, onClose, async () => {
-    if (!(await flushPendingChanges())) return false;
-    return beforeClose();
+    let token: string | null = null;
+    const captured = capturePendingSaves();
+    try {
+      token = await window.desktop.prepareReferenceImportsForLeave();
+      const completed = await captured;
+      const flushed = await flushPendingChanges();
+      if (!completed || !flushed) return false;
+      return await beforeClose();
+    } catch (reason) {
+      setLocalError(message(reason));
+      return false;
+    } finally {
+      if (token) {
+        try {
+          await window.desktop.resumeReferenceSaves(token);
+        } catch (reason) {
+          setLocalError(message(reason));
+        }
+      }
+    }
   });
   const model = useMaterialFlow(
     shot,
@@ -129,7 +155,13 @@ export function MaterialCanvas({
     addLabel,
     addAssets,
     importFiles,
+    cancelImport,
     importing,
+    progress,
+    notice,
+    dismissNotice,
+    pendingAssets,
+    retryAdding,
     localError,
     setLocalError,
   } = useMaterialActions(
@@ -139,6 +171,8 @@ export function MaterialCanvas({
     area,
     onChange,
     model.setSelected,
+    blocked,
+    beginImport,
   );
   useEffect(() => {
     const root = document.getElementById('root');
@@ -153,7 +187,7 @@ export function MaterialCanvas({
   }, []);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
-    if (importing || recovering) return;
+    if (recovering) return;
     navigation.cancel();
     await requestClose();
   };
@@ -164,7 +198,7 @@ export function MaterialCanvas({
     model.selected.length === 1
       ? shot.nodes.find((node) => node.id === model.selected[0] && node.groupId)
       : undefined;
-  const disabled = blocked || importing || closing;
+  const disabled = blocked || importing || closing || pendingAssets;
   const groupActions = {
     count: model.grouping.materials.length,
     hasGroups: model.grouping.groups.length > 0,
@@ -220,7 +254,7 @@ export function MaterialCanvas({
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-5">
         <Button
           variant="ghost"
-          disabled={importing || closing || recovering}
+          disabled={closing || recovering}
           onClick={() => void close()}
         >
           <ArrowLeft />
@@ -261,6 +295,12 @@ export function MaterialCanvas({
         </span>
       </header>
       {unavailableNotice}
+      <ReferenceImportStatus
+        progress={progress}
+        notice={notice}
+        cancel={cancelImport}
+        dismiss={dismissNotice}
+      />
       {(error || localError) && (
         <div
           role="alert"
@@ -275,13 +315,26 @@ export function MaterialCanvas({
             </Button>
           )}
           {localError && (
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => setLocalError(null)}
-            >
-              关闭提示
-            </Button>
+            <>
+              {pendingAssets && (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => void retryAdding()}
+                >
+                  重试添加素材
+                </Button>
+              )}
+              {!pendingAssets && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setLocalError(null)}
+                >
+                  关闭提示
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}

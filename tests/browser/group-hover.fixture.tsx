@@ -4,7 +4,10 @@ import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { groupMaterials, newShot } from '../../src/shared/generation/workspace';
 import type { ProjectSnapshot } from '../../src/shared/models';
+import { referenceImportMock } from './reference-import-mock';
 import '../../src/renderer/src/styles.css';
+
+Object.assign(window, { desktop: referenceImportMock().bridge });
 
 const initial = newShot('shot', '悬停加入测试', { x: 0, y: 0 });
 if (new URLSearchParams(location.search).has('zoom'))

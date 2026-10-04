@@ -11,6 +11,7 @@ import {
 } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { ProjectSnapshot } from '../../src/shared/models';
+import { referenceImportMock } from './reference-import-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
@@ -51,6 +52,7 @@ let stored = {
 let failing = false;
 let writes = 0;
 window.desktop = {
+  ...referenceImportMock().bridge,
   ...workspaceDraftMock(() => stored).bridge,
   getGenerationWorkspace: async () => structuredClone(stored),
   saveGenerationWorkspace: async (_id, workspace) => {
@@ -60,7 +62,12 @@ window.desktop = {
     writes++;
     return structuredClone(stored);
   },
-  importReferences: async () => ({ assetIds: ['imported'], errors: [] }),
+  importReferences: async () => ({
+    assetIds: ['imported'],
+    errors: [],
+    cancelled: false,
+    cancelledCount: 0,
+  }),
   readReferenceText: async () => '磁盘文本保持不变',
 } as DesktopBridge;
 const snapshot: ProjectSnapshot = {

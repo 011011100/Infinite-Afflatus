@@ -8,7 +8,10 @@ import {
   ungroupMaterials,
 } from '../../src/shared/generation/workspace';
 import type { ProjectSnapshot } from '../../src/shared/models';
+import { referenceImportMock } from './reference-import-mock';
 import '../../src/renderer/src/styles.css';
+
+Object.assign(window, { desktop: referenceImportMock().bridge });
 
 const initial = newShot('test', '卡片与标签测试', { x: 0, y: 0 });
 initial.nodes = [

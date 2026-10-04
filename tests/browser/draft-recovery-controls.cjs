@@ -163,6 +163,11 @@ app.whenReady().then(async () => {
     console.log(
       'PASS failed recovery keeps the project open and original contents usable',
     );
+    await run('void recoveryControls.leave()');
+    await waitFor(
+      'recoveryControls.leaveResult === true && !!document.querySelector("#home")',
+      'a later explicit leave is not blocked by the old failed recovery',
+    );
     assert.deepEqual(errors, []);
   } catch (error) {
     failed = true;

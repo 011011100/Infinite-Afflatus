@@ -22,6 +22,18 @@ export interface GeneratedResult {
   extension: string;
 }
 
+export interface StagingProgress {
+  phase: 'receiving' | 'finalizing';
+  bytes: number;
+}
+
+export interface StagingReceiveControls {
+  signal?: AbortSignal;
+  onProgress?: (progress: StagingProgress) => void;
+}
+
+export const STAGING_CANCELLED = '接收结果已取消';
+
 /** Every result goes to durable userData staging, including results received outside migration. */
 export class Staging {
   private receiving: Promise<unknown> = Promise.resolve();
@@ -36,19 +48,57 @@ export class Staging {
     return join(this.directory, `${id}.ready`);
   }
 
-  receive(result: GeneratedResult, stream: Readable): Promise<SaveJob> {
+  receive(
+    result: GeneratedResult,
+    stream: Readable,
+    controls: StagingReceiveControls = {},
+  ): Promise<SaveJob> {
     // A remote response can fail while waiting its turn; iteration will surface the error.
     stream.on('error', () => undefined);
     // One ingestion at a time makes the disk quota exact; cloud tasks themselves remain independent.
-    const work = this.receiving.then(() => this.write(result, stream));
+    let started = false;
+    let cancelQueued: ((reason: unknown) => void) | undefined;
+    const cancelled = new Promise<SaveJob>((_resolve, reject) => {
+      cancelQueued = reject;
+    });
+    const abort = () => {
+      const reason = controls.signal?.reason;
+      stream.destroy(
+        reason instanceof Error
+          ? reason
+          : new DOMException(STAGING_CANCELLED, 'AbortError'),
+      );
+      if (!started) cancelQueued?.(controls.signal?.reason);
+    };
+    const work = this.receiving.then(() => {
+      controls.signal?.throwIfAborted();
+      started = true;
+      return this.write(result, stream, controls);
+    });
     this.receiving = work.catch(() => undefined);
-    return work;
+    const cleanup = () => controls.signal?.removeEventListener('abort', abort);
+    void work.then(cleanup, cleanup);
+    controls.signal?.addEventListener('abort', abort, { once: true });
+    if (controls.signal?.aborted) abort();
+    // Queued cancellation is observable now; its later turn still checks the
+    // signal before creating a job or touching staging files.
+    return controls.signal ? Promise.race([work, cancelled]) : work;
   }
 
   private async write(
     result: GeneratedResult,
     stream: Readable,
+    controls: StagingReceiveControls,
   ): Promise<SaveJob> {
+    const { signal, onProgress } = controls;
+    const progress = (phase: StagingProgress['phase'], bytes: number) => {
+      try {
+        onProgress?.({ phase, bytes });
+      } catch {
+        // A progress observer cannot change whether bytes are durably accepted.
+      }
+    };
+    signal?.throwIfAborted();
     const previous = this.store
       .jobs()
       .find(
@@ -86,13 +136,17 @@ export class Staging {
     };
     let pendingBytes = 0;
     for (const entry of await readdir(this.directory)) {
+      signal?.throwIfAborted();
       const info = await lstat(join(this.directory, entry)).catch(() => null);
       if (info?.isFile()) pendingBytes += info.size;
     }
     const partial = join(this.directory, `${job.id}.part`);
+    signal?.throwIfAborted();
     this.store.putJob(job);
     this.notify();
     try {
+      progress('receiving', 0);
+      signal?.throwIfAborted();
       const handle = await open(
         partial,
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
@@ -101,12 +155,14 @@ export class Staging {
       const hash = createHash('sha256');
       try {
         for await (const chunk of stream) {
+          signal?.throwIfAborted();
           const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           if (pendingBytes + job.size + bytes.length > this.quota)
             throw new Error('结果暂存空间已达上限，请先完成保存或释放磁盘空间');
           await checkSpace(this.directory, bytes.length);
           let offset = 0;
           while (offset < bytes.length) {
+            signal?.throwIfAborted();
             const { bytesWritten } = await handle.write(
               bytes,
               offset,
@@ -114,25 +170,38 @@ export class Staging {
             );
             if (!bytesWritten) throw new Error('暂存文件写入中断');
             offset += bytesWritten;
+            job.size += bytesWritten;
+            progress('receiving', job.size);
           }
           hash.update(bytes);
-          job.size += bytes.length;
         }
+        signal?.throwIfAborted();
         if (!job.size) throw new Error('生成结果为空');
+        progress('finalizing', job.size);
+        signal?.throwIfAborted();
         await handle.sync();
       } finally {
         await handle.close();
       }
+      signal?.throwIfAborted();
       job.sha256 = hash.digest('hex');
       // Persist the expected digest before rename so startup can recognize a complete result.
       this.store.putJob(job);
+      signal?.throwIfAborted();
       await rename(partial, this.path(job.id));
+      // Publication has started: finish durable acknowledgement even if a late
+      // cancellation arrives, so a completed result keeps its stable ID.
       await syncDirectory(this.directory);
       job.status = 'ready';
     } catch (error) {
       stream.destroy();
       job.status = 'failed';
-      job.error = `接收结果失败：${errorMessage(error)}`;
+      job.error =
+        signal?.aborted &&
+        (error === signal.reason ||
+          (error instanceof Error && error.name === 'AbortError'))
+          ? STAGING_CANCELLED
+          : `接收结果失败：${errorMessage(error)}`;
       // Incomplete bytes are never mistaken for a generated result. Keep them for diagnosis.
     }
     this.store.putJob(job);
@@ -173,11 +242,21 @@ export class Staging {
     }
   }
 
-  async remove(job: SaveJob): Promise<void> {
+  async remove(job: SaveJob, signal?: AbortSignal): Promise<void> {
     // A changed cache file might be user data; do not delete it blindly.
     const file = this.path(job.id);
-    if (!sameContent(await fingerprint(file), job))
+    const verified = await fingerprint(file, signal);
+    if (!sameContent(verified, job)) throw new Error('暂存文件已变化，已保留');
+    const current = await lstat(file);
+    if (
+      current.isSymbolicLink() ||
+      current.dev !== verified.device ||
+      current.ino !== verified.inode ||
+      current.size !== verified.size ||
+      current.mtimeMs !== verified.modified
+    )
       throw new Error('暂存文件已变化，已保留');
+    signal?.throwIfAborted();
     await unlink(file);
   }
 

@@ -4,7 +4,10 @@ import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
 import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { newShot } from '../../src/shared/generation/workspace';
 import type { Asset, ProjectSnapshot } from '../../src/shared/models';
+import { referenceImportMock } from './reference-import-mock';
 import '../../src/renderer/src/styles.css';
+
+Object.assign(window, { desktop: referenceImportMock().bridge });
 
 const queryKind = new URLSearchParams(location.search).get('asset');
 const kind: Asset['kind'] =

@@ -66,6 +66,7 @@ if (!app.requestSingleInstanceLock()) {
             console.warn('Export preparation cleanup failed:', error);
           });
         },
+        library.referenceImports,
       );
       serveProjectMedia(library);
       showWindow();

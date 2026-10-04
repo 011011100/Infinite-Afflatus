@@ -53,6 +53,61 @@ test('a failed draft prevents leaving, preserves other saves, and can be retried
   assert.equal(otherSaved, 2);
 });
 
+test('capture observes an in-flight failure before cancellation yields, without starting writes or blocking a later explicit leave', async () => {
+  const saves = new PendingSaves();
+  let finish!: (value: boolean) => void;
+  let pending: Promise<boolean> | null = new Promise<boolean>((resolve) => {
+    finish = resolve;
+  }).finally(() => {
+    pending = null;
+  });
+  let writes = 0;
+  saves.register(
+    'recovery',
+    async () => {
+      writes++;
+      return true;
+    },
+    0,
+    () => pending,
+  );
+  const captured = saves.capturePending();
+  assert.equal(writes, 0, 'capturing must not submit work behind the gate');
+  finish(false);
+  assert.equal(await captured, false);
+  assert.equal(pending, null);
+  assert.equal(
+    await saves.flush(),
+    true,
+    'independent current drafts still flush',
+  );
+  assert.equal(writes, 1);
+  assert.equal(
+    await saves.capturePending(),
+    true,
+    'failure belongs only to the leave that observed it',
+  );
+  assert.equal(await saves.flush(), true);
+});
+
+test('captured rejections are handled even before leave is ready to await them', async () => {
+  const saves = new PendingSaves();
+  let reject!: (reason: Error) => void;
+  const pending = new Promise<boolean>((_resolve, fail) => {
+    reject = fail;
+  });
+  saves.register(
+    'existing operation',
+    async () => true,
+    0,
+    () => pending,
+  );
+  const captured = saves.capturePending();
+  reject(new Error('disk offline'));
+  await turn();
+  assert.equal(await captured, false);
+});
+
 test('viewport saves serialize the latest position and retain it after disk failure', async () => {
   const writes: { value: number; resolve: () => void; reject: () => void }[] =
     [];

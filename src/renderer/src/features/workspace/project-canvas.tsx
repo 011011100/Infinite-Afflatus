@@ -530,6 +530,9 @@ function CanvasContent({
             if (shots.activeId)
               shots.updateShot(shots.activeId, update, options);
           }}
+          beginImport={() =>
+            shots.activeId ? shots.beginReferenceImport(shots.activeId) : null
+          }
           beforeClose={shots.flush}
           onClose={shots.dismiss}
           retry={shots.retry}

@@ -9,7 +9,6 @@ import type { ReferenceImportResult } from '../../shared/generation/draft';
 import { REFERENCE_EXTENSIONS } from '../../shared/generation/reference-files';
 import { isId } from '../projects/project-service';
 import type { Library } from '../storage/library';
-import { importReferenceFiles } from './import-references';
 
 export function registerGenerationIpc(
   library: Library,
@@ -17,6 +16,16 @@ export function registerGenerationIpc(
 ) {
   const id = (value: unknown) => {
     if (!isId(value)) throw new Error('无效的项目或素材标识');
+    return value;
+  };
+  const requestId = (value: unknown) => {
+    if (
+      typeof value !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      )
+    )
+      throw new Error('无效的素材导入标识');
     return value;
   };
   ipcMain.handle(
@@ -63,28 +72,62 @@ export function registerGenerationIpc(
   );
   ipcMain.handle(
     IPC_CHANNELS.importReferences,
-    async (event, projectId: unknown): Promise<ReferenceImportResult> => {
+    async (
+      event,
+      projectId: unknown,
+      importId: unknown,
+    ): Promise<ReferenceImportResult> => {
       const window = trustedWindow(event);
       const validatedId = id(projectId);
+      const validatedImportId = requestId(importId);
       library.projects.summary(validatedId);
-      const result = await dialog.showOpenDialog(window, {
-        title: '添加参考素材',
-        properties: ['openFile', 'multiSelections'],
-        filters: [
-          {
-            name: '图片、视频、音频、文本',
-            extensions: Object.values(REFERENCE_EXTENSIONS).flat(),
-          },
-        ],
-      });
-      if (result.canceled) return { assetIds: [], errors: [] };
-      const imported = await importReferenceFiles(
-        library,
+      return library.referenceImports.run(
+        window.webContents.id,
         validatedId,
-        result.filePaths,
+        validatedImportId,
+        async () => {
+          const result = await dialog.showOpenDialog(window, {
+            title: '添加参考素材',
+            properties: ['openFile', 'multiSelections'],
+            filters: [
+              {
+                name: '图片、视频、音频、文本',
+                extensions: Object.values(REFERENCE_EXTENSIONS).flat(),
+              },
+            ],
+          });
+          trustedWindow(event);
+          return result;
+        },
+        (progress) => {
+          if (!window.isDestroyed() && !window.webContents.isDestroyed())
+            window.webContents.send(
+              IPC_CHANNELS.referenceImportProgress,
+              progress,
+            );
+        },
       );
-      await library.saves.idle();
-      return imported;
     },
   );
+  ipcMain.handle(
+    IPC_CHANNELS.cancelReferenceImport,
+    (event, importId: unknown) => {
+      const window = trustedWindow(event);
+      return library.referenceImports.cancel(
+        window.webContents.id,
+        requestId(importId),
+      );
+    },
+  );
+  ipcMain.handle(IPC_CHANNELS.prepareReferenceImportsForLeave, (event) => {
+    const window = trustedWindow(event);
+    return library.referenceImports.prepareForLeave(window.webContents.id);
+  });
+  ipcMain.handle(IPC_CHANNELS.resumeReferenceSaves, (event, token: unknown) => {
+    const window = trustedWindow(event);
+    library.referenceImports.resumeAfterLeave(
+      window.webContents.id,
+      requestId(token),
+    );
+  });
 }

@@ -84,8 +84,27 @@ const desktop: DesktopBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.getGenerationDraft, id),
   saveGenerationDraft: (id, draft) =>
     ipcRenderer.invoke(IPC_CHANNELS.saveGenerationDraft, id, draft),
-  importReferences: (id) =>
-    ipcRenderer.invoke(IPC_CHANNELS.importReferences, id),
+  importReferences: (id, requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.importReferences, id, requestId),
+  cancelReferenceImport: (requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelReferenceImport, requestId),
+  onReferenceImportProgress: (listener) => {
+    const progress = (
+      _event: Electron.IpcRendererEvent,
+      value: Parameters<typeof listener>[0],
+    ) => listener(value);
+    ipcRenderer.on(IPC_CHANNELS.referenceImportProgress, progress);
+    return () => {
+      ipcRenderer.removeListener(
+        IPC_CHANNELS.referenceImportProgress,
+        progress,
+      );
+    };
+  },
+  prepareReferenceImportsForLeave: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.prepareReferenceImportsForLeave),
+  resumeReferenceSaves: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resumeReferenceSaves, token),
   readReferenceText: (id, assetId) =>
     ipcRenderer.invoke(IPC_CHANNELS.readReferenceText, id, assetId),
   saveInteractions: (settings) =>

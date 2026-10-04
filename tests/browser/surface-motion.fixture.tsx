@@ -14,7 +14,10 @@ import { useInputMethod } from '@/lib/input-method';
 import { newShot } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { LibraryState, ProjectSnapshot } from '../../src/shared/models';
+import { referenceImportMock } from './reference-import-mock';
 import '../../src/renderer/src/styles.css';
+
+Object.assign(window, { desktop: referenceImportMock().bridge });
 
 const library: LibraryState = {
   root: '/isolated-motion-test',

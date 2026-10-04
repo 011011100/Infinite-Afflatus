@@ -231,3 +231,63 @@ test('the existing per-selection limit rejects before receiving any file', async
   );
   assert.deepEqual(f.library.store.jobs(), []);
 });
+
+test('service cancellation preserves completed staging IDs, drains file handles and leaves the workspace writable before saved copies resume', async (t) => {
+  const f = await fixture(t);
+  const first = await f.file('已完成.txt', 'keep this complete reference');
+  const bytes = Buffer.alloc(256 * 1024, 93);
+  const current = await f.file('取消当前.png', bytes);
+  const last = await f.file('未开始.txt', 'do not start this file');
+  await f.library.gate.block();
+  const requestId = crypto.randomUUID();
+  let cancellation: Promise<void> | undefined;
+  const result = await f.library.referenceImports.run(
+    1,
+    f.project.id,
+    requestId,
+    async () => ({ canceled: false, filePaths: [first, current, last] }),
+    (progress) => {
+      if (progress.fileIndex === 2 && progress.phase === 'finalizing')
+        cancellation = f.library.referenceImports.cancel(1, requestId);
+    },
+  );
+  assert.ok(cancellation);
+  await cancellation;
+  assert.equal(result.assetIds.length, 1);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.cancelledCount, 2);
+  assert.deepEqual(result.errors, []);
+  assert.equal(
+    f.library.store.jobs().length,
+    2,
+    'unstarted file has no save job',
+  );
+  const accepted = f.library.store.job(result.assetIds[0] ?? '');
+  assert.equal(accepted.status, 'ready');
+  assert.equal(
+    await readFile(f.library.staging.path(accepted.id), 'utf8'),
+    'keep this complete reference',
+  );
+  const cancelled = f.library.store
+    .jobs()
+    .find((job) => job.name === '取消当前.png');
+  assert.ok(cancelled);
+  assert.equal(cancelled.status, 'failed');
+  assert.equal(cancelled.error, '接收结果已取消');
+  assert.deepEqual(
+    await readFile(join(f.library.staging.directory, `${cancelled.id}.part`)),
+    bytes,
+  );
+  const token = await f.library.referenceImports.prepareForLeave(1);
+  f.library.gate.release();
+  const wanted = workspaceWithReferences(result.assetIds);
+  const saved = await f.library.generation.saveWorkspace(f.project.id, wanted);
+  assert.deepEqual(saved, { ...wanted, revision: 1 });
+  assert.equal((await f.library.projects.open(f.project.id)).assets.length, 0);
+  f.library.referenceImports.resumeAfterLeave(1, token);
+  await f.library.saves.idle();
+  assert.equal(f.library.store.job(accepted.id).status, 'saved');
+  assert.equal((await f.library.projects.open(f.project.id)).assets.length, 1);
+  assert.deepEqual(await readFile(current), bytes);
+  assert.equal(await readFile(last, 'utf8'), 'do not start this file');
+});

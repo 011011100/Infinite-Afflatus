@@ -7,6 +7,7 @@ import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { ProjectSnapshot } from '../../src/shared/models';
 import type { WorkspaceDraftRecord } from '../../src/shared/workspace-draft';
+import { referenceImportMock } from './reference-import-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
@@ -82,6 +83,7 @@ const control = {
 };
 Object.assign(window, { recoveryControls: control });
 window.desktop = {
+  ...referenceImportMock().bridge,
   ...workspaceDraftMock(() => stored).bridge,
   getGenerationWorkspace: async () => structuredClone(stored),
   saveGenerationWorkspace: async (_id, value) => {

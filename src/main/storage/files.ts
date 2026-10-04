@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import {
   copyFile,
+  type FileHandle,
   link,
   lstat,
   open,
@@ -123,7 +124,9 @@ export async function durableCopy(
 export async function publishCopy(
   source: string,
   target: string,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   const temporary = `${target}.${randomUUID()}.part`;
   let identity: { dev: number; ino: number } | null = null;
   const input = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -135,24 +138,12 @@ export async function publishCopy(
     );
     try {
       identity = await output.stat();
-      for await (const chunk of input.createReadStream({ autoClose: false })) {
-        const bytes = chunk as Buffer;
-        let offset = 0;
-        while (offset < bytes.length) {
-          const { bytesWritten } = await output.write(
-            bytes,
-            offset,
-            bytes.length - offset,
-          );
-          if (!bytesWritten) throw new Error('素材保存中断');
-          offset += bytesWritten;
-        }
-      }
-      await output.sync();
+      await copyInto(input, output, signal);
     } finally {
       await output.close();
     }
     // link is an atomic, no-replace publication within the same volume.
+    signal?.throwIfAborted();
     try {
       await link(temporary, target);
     } catch (error) {
@@ -164,13 +155,17 @@ export async function publishCopy(
         throw error;
       // FAT/exFAT cannot hard-link. Exclusive copy still never overwrites user data;
       // an interrupted copy stays unregistered and retries publish under a new name.
-      await copyFile(temporary, target, constants.COPYFILE_EXCL);
+      signal?.throwIfAborted();
       const published = await open(
         target,
-        constants.O_RDWR | constants.O_NOFOLLOW,
+        constants.O_WRONLY |
+          constants.O_CREAT |
+          constants.O_EXCL |
+          constants.O_NOFOLLOW,
+        0o600,
       );
       try {
-        await published.sync();
+        await copyInto(input, published, signal);
       } finally {
         await published.close();
       }
@@ -189,6 +184,34 @@ export async function publishCopy(
         await unlink(temporary);
     }
   }
+}
+
+async function copyInto(
+  input: FileHandle,
+  output: FileHandle,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted();
+  for await (const chunk of input.createReadStream({
+    start: 0,
+    autoClose: false,
+    signal,
+  })) {
+    const bytes = chunk as Buffer;
+    let offset = 0;
+    while (offset < bytes.length) {
+      signal?.throwIfAborted();
+      const { bytesWritten } = await output.write(
+        bytes,
+        offset,
+        bytes.length - offset,
+      );
+      if (!bytesWritten) throw new Error('素材保存中断');
+      offset += bytesWritten;
+    }
+  }
+  signal?.throwIfAborted();
+  await output.sync();
 }
 
 export async function syncDirectory(path: string): Promise<void> {

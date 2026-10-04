@@ -4,6 +4,7 @@ import type {
   GenerationDraft,
   ReferenceImportResult,
 } from './generation/draft';
+import type { ReferenceImportProgress } from './generation/reference-import';
 import type { GenerationWorkspace } from './generation/workspace';
 import type { InteractionSettings } from './interaction/settings';
 import type { MediaToolsReport } from './media-tools';
@@ -56,6 +57,11 @@ export const IPC_CHANNELS = {
   getGenerationDraft: 'generation:draft',
   saveGenerationDraft: 'generation:save-draft',
   importReferences: 'generation:import-references',
+  cancelReferenceImport: 'generation:cancel-reference-import',
+  referenceImportProgress: 'generation:reference-import-progress',
+  prepareReferenceImportsForLeave:
+    'generation:prepare-reference-imports-for-leave',
+  resumeReferenceSaves: 'generation:resume-reference-saves',
   readReferenceText: 'generation:read-text',
   appInfo: 'app:info',
   saveInteractions: 'settings:interactions',
@@ -145,7 +151,16 @@ export interface DesktopBridge {
     projectId: string,
     draft: GenerationDraft,
   ) => Promise<GenerationDraft>;
-  importReferences: (projectId: string) => Promise<ReferenceImportResult>;
+  importReferences: (
+    projectId: string,
+    requestId: string,
+  ) => Promise<ReferenceImportResult>;
+  cancelReferenceImport: (requestId: string) => Promise<void>;
+  onReferenceImportProgress: (
+    listener: (progress: ReferenceImportProgress) => void,
+  ) => () => void;
+  prepareReferenceImportsForLeave: () => Promise<string>;
+  resumeReferenceSaves: (token: string) => Promise<void>;
   readReferenceText: (projectId: string, assetId: string) => Promise<string>;
   getAppInfo: () => Promise<AppInfo>;
   saveInteractions: (settings: InteractionSettings) => Promise<void>;
