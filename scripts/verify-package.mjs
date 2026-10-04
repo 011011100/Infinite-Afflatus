@@ -4,20 +4,28 @@ import { fileURLToPath } from 'node:url';
 import { extractFile, listPackage, statFile } from '@electron/asar';
 import { APP_NAME, checkApplicationFiles } from './package-content.mjs';
 
-export function verifyAsar(archive) {
+export function verifyAsar(
+  archive,
+  reader = { listPackage, statFile, extractFile },
+) {
   const files = [];
-  for (const path of listPackage(archive)) {
-    // ASAR lists native paths: Windows entries start with \\ and use \\ separators.
-    const file = path.replaceAll('\\', '/').replace(/^\//, '');
-    const info = statFile(archive, file, false);
+  const nativePaths = new Map();
+  for (const path of reader.listPackage(archive)) {
+    // ASAR's tree lookup splits path.sep; keep native paths for every library call.
+    const nativePath = path.replace(/^[\\/]/, '');
+    const file = nativePath.replaceAll('\\', '/');
+    const info = reader.statFile(archive, nativePath, false);
     if ('link' in info || info.unpacked)
       throw new Error(
         `Unexpected linked or unpacked application entry: ${file}`,
       );
-    if (!('files' in info)) files.push(file);
+    if (!('files' in info)) {
+      files.push(file);
+      nativePaths.set(file, nativePath);
+    }
   }
   checkApplicationFiles(files, (file) =>
-    extractFile(archive, file).toString('utf8'),
+    reader.extractFile(archive, nativePaths.get(file)).toString('utf8'),
   );
   return { asar: archive, files: files.length };
 }

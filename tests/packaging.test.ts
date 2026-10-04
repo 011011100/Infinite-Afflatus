@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   mkdir,
   mkdtemp,
@@ -8,13 +9,14 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep, win32 } from 'node:path';
 import { Writable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { test } from 'node:test';
-import { createPackage } from '@electron/asar';
-import { Filesystem } from '@electron/asar/lib/filesystem.js';
+import { runInNewContext } from 'node:vm';
+import { createPackage, extractFile, getRawHeader } from '@electron/asar';
 import { stageApplication } from '../scripts/package-content.mjs';
 import { verifyAsar } from '../scripts/verify-package.mjs';
 
@@ -102,23 +104,58 @@ test('the final ASAR validator rejects private files added after staging', async
   assert.throws(() => verifyAsar(file), /Unexpected packaged file/);
 });
 
-test('the ASAR validator accepts Windows native listing paths without weakening the allowlist', async (t) => {
+test('the ASAR validator uses native Windows paths for both nested tree lookup and extraction', async (t) => {
   const f = await fixture();
   t.after(f.clean);
   await stageApplication(f.root, f.stage);
   const archive = join(f.base, 'app.asar');
   await finished(await createPackage(f.stage, archive));
-  const listFiles = Filesystem.prototype.listFiles;
-  t.mock.method(
-    Filesystem.prototype,
-    'listFiles',
-    function (this: Filesystem, options: Parameters<typeof listFiles>[0]) {
-      return listFiles
-        .call(this, options)
-        .map((file) => file.replaceAll('/', '\\'));
-    },
+  // Execute the installed library's actual tree traversal with Windows path semantics.
+  // Only disk extraction returns to the host path format after Windows lookup succeeds.
+  const require = createRequire(import.meta.url);
+  const source = require.resolve('@electron/asar/lib/filesystem.js');
+  const moduleRequire = createRequire(source);
+  const runtime = {
+    exports: {} as typeof import('@electron/asar/lib/filesystem.js'),
+  };
+  const load = runInNewContext(
+    `(function(require, module, exports) { ${readFileSync(source, 'utf8')}\n })`,
+    { Buffer, process },
   );
-  assert.deepEqual(verifyAsar(archive), { asar: archive, files: 8 });
+  load(
+    (name: string) => (name === 'path' ? win32 : moduleRequire(name)),
+    runtime,
+    runtime.exports,
+  );
+  const filesystem = new runtime.exports.Filesystem('C:\\staged');
+  const { header, headerSize } = getRawHeader(archive);
+  filesystem.setHeader(structuredClone(header), headerSize);
+  assert.throws(
+    () => filesystem.getFile('out/main/chunks', false),
+    /not found/,
+  );
+  filesystem.setHeader(structuredClone(header), headerSize);
+  const lookups: string[] = [];
+  const reads: string[] = [];
+  assert.deepEqual(
+    verifyAsar(archive, {
+      listPackage: () => filesystem.listFiles(),
+      statFile: (_archive, file, followLinks) => {
+        lookups.push(file);
+        return filesystem.getFile(file, followLinks);
+      },
+      extractFile: (_archive, file, followLinks) => {
+        reads.push(file);
+        filesystem.getFile(file, followLinks);
+        return extractFile(archive, file.replaceAll('\\', sep), followLinks);
+      },
+    }),
+    { asar: archive, files: 8 },
+  );
+  assert.ok(lookups.includes('out\\main\\chunks'));
+  assert.ok(reads.includes('out\\main\\index.js'));
+  assert.ok(reads.includes('out\\preload\\index.cjs'));
+  assert.ok(reads.includes('out\\renderer\\index.html'));
 });
 
 test('staging refuses unbundled production imports instead of shipping a broken no-node_modules app', async (t) => {
