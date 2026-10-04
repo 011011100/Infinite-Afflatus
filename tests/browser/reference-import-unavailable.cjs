@@ -20,6 +20,10 @@ const {
   withFixture,
   runElectron,
 } = require('./reference-import-harness.cjs');
+const {
+  installRecoveryTrace,
+  readRecoveryDiagnostic,
+} = require('./reference-recovery-diagnostics.cjs');
 
 const root = resolve(__dirname, '../..');
 const mode = process.argv.find((arg) => arg.startsWith('--mode='))?.slice(7);
@@ -103,6 +107,8 @@ async function electronCase() {
   let database;
   let moved = false;
   let pickerCalls = 0;
+  let diagnostic;
+  let currentCheck = 'production startup';
   const backup = join(base, 'offline-project.sqlite');
   const evidenceFile = join(base, 'evidence.json');
   const errors = [];
@@ -178,6 +184,7 @@ async function electronCase() {
     win.once('closed', () => clearInterval(timer));
   });
   async function waitFor(check, label, timeout = 45000) {
+    currentCheck = label;
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
       assert.deepEqual(errors, [], label);
@@ -211,6 +218,25 @@ async function electronCase() {
       (await run('window.desktop.getLibrary()')).root,
       join(base, 'projects'),
     );
+    // Enabled only after proving this production window is attached to our synthetic fixture.
+    diagnostic = async (label) => {
+      try {
+        const report = await readRecoveryDiagnostic(run, {
+          base,
+          projectId: project?.id,
+          database,
+          backup,
+        });
+        console.log(
+          `REFERENCE_RECOVERY_DIAGNOSTIC:${JSON.stringify({ label, currentCheck, mode, moved, pickerCalls, errors, report })}`,
+        );
+      } catch (error) {
+        console.log(
+          `REFERENCE_RECOVERY_DIAGNOSTIC:${JSON.stringify({ label, currentCheck, diagnosticError: String(error) })}`,
+        );
+      }
+    };
+    await run(`(${installRecoveryTrace.toString()})()`);
     if (mode === 'import') {
       await click('新建项目');
       await click('新建镜头');
@@ -334,11 +360,21 @@ async function electronCase() {
         'offline database has not been modified',
       );
       renameSync(backup, database);
+      await run(
+        `window.referenceRecoveryDiagnostics.record('retry-before-click')`,
+      );
       await click('重试读取项目');
+      await run(
+        `window.referenceRecoveryDiagnostics.record('retry-click-returned')`,
+      );
       await waitFor(
         () => run(`!document.querySelector('[data-project-unavailable]')`),
         'explicit retry verifies restored original database',
       );
+      await run(
+        `window.referenceRecoveryDiagnostics.record('retry-completed')`,
+      );
+      await diagnostic('retry-completed');
       await waitFor(
         async () =>
           JSON.stringify(
@@ -426,6 +462,7 @@ async function electronCase() {
     app.quit();
   } catch (error) {
     console.error(error);
+    await diagnostic?.('failure');
     exit(1);
   }
 }

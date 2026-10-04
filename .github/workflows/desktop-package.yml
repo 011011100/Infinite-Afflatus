@@ -2,6 +2,16 @@ name: Desktop package validation
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Target platform (all for complete delivery validation)
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - macos-latest
+          - windows-latest
 
 permissions:
   contents: read
@@ -18,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJSON((!inputs.platform || inputs.platform == 'all') && '["macos-latest", "windows-latest"]' || format('["{0}"]', inputs.platform)) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
