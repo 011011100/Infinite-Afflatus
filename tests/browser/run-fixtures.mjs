@@ -20,6 +20,7 @@ const available = [
   'trim-recovery-controls',
   'project-edit-recovery-controls',
   'app-backup-controls',
+  'thumbnail-visibility-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

@@ -66,6 +66,8 @@ pnpm package:verify release/mac-arm64
 
 `tests/browser/app-backup-recovery.mjs` 使用六次独立生产启动验证应用索引备份：在设置中创建真实快照，损坏应用库后取消检查，明确确认恢复，两次独立重开，以及从保留的完整暂存结果重新关联缺失素材。实际 SQLite、主进程、preload 和页面参与执行；原生对话框回答和文件选择受测试控制。脚本逐项核对原数据库及旁路文件、备份、项目、两类独立草稿和暂存文件的字节，要求旧保存／清理记录不再执行。该流程独立于模拟 IPC 的九项备份控件回归，也不证明媒体编码、异地备份或安装版升级。
 
+`tests/browser/media-resource-profile.mjs` 用生产构建和独立项目验证 100／1000 个真实合成视频：主画布媒体并发、离屏释放、长组合完整时长、裁剪和局部拆分撤销，以及源素材哈希。Chromium Media 事件、canvas 像素和真实进程工作集分别记录；不以模拟解码或像素推算冒充内存实测。两端桌面工作流均执行资源限制断言，细节与性能适用范围见 [大项目媒体资源](media-performance.md)。
+
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
 
 ### Windows 安装回归

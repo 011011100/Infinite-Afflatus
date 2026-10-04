@@ -19,8 +19,8 @@ import {
 import type { Asset } from '../../../../../shared/models';
 import { projectEditRecoveryGuards } from '../../drafts/project-edit-recovery-guards';
 import { usePendingSave } from '../../lifecycle/use-pending-save';
-import type { ThumbnailFrame } from '../decode-thumbnail';
 import { useSequencePlayback } from '../playback/use-sequence-playback';
+import type { VideoMetadata } from '../video-metadata';
 import { buildTimeline, locateTime, totalDuration } from './timeline';
 import type { TrimDraftController } from './trim-draft-controller';
 import { TrimSaveQueue } from './trim-save-queue';
@@ -46,7 +46,7 @@ export interface EditorProps {
 
 export function useSequenceEditor(
   props: EditorProps & {
-    frames: Map<string, ThumbnailFrame>;
+    frames: Map<string, VideoMetadata>;
     closing?: boolean;
   },
 ) {

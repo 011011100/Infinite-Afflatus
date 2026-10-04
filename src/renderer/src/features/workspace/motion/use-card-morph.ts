@@ -62,8 +62,13 @@ export function useCardMorph(
       try {
         const before = captureCards(root, layer, patch.before);
         if (!before) return noop;
+        // Flip measures each target's transform with temporary DOM writes. Keep
+        // that work inside the clipped presentation; piece surfaces still use
+        // the complete bounds above, including members that become visible.
         const targets = [...before.values()].flatMap((card) =>
-          [...card.assets.values()].map((asset) => asset.element),
+          [...card.assets.values()]
+            .filter((asset) => asset.visible)
+            .map((asset) => asset.element),
         );
         // Capture the presentation state before cancelling an interrupted undo/redo.
         // GSAP supports kill:false; its bundled FlipStateVars omits this option.

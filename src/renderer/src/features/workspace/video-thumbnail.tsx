@@ -6,6 +6,7 @@ import { type ClipTrim, clipRange } from '../../../../shared/canvas/trim';
 import type { Asset } from '../../../../shared/models';
 import { formatDuration } from './media';
 import { useThumbnail } from './thumbnail-provider';
+import { useThumbnailVisibility } from './use-thumbnail-visibility';
 
 export function VideoThumbnail({
   asset,
@@ -28,11 +29,24 @@ export function VideoThumbnail({
   canHold: boolean;
   split: () => void;
 }) {
-  const { frame, failed } = useThumbnail(projectId, asset);
+  const button = useRef<HTMLButtonElement>(null);
+  const visibility = useThumbnailVisibility(button);
+  const { frame, failed, metadata } = useThumbnail(
+    projectId,
+    asset,
+    visibility.requested,
+    visibility.retained,
+    visibility.priority,
+  );
   const canvas = useRef<HTMLCanvasElement>(null);
   useLayoutEffect(() => {
     const target = canvas.current;
-    if (!target || !frame) return;
+    if (!target) return;
+    if (!frame) {
+      target.width = 0;
+      target.height = 0;
+      return;
+    }
     target.width = frame.image.width;
     target.height = frame.image.height;
     // Paint before the first frame of a new card; no decoder/loading flash.
@@ -41,12 +55,16 @@ export function VideoThumbnail({
   const hold = useLongPressSplit(grouped && canHold, select, split);
   return (
     <button
+      ref={button}
       type="button"
       aria-label={`选择片段 ${index + 1} ${asset.name}`}
       aria-pressed={active}
       data-video-thumbnail
       data-asset-id={asset.id}
       data-flip-id={asset.id}
+      onFocus={visibility.onFocus}
+      onBlur={visibility.onBlur}
+      onPointerDownCapture={visibility.onPointerDown}
       onPointerDown={hold.onPointerDown}
       onDoubleClick={hold.cancel}
       onContextMenu={hold.cancel}
@@ -65,6 +83,8 @@ export function VideoThumbnail({
     >
       <canvas
         ref={canvas}
+        width={0}
+        height={0}
         className="pointer-events-none h-full w-full object-cover"
         role="img"
         aria-label={`${asset.name} 缩略预览`}
@@ -82,13 +102,13 @@ export function VideoThumbnail({
           {String(index + 1).padStart(2, '0')} · {asset.name}
         </span>
         <span className="shrink-0 tabular-nums">
-          {frame?.duration == null
+          {metadata?.duration == null
             ? ''
             : formatDuration(
                 trim
-                  ? clipRange(frame.duration, trim).end -
-                      clipRange(frame.duration, trim).start
-                  : frame.duration,
+                  ? clipRange(metadata.duration, trim).end -
+                      clipRange(metadata.duration, trim).start
+                  : metadata.duration,
               )}
         </span>
       </div>

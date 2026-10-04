@@ -44,6 +44,16 @@ jobs:
         run: pnpm package:local
       - name: Verify renderer observer lifecycle, import, cleanup and media settings interactions
         run: pnpm test:browser
+      - name: Verify real thumbnail resource limits and editing with 100 videos
+        timeout-minutes: 5
+        env:
+          AFFLATUS_MEDIA_RESOURCE_REPORTS: ${{ runner.temp }}/afflatus-media-resource-reports
+        run: node --import tsx tests/browser/media-resource-profile.mjs --count=100 --label=ci100 --resource-limits
+      - name: Verify long-project resource limits and complete metadata with 1000 videos
+        timeout-minutes: 5
+        env:
+          AFFLATUS_MEDIA_RESOURCE_REPORTS: ${{ runner.temp }}/afflatus-media-resource-reports
+        run: node --import tsx tests/browser/media-resource-profile.mjs --count=1000 --label=ci1000 --resource-limits
       - name: Launch packaged app against an isolated library and verify saved content after restart
         run: node --import tsx tests/browser/packaged-delivery.mjs
       - name: Verify production startup failures preserve the original library
@@ -78,3 +88,11 @@ jobs:
             release/*-internal-*.exe
           retention-days: 7
           if-no-files-found: error
+      - name: Preserve media resource reports and diagnostic screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: media-resources-${{ matrix.os }}
+          path: ${{ runner.temp }}/afflatus-media-resource-reports
+          retention-days: 7
+          if-no-files-found: ignore

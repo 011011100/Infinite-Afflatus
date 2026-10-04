@@ -4,9 +4,9 @@ import { type KeyboardEvent, useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import { projectEditRecoveryGuards } from '../../drafts/project-edit-recovery-guards';
-import type { ThumbnailFrame } from '../decode-thumbnail';
 import { mediaUrl } from '../media';
 import { mediaRevision, useMediaRevision } from '../use-media-revision';
+import type { VideoMetadata } from '../video-metadata';
 import { Filmstrip } from './filmstrip';
 import {
   formatTime,
@@ -43,7 +43,7 @@ export function SequenceTimeline({
 }: {
   projectId: string;
   clips: TimelineClip[];
-  frames: Map<string, ThumbnailFrame>;
+  frames: Map<string, VideoMetadata>;
   time: number;
   playingIndex: number;
   playing?: boolean;
@@ -146,7 +146,7 @@ export function SequenceTimeline({
           {clips.map((clip, index) => {
             const left = (origin + clip.offset) * scale;
             const clipWidth = Math.max(2, clip.length * scale - 2);
-            const frame = frames.get(clip.asset.id)?.image;
+            const frame = frames.get(clip.asset.id);
             return (
               <div
                 key={clip.asset.id}

@@ -35,7 +35,10 @@ import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import { CanvasActions } from './canvas-actions';
 import { SequenceEditor } from './editor/sequence-editor';
 import { useCardMorph } from './motion/use-card-morph';
-import { ThumbnailProvider } from './thumbnail-provider';
+import {
+  ThumbnailActivityContext,
+  ThumbnailProvider,
+} from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
 import { useCardDrag } from './use-card-drag';
@@ -373,192 +376,194 @@ function CanvasContent({
           {trimNotice}
         </div>
       )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        defaultViewport={snapshot.viewport}
-        onInit={(instance) => {
-          flow.current = instance;
-        }}
-        minZoom={0.25}
-        maxZoom={2}
-        nodesConnectable={false}
-        nodesDraggable={!interactionBlocked && !document.saving}
-        nodeDragThreshold={DRAG_THRESHOLD}
-        panActivationKeyCode={null}
-        nodeClickDistance={5}
-        deleteKeyCode={null}
-        multiSelectionKeyCode={null}
-        selectionKeyCode={null}
-        disableKeyboardA11y
-        zoomOnDoubleClick={false}
-        panOnDrag={!interactionBlocked}
-        zoomOnScroll={!interactionBlocked}
-        zoomOnPinch={!interactionBlocked}
-        onNodesChange={(changes) => {
-          for (const change of changes) {
+      <ThumbnailActivityContext value={!playing && !shots.activeId}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          defaultViewport={snapshot.viewport}
+          onInit={(instance) => {
+            flow.current = instance;
+          }}
+          minZoom={0.25}
+          maxZoom={2}
+          nodesConnectable={false}
+          nodesDraggable={!interactionBlocked && !document.saving}
+          nodeDragThreshold={DRAG_THRESHOLD}
+          panActivationKeyCode={null}
+          nodeClickDistance={5}
+          deleteKeyCode={null}
+          multiSelectionKeyCode={null}
+          selectionKeyCode={null}
+          disableKeyboardA11y
+          zoomOnDoubleClick={false}
+          panOnDrag={!interactionBlocked}
+          zoomOnScroll={!interactionBlocked}
+          zoomOnPinch={!interactionBlocked}
+          onNodesChange={(changes) => {
+            for (const change of changes) {
+              if (
+                change.type === 'position' &&
+                !interactionBlocked &&
+                !isRecovering() &&
+                change.position &&
+                change.id.startsWith('shot:')
+              ) {
+                const position = change.position;
+                setShotPositions((current) => ({
+                  ...current,
+                  [change.id.slice(5)]: position,
+                }));
+              }
+              if (change.type === 'select' && change.selected)
+                selectCard(change.id);
+              if (change.type === 'dimensions' && change.dimensions) {
+                const size = change.dimensions;
+                setMeasurements((current) =>
+                  current[change.id]?.width === size.width &&
+                  current[change.id]?.height === size.height
+                    ? current
+                    : { ...current, [change.id]: size },
+                );
+              }
+            }
+          }}
+          onPaneClick={() => setSelection(null)}
+          onNodeDoubleClick={(event, node) => {
+            event.preventDefault();
             if (
-              change.type === 'position' &&
-              !interactionBlocked &&
-              !isRecovering() &&
-              change.position &&
-              change.id.startsWith('shot:')
-            ) {
-              const position = change.position;
-              setShotPositions((current) => ({
-                ...current,
-                [change.id.slice(5)]: position,
+              interactionBlocked ||
+              isRecovering() ||
+              inactive ||
+              drag.drag ||
+              document.saving
+            )
+              return;
+            if (node.type === 'shot') shots.open(node.id.slice(5));
+            else play(node.id);
+          }}
+          onNodeDragStart={(_event, node) => {
+            if (interactionBlocked || isRecovering()) return;
+            if (node.type === 'video') drag.start(node.id);
+          }}
+          onNodeDrag={(_event, node) =>
+            node.type === 'video' &&
+            drag.move(node.position, flow.current?.getZoom() ?? 1)
+          }
+          onNodeDragStop={(_event, node) => {
+            if (interactionBlocked || isRecovering()) {
+              setShotPositions({});
+              return;
+            }
+            if (node.type === 'shot') {
+              shots.updateShot(node.id.slice(5), (shot) => ({
+                ...shot,
+                position: node.position,
               }));
-            }
-            if (change.type === 'select' && change.selected)
-              selectCard(change.id);
-            if (change.type === 'dimensions' && change.dimensions) {
-              const size = change.dimensions;
-              setMeasurements((current) =>
-                current[change.id]?.width === size.width &&
-                current[change.id]?.height === size.height
-                  ? current
-                  : { ...current, [change.id]: size },
-              );
-            }
-          }
-        }}
-        onPaneClick={() => setSelection(null)}
-        onNodeDoubleClick={(event, node) => {
-          event.preventDefault();
-          if (
-            interactionBlocked ||
-            isRecovering() ||
-            inactive ||
-            drag.drag ||
-            document.saving
-          )
-            return;
-          if (node.type === 'shot') shots.open(node.id.slice(5));
-          else play(node.id);
-        }}
-        onNodeDragStart={(_event, node) => {
-          if (interactionBlocked || isRecovering()) return;
-          if (node.type === 'video') drag.start(node.id);
-        }}
-        onNodeDrag={(_event, node) =>
-          node.type === 'video' &&
-          drag.move(node.position, flow.current?.getZoom() ?? 1)
-        }
-        onNodeDragStop={(_event, node) => {
-          if (interactionBlocked || isRecovering()) {
-            setShotPositions({});
-            return;
-          }
-          if (node.type === 'shot') {
-            shots.updateShot(node.id.slice(5), (shot) => ({
-              ...shot,
-              position: node.position,
-            }));
-            setShotPositions({});
-          } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
-        }}
-        onMoveEnd={(_event, viewport) => {
-          if (!interactionBlocked && !isRecovering())
-            void saveViewport(viewport);
-        }}
-      >
-        <ViewportPortal>
-          <svg
-            data-card-liquid-layer
-            className="card-liquid-layer"
-            aria-hidden="true"
+              setShotPositions({});
+            } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
+          }}
+          onMoveEnd={(_event, viewport) => {
+            if (!interactionBlocked && !isRecovering())
+              void saveViewport(viewport);
+          }}
+        >
+          <ViewportPortal>
+            <svg
+              data-card-liquid-layer
+              className="card-liquid-layer"
+              aria-hidden="true"
+            />
+          </ViewportPortal>
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color="var(--canvas-dot)"
           />
-        </ViewportPortal>
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          color="var(--canvas-dot)"
-        />
-        {!interactionBlocked && <CanvasControls />}
-        <Panel position="top-left">
-          <Button
-            variant="outline"
-            className="bg-background shadow-sm"
-            disabled={interactionBlocked || !shots.loaded}
-            onClick={() => {
-              if (isRecovering()) return;
-              const bottom = Math.max(
-                60,
-                ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
-                ...shots.shots
-                  .filter((shot) => !shot.sourceAssetId)
-                  .map((shot) => shot.position.y + CARD_HEIGHT + 48),
-              );
-              shots.create({ x: 100, y: bottom });
-              void flow.current?.setCenter(244, bottom + CARD_HEIGHT / 2, {
-                zoom: 1,
-              });
-            }}
-          >
-            <Plus />
-            新建镜头
-          </Button>
-        </Panel>
-        {shots.error && (
-          <Panel position="top-right">
-            <div
-              role="alert"
-              className="flex items-center gap-2 rounded-lg bg-warning p-3 text-xs text-warning-foreground"
+          {!interactionBlocked && <CanvasControls />}
+          <Panel position="top-left">
+            <Button
+              variant="outline"
+              className="bg-background shadow-sm"
+              disabled={interactionBlocked || !shots.loaded}
+              onClick={() => {
+                if (isRecovering()) return;
+                const bottom = Math.max(
+                  60,
+                  ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
+                  ...shots.shots
+                    .filter((shot) => !shot.sourceAssetId)
+                    .map((shot) => shot.position.y + CARD_HEIGHT + 48),
+                );
+                shots.create({ x: 100, y: bottom });
+                void flow.current?.setCenter(244, bottom + CARD_HEIGHT / 2, {
+                  zoom: 1,
+                });
+              }}
             >
-              {shots.error}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="重试镜头数据"
-                onClick={() => void shots.retry()}
-              >
-                <RotateCw />
-              </Button>
-            </div>
+              <Plus />
+              新建镜头
+            </Button>
           </Panel>
-        )}
-        <Panel position="bottom-center">
-          <CanvasActions
-            disabled={interactionBlocked || document.saving || !!drag.drag}
-            canUndo={document.canUndo}
-            canRedo={document.canRedo}
-            canSplit={canSplit}
-            shortcuts={interactions.shortcuts}
-            isMac={isMac}
-            undo={document.undo}
-            redo={document.redo}
-            split={split}
-          />
-        </Panel>
-        <Panel position="top-center" className="pointer-events-none">
-          {snapTarget ? (
-            <p
-              role="status"
-              className="max-w-[70vw] truncate rounded-full border border-primary/20 bg-background px-4 py-2 text-xs text-primary shadow-sm"
-            >
-              松开拼接 ·{' '}
-              {snapCards
-                .map((card) =>
-                  card.assetIds.length > 1
-                    ? `${card.assetIds.length} 段组合`
-                    : assets.get(card.assetIds[0] ?? '')?.name,
-                )
-                .join(' → ')}{' '}
-              <span className="ml-2 text-muted-foreground">Esc 取消</span>
-            </p>
-          ) : document.saving ? (
-            <p
-              role="status"
-              className="rounded-full bg-canvas/90 px-3 py-1.5 text-xs text-muted-foreground"
-            >
-              正在保存…
-            </p>
-          ) : null}
-        </Panel>
-      </ReactFlow>
+          {shots.error && (
+            <Panel position="top-right">
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-lg bg-warning p-3 text-xs text-warning-foreground"
+              >
+                {shots.error}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="重试镜头数据"
+                  onClick={() => void shots.retry()}
+                >
+                  <RotateCw />
+                </Button>
+              </div>
+            </Panel>
+          )}
+          <Panel position="bottom-center">
+            <CanvasActions
+              disabled={interactionBlocked || document.saving || !!drag.drag}
+              canUndo={document.canUndo}
+              canRedo={document.canRedo}
+              canSplit={canSplit}
+              shortcuts={interactions.shortcuts}
+              isMac={isMac}
+              undo={document.undo}
+              redo={document.redo}
+              split={split}
+            />
+          </Panel>
+          <Panel position="top-center" className="pointer-events-none">
+            {snapTarget ? (
+              <p
+                role="status"
+                className="max-w-[70vw] truncate rounded-full border border-primary/20 bg-background px-4 py-2 text-xs text-primary shadow-sm"
+              >
+                松开拼接 ·{' '}
+                {snapCards
+                  .map((card) =>
+                    card.assetIds.length > 1
+                      ? `${card.assetIds.length} 段组合`
+                      : assets.get(card.assetIds[0] ?? '')?.name,
+                  )
+                  .join(' → ')}{' '}
+                <span className="ml-2 text-muted-foreground">Esc 取消</span>
+              </p>
+            ) : document.saving ? (
+              <p
+                role="status"
+                className="rounded-full bg-canvas/90 px-3 py-1.5 text-xs text-muted-foreground"
+              >
+                正在保存…
+              </p>
+            ) : null}
+          </Panel>
+        </ReactFlow>
+      </ThumbnailActivityContext>
       {!nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-muted-foreground select-none">
           <h1 className="mb-2.5 text-xl font-medium">从一个镜头开始</h1>

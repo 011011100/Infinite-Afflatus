@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import { ExportButton } from '@/features/export/export-dialog';
-import type { ThumbnailFrame } from '../decode-thumbnail';
+import type { VideoMetadata } from '../video-metadata';
 import { SequenceControls } from './sequence-controls';
 import { SequenceTimeline } from './sequence-timeline';
 import { type EditorProps, useSequenceEditor } from './use-sequence-editor';
@@ -80,7 +80,7 @@ export function SequenceEditor(props: EditorProps) {
 
 function EditorContent(
   props: EditorProps & {
-    frames: Map<string, ThumbnailFrame>;
+    frames: Map<string, VideoMetadata>;
     closing: boolean;
   },
 ) {

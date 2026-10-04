@@ -220,9 +220,7 @@ function Editor({ state }: { state: ReturnType<typeof useLibrary> }) {
   const card = canvas.snapshot.canvas.cards[0];
   if (!card) throw new Error('Missing fixture card');
   const frames = useRef(
-    new Map([
-      [assetId, { image: document.createElement('canvas'), duration: 10 }],
-    ]),
+    new Map([[assetId, { width: 160, height: 90, duration: 10 }]]),
   );
   const editor = useSequenceEditor({
     card,
