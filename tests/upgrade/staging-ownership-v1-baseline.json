@@ -1,0 +1,6 @@
+{
+  "name": "staging-part-ownership-v1",
+  "scenario": "image-workspace",
+  "commit": "c8bf106b02f6a187c52d6381bd788f5a7f88b0fd",
+  "description": "Durable ownership v1, sealed partial hashes and cleanup intents written by the first committed cleanup implementation"
+}
