@@ -5,6 +5,7 @@ import {
   reversePatch,
 } from '../../../../shared/canvas/operations';
 import type { ProjectSnapshot } from '../../../../shared/models';
+import { usePendingSave } from '../lifecycle/use-pending-save';
 
 /** One short transaction at a time; failed writes restore the authoritative project. */
 export function useCanvasDocument(
@@ -20,6 +21,11 @@ export function useCanvasDocument(
     future: CanvasPatch[];
   }>({ past: [], future: [] });
   const writing = useRef(false);
+  const pending = useRef<Promise<boolean> | null>(null);
+  usePendingSave(
+    `主画布:${initial.project.id}`,
+    () => pending.current ?? Promise.resolve(true),
+  );
   useEffect(() => {
     if (saving || writing.current) return;
     setSnapshot((current) =>
@@ -34,6 +40,11 @@ export function useCanvasDocument(
     async (patch: CanvasPatch, action: 'edit' | 'undo' | 'redo' = 'edit') => {
       if (writing.current || blocked) return false;
       writing.current = true;
+      let resolveSave!: (saved: boolean) => void;
+      pending.current = new Promise<boolean>((resolve) => {
+        resolveSave = resolve;
+      });
+      let successful = false;
       const finishTransition = prepareTransition(patch);
       setSaving(true);
       try {
@@ -56,6 +67,7 @@ export function useCanvasDocument(
             };
           return { past: [...current.past.slice(-49), patch], future: [] };
         });
+        successful = true;
         return true;
       } catch (error) {
         finishTransition(false);
@@ -71,6 +83,8 @@ export function useCanvasDocument(
       } finally {
         writing.current = false;
         setSaving(false);
+        pending.current = null;
+        resolveSave(successful);
       }
     },
     [initial.project.id, blocked, report, prepareTransition],

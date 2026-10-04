@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { useContentMotion } from '@/components/ui/use-surface-motion';
+import { ExportTaskButton } from '@/features/export/export-dialog';
+import { SaveLifecycleStatus } from '@/features/lifecycle/save-lifecycle-status';
+import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
 import { ProjectHome } from '@/features/projects/project-home';
+import { ProjectPackageActions } from '@/features/projects/project-package-actions';
 import { useLibrary } from '@/features/projects/use-library';
 import { AppSettings } from '@/features/settings/app-settings';
 import { SaveStatus } from '@/features/settings/save-status';
@@ -15,6 +19,7 @@ import { useInputMethod } from '@/lib/input-method';
 export function App() {
   useInputMethod();
   const state = useLibrary();
+  const lifecycle = useSaveLifecycle();
   const [settings, setSettings] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
   const { library, project, busy, run } = state;
@@ -32,7 +37,12 @@ export function App() {
               variant="ghost"
               size="icon-sm"
               aria-label="返回项目首页"
-              onClick={state.home}
+              disabled={lifecycle.saving}
+              onClick={() => {
+                void lifecycle.prepare().then((saved) => {
+                  if (saved) state.home();
+                });
+              }}
             >
               <ArrowLeft />
             </Button>
@@ -53,6 +63,16 @@ export function App() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <ExportTaskButton />
+          {project && (
+            <ProjectPackageActions
+              key={project.project.id}
+              projectId={project.project.id}
+              projectName={project.project.name}
+              disabled={busy || library?.writeBlocked === true}
+              report={state.report}
+            />
+          )}
           {project && (
             <Button
               variant="outline"
@@ -113,7 +133,7 @@ export function App() {
               snapshot={project}
               blocked={library.writeBlocked}
               interactions={library.interactions}
-              inactive={settings || newName !== null}
+              inactive={settings || newName !== null || lifecycle.saving}
               report={state.report}
             />
           </CanvasErrorBoundary>
@@ -123,14 +143,20 @@ export function App() {
             disabled={busy || library.writeBlocked}
             onCreate={state.create}
             onOpen={state.open}
+            onImport={state.importPackage}
+            importingPackage={state.importingPackage}
+            onCancelImport={state.cancelPackage}
           />
         )}
       </div>
+      <SaveLifecycleStatus {...lifecycle} />
       {settings && library && (
         <AppSettings
           library={library}
           error={state.error}
-          run={run}
+          run={async (operation) => {
+            if (await lifecycle.prepare()) await run(operation);
+          }}
           onClose={() => setSettings(false)}
         />
       )}

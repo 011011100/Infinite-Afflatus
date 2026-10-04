@@ -47,7 +47,7 @@ test('rapid alternating drags retain the newest range while old saves acknowledg
   assert.equal(queue.getSnapshot().pending, false);
   assert.equal(queue.getSnapshot().card, latest);
 });
-test('failed writes discard dependent changes, restore the last saved range and allow another gesture', async () => {
+test('failed writes restore the confirmed preview and let a new gesture supersede failed edits', async () => {
   const { queue, writes } = fixture();
   queue.enqueue('a', { start: 1, end: 4 });
   writes[0]?.finish(true);
@@ -87,4 +87,24 @@ test('idle external undo becomes the next trim baseline and rejected IPC unlocks
   await flush();
   assert.equal(rejected.getSnapshot().pending, false);
   assert.equal(rejected.getSnapshot().card, card);
+});
+
+test('leaving waits for every queued trim; a failed leave can retry the retained gestures', async () => {
+  const { queue, writes } = fixture();
+  queue.enqueue('a', { start: 1, end: 4 });
+  queue.enqueue('b', { start: 0.5, end: 2 });
+  const leave = queue.flush();
+  writes[0]?.finish(true);
+  await flush();
+  writes[1]?.finish(false);
+  assert.equal(await leave, false);
+  assert.deepEqual(queue.getSnapshot().card.trims, { a: { start: 1, end: 4 } });
+  const retry = queue.flush();
+  assert.deepEqual(writes[2]?.patch.before, writes[0]?.patch.after);
+  writes[2]?.finish(true);
+  assert.equal(await retry, true);
+  assert.deepEqual(queue.getSnapshot().card.trims, {
+    a: { start: 1, end: 4 },
+    b: { start: 0.5, end: 2 },
+  });
 });

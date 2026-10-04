@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clapperboard, Plus } from 'lucide-react';
+import { ArchiveRestore, ArrowUpRight, Clapperboard, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +9,17 @@ export function ProjectHome({
   disabled,
   onCreate,
   onOpen,
+  onImport,
+  importingPackage = false,
+  onCancelImport,
 }: {
   projects: ProjectSummary[];
   disabled: boolean;
   onCreate: (name: string) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
+  onImport: () => Promise<void>;
+  importingPackage?: boolean;
+  onCancelImport: () => Promise<void>;
 }) {
   const [name, setName] = useState('');
   return (
@@ -50,10 +56,36 @@ export function ProjectHome({
         </form>
         <div className="mt-14 flex items-center justify-between border-b pb-3">
           <h2 className="text-sm font-medium">我的项目</h2>
-          <span className="text-xs text-muted-foreground">
-            {projects.length} 个项目
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground">
+              {projects.length} 个项目
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              onClick={() => void onImport()}
+            >
+              <ArchiveRestore />
+              导入项目包
+            </Button>
+          </div>
         </div>
+        {importingPackage && (
+          <div
+            className="mt-4 flex items-center gap-3 rounded-lg border bg-background p-3 text-sm"
+            role="status"
+          >
+            <span>正在读取项目包并复制素材…</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void onCancelImport()}
+            >
+              取消导入
+            </Button>
+          </div>
+        )}
         {projects.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
             还没有项目。创建后，随时可以回来继续。

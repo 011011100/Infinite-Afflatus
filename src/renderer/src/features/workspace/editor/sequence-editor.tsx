@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
+import { ExportButton } from '@/features/export/export-dialog';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { SequenceControls } from './sequence-controls';
 import { SequenceTimeline } from './sequence-timeline';
@@ -96,6 +97,7 @@ function EditorContent(
     gesturing,
     setGesturing,
     saveError,
+    retrySave,
     pending,
     reset,
     muted,
@@ -114,7 +116,7 @@ function EditorContent(
         <Button
           variant="ghost"
           size="sm"
-          onClick={close}
+          onClick={() => void close()}
           disabled={pending || gesturing}
           aria-label="返回画布"
         >
@@ -178,6 +180,14 @@ function EditorContent(
           >
             <Redo2 />
           </Button>
+          <ExportButton
+            projectId={props.projectId}
+            cardId={props.card.id}
+            clipCount={assets.length}
+            duration={total}
+            onOpen={playback.pause}
+            disabled={disabled || gesturing || !!saveError || props.closing}
+          />
         </div>
       </header>
       {(saveError || playback.error) && (
@@ -186,6 +196,11 @@ function EditorContent(
           className="flex items-center justify-between bg-destructive/10 px-8 py-2 text-xs text-destructive"
         >
           <span>{saveError || playback.error}</span>
+          {saveError && (
+            <Button variant="ghost" size="sm" onClick={() => void retrySave()}>
+              重试保存
+            </Button>
+          )}
           {playback.error && (
             <Button
               variant="ghost"

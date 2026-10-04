@@ -5,6 +5,7 @@ import {
   registerMediaScheme,
   serveProjectMedia,
 } from './desktop/media-protocol';
+import { SaveLifecycle } from './desktop/save-lifecycle';
 import { createWindow } from './desktop/window';
 import { errorMessage } from './storage/database';
 import { Library } from './storage/library';
@@ -17,9 +18,12 @@ registerMediaScheme();
 let mainWindow: BrowserWindow | null = null;
 let library: Library | null = null;
 let quitting = false;
+let quitRequest: Promise<void> | null = null;
+let saveLifecycle: SaveLifecycle | null = null;
 function showWindow(): void {
   if (quitting || library?.isClosing) return;
   mainWindow = createWindow();
+  saveLifecycle?.protect(mainWindow, () => quitting || quitRequest !== null);
   mainWindow.once('closed', () => {
     mainWindow = null;
   });
@@ -45,6 +49,10 @@ if (!app.requestSingleInstanceLock()) {
         join(app.getPath('documents'), 'Infinite Afflatus', 'Projects');
       library = await Library.open(app.getPath('userData'), defaultRoot);
       registerDesktop(library, () => mainWindow);
+      saveLifecycle = new SaveLifecycle(
+        () => mainWindow,
+        () => library?.packages.cancel(),
+      );
       serveProjectMedia(library);
       showWindow();
       app.on('activate', () => {
@@ -63,15 +71,22 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 app.on('before-quit', (event) => {
-  if (quitting || !library) return;
+  if (!library) return;
   event.preventDefault();
-  quitting = true;
-  void library
-    .close()
-    // Storage has drained; exit without allowing a late activation to create a new window.
-    .then(() => app.exit(0))
+  if (quitRequest || quitting) return;
+  const currentLibrary = library;
+  quitRequest = (async () => {
+    if (saveLifecycle && !(await saveLifecycle.prepare())) return;
+    quitting = true;
+    await currentLibrary.close();
+    // Only drain the storage after every renderer draft has reached it.
+    app.exit(0);
+  })()
     .catch((error: unknown) => {
       console.error('Shutdown error:', error);
       app.exit(1);
+    })
+    .finally(() => {
+      quitRequest = null;
     });
 });

@@ -17,6 +17,8 @@ interface TrimSaveState {
 export class TrimSaveQueue {
   private confirmed: CanvasCard;
   private edits: Edit[] = [];
+  private failedEdits: Edit[] = [];
+  private running: Promise<boolean> | null = null;
   private listeners = new Set<() => void>();
   private state: TrimSaveState;
 
@@ -48,20 +50,45 @@ export class TrimSaveQueue {
     const previous = this.state.card.trims?.[assetId];
     if (previous?.start === range.start && previous.end === range.end) return;
     const running = this.state.pending;
+    this.failedEdits = [];
     this.edits.push({ assetId, range: { ...range } });
     this.emit({
       card: this.apply(this.state.card, { assetId, range }),
       pending: true,
       error: null,
     });
-    if (!running) void this.drain();
+    if (!running) void this.start();
+  }
+
+  /** A retry keeps the original gestures, but uses the latest confirmed project baseline. */
+  flush = (): Promise<boolean> => {
+    if (this.running) return this.running;
+    if (!this.failedEdits.length) return Promise.resolve(true);
+    this.edits = this.failedEdits;
+    this.failedEdits = [];
+    this.emit({
+      card: this.edits.reduce(
+        (card, edit) => this.apply(card, edit),
+        this.confirmed,
+      ),
+      pending: true,
+      error: null,
+    });
+    return this.start();
+  };
+
+  private start(): Promise<boolean> {
+    this.running = this.drain().finally(() => {
+      this.running = null;
+    });
+    return this.running;
   }
 
   private apply(card: CanvasCard, edit: Edit): CanvasCard {
     return { ...card, trims: { ...card.trims, [edit.assetId]: edit.range } };
   }
 
-  private async drain(): Promise<void> {
+  private async drain(): Promise<boolean> {
     while (this.edits.length) {
       const edit = this.edits[0];
       if (!edit) break;
@@ -73,20 +100,22 @@ export class TrimSaveQueue {
         /* Report failure and unlock the editor even if IPC rejects. */
       }
       if (!saved) {
+        this.failedEdits = this.edits;
         this.edits = [];
         this.emit({
           card: this.confirmed,
           pending: false,
-          error: '裁剪未保存，已恢复已保存的范围。请重试。',
+          error: '裁剪未保存，预览已恢复已保存范围。可重试保存刚才的修改。',
           reset: this.state.reset + 1,
         });
-        return;
+        return false;
       }
       this.confirmed = after;
       this.edits.shift();
     }
     // Keep the latest optimistic range until the corresponding project snapshot arrives.
     this.emit({ pending: false });
+    return true;
   }
 
   private emit(next: Partial<TrimSaveState>): void {

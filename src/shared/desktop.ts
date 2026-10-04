@@ -1,4 +1,5 @@
 import type { CanvasPatch } from './canvas/model';
+import type { SequenceExportJob, SequenceExportOptions } from './export';
 import type {
   GenerationDraft,
   ReferenceImportResult,
@@ -11,8 +12,22 @@ import type {
   ProjectSnapshot,
   Viewport,
 } from './models';
+import type { ProjectPackageInfo } from './project-package';
 
 export const IPC_CHANNELS = {
+  cancelProjectPackage: 'package:cancel',
+  saveBeforeLeave: 'lifecycle:save-before-leave',
+  saveBeforeLeaveResult: 'lifecycle:save-before-leave-result',
+  leaveCancelled: 'lifecycle:leave-cancelled',
+  inspectProjectPackage: 'package:inspect',
+  exportProjectPackage: 'package:export',
+  importProjectPackage: 'package:import',
+  duplicateProject: 'project:duplicate',
+  startExport: 'export:start',
+  listExports: 'export:list',
+  cancelExport: 'export:cancel',
+  revealExport: 'export:reveal',
+  exportsChanged: 'export:changed',
   getGenerationWorkspace: 'generation:workspace',
   saveGenerationWorkspace: 'generation:save-workspace',
   getGenerationDraft: 'generation:draft',
@@ -50,6 +65,22 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  cancelProjectPackage: () => Promise<void>;
+  onSaveBeforeLeave: (listener: () => Promise<boolean>) => () => void;
+  onLeaveCancelled: (listener: () => void) => () => void;
+  inspectProjectPackage: (id: string) => Promise<ProjectPackageInfo>;
+  exportProjectPackage: (id: string) => Promise<string | null>;
+  importProjectPackage: () => Promise<ProjectSnapshot | null>;
+  duplicateProject: (id: string) => Promise<ProjectSnapshot>;
+  startExport: (
+    projectId: string,
+    cardId: string,
+    options: SequenceExportOptions,
+  ) => Promise<SequenceExportJob | null>;
+  listExports: () => Promise<SequenceExportJob[]>;
+  cancelExport: (id: string) => Promise<void>;
+  revealExport: (id: string) => Promise<void>;
+  onExportsChanged: (listener: () => void) => () => void;
   getGenerationWorkspace: (projectId: string) => Promise<GenerationWorkspace>;
   saveGenerationWorkspace: (
     projectId: string,

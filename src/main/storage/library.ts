@@ -2,9 +2,11 @@ import { lstat, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
+import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { SaveQueue } from '../saving/save-queue';
 import { type GeneratedResult, Staging } from '../saving/staging';
@@ -22,8 +24,11 @@ export class Library {
   readonly saves: SaveQueue;
   readonly migration: MigrationService;
   readonly proxies: ProxyService;
+  readonly exports: SequenceExportService;
+  readonly packages: ProjectPackageService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
+  private exportListeners = new Set<() => void>();
   private closing: Promise<void> | null = null;
   get isClosing(): boolean {
     return this.closing !== null;
@@ -36,6 +41,21 @@ export class Library {
   ) {
     this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
+    this.packages = new ProjectPackageService(
+      this.projects,
+      store,
+      this.gate,
+      userData,
+    );
+    this.exports = new SequenceExportService(
+      this.projects,
+      this.gate,
+      store,
+      userData,
+      () => {
+        for (const listener of this.exportListeners) listener();
+      },
+    );
     this.generation = new GenerationService(this.projects, store, this.gate);
     this.proxies = new ProxyService(this.projects, this.gate, store, userData);
     this.staging = new Staging(
@@ -89,9 +109,11 @@ export class Library {
         throw new Error('项目目录不能与应用数据目录相互包含');
       const library = new Library(store, canonicalUserData, quota);
       await library.migration.recover();
+      await library.packages.recover();
       await library.projects.discover();
       await library.staging.recover();
       await library.proxies.recover();
+      await library.exports.recover();
       library.saves.start();
       return library;
     } catch (error) {
@@ -116,6 +138,12 @@ export class Library {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+  subscribeExports(listener: () => void): () => void {
+    this.exportListeners.add(listener);
+    return () => {
+      this.exportListeners.delete(listener);
+    };
   }
   emit(): void {
     for (const listener of this.listeners) {
@@ -144,6 +172,8 @@ export class Library {
   }
 
   private async shutdown(): Promise<void> {
+    await this.packages.close();
+    await this.exports.close();
     await this.proxies.close();
     await this.staging.idle();
     await this.migration.idle();

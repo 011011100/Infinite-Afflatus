@@ -108,3 +108,7 @@ FFMPEG_PATH=/path/to/ffmpeg FFPROBE_PATH=/path/to/ffprobe pnpm doctor:media
 - 不提交个人环境配置、密钥、私有媒体、数据库或 `out/`。
 - 不在仓库为空或暂无自动化测试时，把「没有失败」写成完整测试通过。
 - 按用户约定，完成修改后提交并推送到当前工作分支。
+
+## 本地交付回归
+
+视频导出、项目包与关闭保存的实现和独立验证命令见 [本地创作交付](local-delivery.md) 与 [离开前保存](saving-on-leave.md)。`tests/browser/delivery.cjs` 使用生产构建与真实 IPC、临时合成素材；当前关闭／重开用例仅面向 macOS，不操作已有用户项目。

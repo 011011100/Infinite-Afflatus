@@ -6,6 +6,7 @@ export function useLibrary() {
   const [project, setProject] = useState<ProjectSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [operations, setOperations] = useState(0);
+  const [importingPackage, setImportingPackage] = useState(false);
   const activeId = useRef<string | null>(null);
   const revision = useRef(0);
 
@@ -79,6 +80,15 @@ export function useLibrary() {
       activeId.current = snapshot.project.id;
       setProject(snapshot);
     });
+  const importPackage = () => {
+    setImportingPackage(true);
+    return run(async () => {
+      const snapshot = await window.desktop.importProjectPackage();
+      if (!snapshot) return;
+      activeId.current = snapshot.project.id;
+      setProject(snapshot);
+    }).finally(() => setImportingPackage(false));
+  };
   const home = () => {
     activeId.current = null;
     revision.current += 1;
@@ -92,6 +102,9 @@ export function useLibrary() {
     run,
     open,
     create,
+    importPackage,
+    importingPackage,
+    cancelPackage: () => run(() => window.desktop.cancelProjectPackage()),
     home,
     report,
     clearError: () => setError(null),

@@ -1,5 +1,5 @@
 import type { ReactFlowInstance } from '@xyflow/react';
-import { type RefObject, useState } from 'react';
+import { type RefObject, useRef, useState } from 'react';
 import { materialPosition } from '../../../../shared/generation/material-layout';
 import {
   LABEL_SIZE,
@@ -11,6 +11,7 @@ import {
   MATERIAL_WIDTH,
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
+import { usePendingSave } from '../lifecycle/use-pending-save';
 import { message } from './errors';
 import type { MaterialCanvasNode } from './use-material-flow';
 
@@ -24,6 +25,13 @@ export function useMaterialActions(
 ) {
   const [importing, setImporting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const pendingImport = useRef<Promise<boolean> | null>(null);
+  // Import callbacks add material references, so finish them before saving the shot draft.
+  usePendingSave(
+    `导入镜头素材:${projectId}`,
+    () => pendingImport.current ?? Promise.resolve(true),
+    -10,
+  );
   const position = (count = 1, size?: Size) => {
     const rect = area.current?.getBoundingClientRect();
     const center =
@@ -114,15 +122,23 @@ export function useMaterialActions(
   };
   const importFiles = async () => {
     setImporting(true);
-    try {
-      const imported = await window.desktop.importReferences(projectId);
-      addAssets(imported.assetIds);
-      setLocalError(imported.errors.length ? imported.errors.join('\n') : null);
-    } catch (reason) {
-      setLocalError(message(reason));
-    } finally {
-      setImporting(false);
-    }
+    pendingImport.current = (async () => {
+      try {
+        const imported = await window.desktop.importReferences(projectId);
+        addAssets(imported.assetIds);
+        setLocalError(
+          imported.errors.length ? imported.errors.join('\n') : null,
+        );
+        return true;
+      } catch (reason) {
+        setLocalError(message(reason));
+        return false;
+      } finally {
+        setImporting(false);
+      }
+    })();
+    await pendingImport.current;
+    pendingImport.current = null;
   };
   return {
     addText,

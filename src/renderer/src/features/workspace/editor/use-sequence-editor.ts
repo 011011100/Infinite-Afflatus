@@ -16,6 +16,7 @@ import {
   shortcutAction,
 } from '../../../../../shared/interaction/shortcuts';
 import type { Asset } from '../../../../../shared/models';
+import { usePendingSave } from '../../lifecycle/use-pending-save';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { useSequencePlayback } from '../playback/use-sequence-playback';
 import { buildTimeline, locateTime, totalDuration } from './timeline';
@@ -67,6 +68,11 @@ export function useSequenceEditor(
   }, [edits.reset, queue, card]);
   const [selectedId, setSelectedId] = useState(assets[0]?.id);
   const [gesturing, setGesturing] = useState(false);
+  usePendingSave(
+    `裁剪:${props.projectId}:${card.id}`,
+    () => (gesturing ? Promise.resolve(false) : queue.flush()),
+    -5,
+  );
   const [muted, setMuted] = useState(false);
   const durations = useMemo(
     () => new Map([...frames].map(([id, frame]) => [id, frame.duration ?? 0])),
@@ -109,10 +115,12 @@ export function useSequenceEditor(
     : 0;
   const pending = saving || edits.pending;
   const disabled = blocked || pending;
-  const close = () => {
-    if (pending || gesturing || props.closing) return;
-    playback.stop();
-    props.onClose();
+  const close = async () => {
+    if (gesturing || props.closing) return;
+    if (await queue.flush()) {
+      playback.stop();
+      props.onClose();
+    }
   };
   const cancel = () => {
     setDraft(null);
@@ -152,6 +160,7 @@ export function useSequenceEditor(
     const key = (event: KeyboardEvent) => {
       if (
         props.closing ||
+        document.querySelector('dialog[open], [data-save-before-leave]') ||
         event.defaultPrevented ||
         event.repeat ||
         event.isComposing
@@ -160,7 +169,7 @@ export function useSequenceEditor(
       if (event.key === 'Escape') {
         if (gesturing) return;
         event.preventDefault();
-        close();
+        void close();
         return;
       }
       if (
@@ -205,6 +214,7 @@ export function useSequenceEditor(
     gesturing,
     setGesturing,
     saveError: edits.error,
+    retrySave: queue.flush,
     pending,
     reset: edits.reset,
     muted,

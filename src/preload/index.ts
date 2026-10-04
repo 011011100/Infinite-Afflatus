@@ -2,6 +2,51 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  cancelProjectPackage: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelProjectPackage),
+  onLeaveCancelled: (listener) => {
+    const cancel = () => listener();
+    ipcRenderer.on(IPC_CHANNELS.leaveCancelled, cancel);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.leaveCancelled, cancel);
+    };
+  },
+  onSaveBeforeLeave: (listener) => {
+    const request = (_event: Electron.IpcRendererEvent, token: string) => {
+      void Promise.resolve()
+        .then(listener)
+        .catch(() => false)
+        .then((saved) =>
+          ipcRenderer.invoke(IPC_CHANNELS.saveBeforeLeaveResult, token, saved),
+        )
+        .catch(() => {
+          /* A timeout or destroyed window never authorizes a later close. */
+        });
+    };
+    ipcRenderer.on(IPC_CHANNELS.saveBeforeLeave, request);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.saveBeforeLeave, request);
+    };
+  },
+  inspectProjectPackage: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.inspectProjectPackage, id),
+  exportProjectPackage: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.exportProjectPackage, id),
+  importProjectPackage: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.importProjectPackage),
+  duplicateProject: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.duplicateProject, id),
+  startExport: (projectId, cardId, options) =>
+    ipcRenderer.invoke(IPC_CHANNELS.startExport, projectId, cardId, options),
+  listExports: () => ipcRenderer.invoke(IPC_CHANNELS.listExports),
+  cancelExport: (id) => ipcRenderer.invoke(IPC_CHANNELS.cancelExport, id),
+  revealExport: (id) => ipcRenderer.invoke(IPC_CHANNELS.revealExport, id),
+  onExportsChanged: (listener) => {
+    const changed = () => listener();
+    ipcRenderer.on(IPC_CHANNELS.exportsChanged, changed);
+    return () =>
+      ipcRenderer.removeListener(IPC_CHANNELS.exportsChanged, changed);
+  },
   getGenerationWorkspace: (id) =>
     ipcRenderer.invoke(IPC_CHANNELS.getGenerationWorkspace, id),
   saveGenerationWorkspace: (id, workspace) =>

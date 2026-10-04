@@ -11,7 +11,9 @@ import {
 import type { CanvasPatch } from '../../shared/canvas/model';
 import { IPC_CHANNELS } from '../../shared/desktop';
 import type { Viewport } from '../../shared/models';
+import { registerExportIpc } from '../export/export-ipc';
 import { registerGenerationIpc } from '../generation/generation-ipc';
+import { registerPackageIpc } from '../packages/package-ipc';
 import {
   isId,
   validateName,
@@ -40,6 +42,8 @@ export function registerDesktop(
     return value;
   };
   registerGenerationIpc(library, trustedWindow);
+  registerExportIpc(library, trustedWindow);
+  registerPackageIpc(library, trustedWindow);
   ipcMain.handle(IPC_CHANNELS.appInfo, (event) => {
     trustedWindow(event);
     return {
@@ -164,5 +168,10 @@ export function registerDesktop(
     const window = getWindow();
     if (window && !window.isDestroyed())
       window.webContents.send(IPC_CHANNELS.changed);
+  });
+  library.subscribeExports(() => {
+    const window = getWindow();
+    if (window && !window.isDestroyed())
+      window.webContents.send(IPC_CHANNELS.exportsChanged);
   });
 }

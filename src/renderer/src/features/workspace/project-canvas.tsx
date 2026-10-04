@@ -28,6 +28,7 @@ import { ThumbnailProvider } from './thumbnail-provider';
 import { useCanvasDocument } from './use-canvas-document';
 import { useCanvasShortcuts } from './use-canvas-shortcuts';
 import { useCardDrag } from './use-card-drag';
+import { useViewportSave } from './use-viewport-save';
 import { VideoCard, type VideoCardNode } from './video-card';
 
 const edges: Edge[] = [];
@@ -59,6 +60,7 @@ function CanvasContent({
   report,
 }: ProjectCanvasProps) {
   const shots = useShotWorkspace(snapshot.project.id, blocked);
+  const saveViewport = useViewportSave(snapshot.project.id, report);
   const [shotPositions, setShotPositions] = useState<
     Record<string, { x: number; y: number }>
   >({});
@@ -351,10 +353,7 @@ function CanvasContent({
           } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
         }}
         onMoveEnd={(_event, viewport) => {
-          if (!blocked)
-            void window.desktop
-              .saveViewport(snapshot.project.id, viewport)
-              .catch(report);
+          if (!blocked) void saveViewport(viewport);
         }}
       >
         <ViewportPortal>

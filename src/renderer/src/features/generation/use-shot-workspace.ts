@@ -6,6 +6,7 @@ import {
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
+import { usePendingSave } from '../lifecycle/use-pending-save';
 import { message } from './errors';
 
 /** One project-scoped save stream, including edits made while an earlier write is pending. */
@@ -52,6 +53,7 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
     })();
     return pending.current;
   }, [projectId]);
+  usePendingSave(`镜头草稿:${projectId}`, flush);
   useEffect(() => {
     let active = true;
     void window.desktop
