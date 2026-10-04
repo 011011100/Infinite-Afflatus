@@ -1,9 +1,11 @@
 import { dirname, join } from 'node:path';
-import { dialog, shell } from 'electron';
+import { app, dialog, shell } from 'electron';
+import { AppBackupRecovery } from '../backups/app-backup-recovery';
 import { errorMessage } from '../storage/database';
 import { Library } from '../storage/library';
 import { LibraryOpenError } from '../storage/library-open-error';
 import { pathInfo } from '../storage/startup-checks';
+import { restoreAppBackupFromDialogs } from './app-backup-dialogs';
 import {
   runStartupRecovery,
   type StartupRecoveryAction,
@@ -26,14 +28,16 @@ export function openLibraryWithRecovery(
   userData: string,
   defaultRoot: string,
 ): Promise<Library | null> {
+  const backups = new AppBackupRecovery(userData, app.getVersion());
   return runStartupRecovery(
-    () => Library.open(userData, defaultRoot),
+    () => Library.open(userData, defaultRoot, undefined, app.getVersion()),
     async (failure, locationError) => {
       const root =
         failure instanceof LibraryOpenError ? failure.projectRoot : null;
       const choices: { label: string; action: StartupRecoveryAction }[] = [
         { label: '重试', action: 'retry' },
         { label: '查看应用数据位置', action: 'show-data' },
+        { label: '检查本机备份', action: 'restore-backup' },
         ...(root
           ? [{ label: '查看原项目位置', action: 'show-projects' as const }]
           : []),
@@ -69,5 +73,6 @@ export function openLibraryWithRecovery(
         action === 'show-projects' && root ? root : userData,
       );
     },
+    () => restoreAppBackupFromDialogs(backups, dialog),
   );
 }

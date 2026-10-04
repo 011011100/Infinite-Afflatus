@@ -2,6 +2,9 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { AppBackupRecovery } from '../backups/app-backup-recovery';
+import { AppBackupService } from '../backups/app-backup-service';
+import { preflightBackupAnchor } from '../backups/backup-open-check';
 import { ProjectEditDraftService } from '../drafts/project-edit-draft-service';
 import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
@@ -35,6 +38,7 @@ import { WriteGate } from './write-gate';
 /** Main-process composition root. Feature modules depend on narrow services, never on Electron. */
 export class Library {
   readonly projects: ProjectService;
+  readonly backups: AppBackupService;
   readonly generation: GenerationService;
   readonly interactions: InteractionSettingsStore;
   readonly mediaTools: MediaToolSettings;
@@ -61,12 +65,14 @@ export class Library {
     readonly store: AppStore,
     userData: string,
     quota?: number,
+    appVersion = 'development',
   ) {
     this.drafts = new WorkspaceDraftService(userData);
     this.editDrafts = new ProjectEditDraftService(userData);
     this.interactions = new InteractionSettingsStore(store);
     this.mediaTools = new MediaToolSettings(store);
     this.projects = new ProjectService(store, this.gate);
+    this.backups = new AppBackupService(store, userData, this.gate, appVersion);
     this.health = new ProjectHealthService(
       this.projects,
       store,
@@ -129,6 +135,7 @@ export class Library {
       userData,
       () => this.emit(),
       () => this.saves.kick(),
+      this.backups,
     );
   }
 
@@ -136,6 +143,7 @@ export class Library {
     userData: string,
     defaultRoot: string,
     quota?: number,
+    appVersion = 'development',
   ): Promise<Library> {
     let store: AppStore | null = null;
     let recordedRoot: string | null = null;
@@ -143,6 +151,10 @@ export class Library {
     try {
       await mkdir(userData, { recursive: true });
       const canonicalUserData = await canonicalDirectory(userData);
+      await new AppBackupRecovery(
+        canonicalUserData,
+        appVersion,
+      ).resumePending();
       const appFile = join(canonicalUserData, 'app.sqlite');
       const existing = await pathInfo(appFile);
       if (existing) recordedRoot = readAppStoreRoot(appFile, existing);
@@ -160,14 +172,17 @@ export class Library {
         throw new Error('项目目录不能与应用数据目录相互包含');
       await requireWritableDirectory(root);
       stage = 'application';
+      if (existing) await preflightBackupAnchor(canonicalUserData, appFile);
       store = new AppStore(appFile, root, {
         mode: existing ? 'existing' : 'create',
         ...(existing ? { expected: existing } : {}),
       });
       if (store.root !== root) store.set('root', root);
-      const library = new Library(store, canonicalUserData, quota);
+      const library = new Library(store, canonicalUserData, quota, appVersion);
       stage = 'recovery';
+      await library.backups.initialize();
       await library.migration.recover();
+      await library.backups.afterMigration();
       await library.packages.recover();
       await library.health.recover();
       await library.projects.discover();
@@ -178,7 +193,7 @@ export class Library {
       library.saves.start();
       return library;
     } catch (error) {
-      store?.close();
+      await store?.close();
       throw new LibraryOpenError(error, userData, recordedRoot, stage);
     }
   }
@@ -241,6 +256,7 @@ export class Library {
     // every cancellation before waiting, and observe every cleanup outcome.
     // Fully received results remain durable and resume on the next library open.
     const stopped = await Promise.allSettled([
+      this.backups.close(),
       this.mediaTools.close(),
       this.referenceImports.close(),
       this.stagingCleanup.close(),
@@ -259,6 +275,6 @@ export class Library {
     await this.gate.idle();
     await this.drafts.close();
     await this.editDrafts.close();
-    this.store.close();
+    await this.store.close();
   }
 }

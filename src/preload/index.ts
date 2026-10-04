@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  getAppBackups: () => ipcRenderer.invoke(IPC_CHANNELS.getAppBackups),
+  createAppBackup: () => ipcRenderer.invoke(IPC_CHANNELS.createAppBackup),
+  revealAppBackups: () => ipcRenderer.invoke(IPC_CHANNELS.revealAppBackups),
+  revealRetainedAppData: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.revealRetainedAppData),
   protectProjectEditDraft: (projectId, input) =>
     ipcRenderer.invoke(IPC_CHANNELS.protectProjectEditDraft, projectId, input),
   listProjectEditDrafts: (projectId) =>

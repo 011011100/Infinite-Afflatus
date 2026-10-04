@@ -11,6 +11,7 @@ import {
 import type { CanvasPatch } from '../../shared/canvas/model';
 import { IPC_CHANNELS } from '../../shared/desktop';
 import type { Viewport } from '../../shared/models';
+import { registerAppBackupIpc } from '../backups/app-backup-ipc';
 import { registerWorkspaceDraftIpc } from '../drafts/draft-ipc';
 import { registerProjectEditDraftIpc } from '../drafts/project-edit-draft-ipc';
 import { registerExportIpc } from '../export/export-ipc';
@@ -47,6 +48,7 @@ export function registerDesktop(
     return value;
   };
   registerGenerationIpc(library, trustedWindow);
+  registerAppBackupIpc(library.backups, trustedWindow);
   registerExportIpc(library, trustedWindow);
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);

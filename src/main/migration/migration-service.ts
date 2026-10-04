@@ -31,6 +31,7 @@ export class MigrationService {
   private preview: MigrationPreview | null = null;
   private work: Promise<void> | null = null;
   private cancelRequested = false;
+  private unsafeCutover = false;
 
   constructor(
     private readonly store: AppStore,
@@ -39,10 +40,28 @@ export class MigrationService {
     private readonly userData: string,
     private readonly notify: () => void,
     private readonly resumeSaves: () => void,
+    private readonly backupHooks?: {
+      beforeMigration(preview: MigrationPreview): Promise<void>;
+      migrationStarted(preview: MigrationPreview): Promise<void>;
+      beforeCutover(journal: MigrationJournal): Promise<unknown>;
+      afterCutover(): Promise<void>;
+      afterMigration(): Promise<void>;
+    },
   ) {}
 
   get journal(): MigrationJournal | null {
-    return this.store.get<MigrationJournal>('migration');
+    const journal = this.store.get<MigrationJournal>('migration');
+    return this.unsafeCutover && journal
+      ? {
+          ...journal,
+          status: {
+            ...journal.status,
+            restartRequired: true,
+            error:
+              '目录切换确认中断，已保留两份资料并暂停写入；请重新打开应用完成恢复',
+          },
+        }
+      : journal;
   }
 
   private persist(journal: MigrationJournal): void {
@@ -101,11 +120,12 @@ export class MigrationService {
     const admitted = this.gate.block();
     this.work = admitted
       .then(() => this.perform(preview))
+      .then(() => this.backupHooks?.afterMigration())
       .finally(() => {
         this.work = null;
-        this.gate.release();
+        if (!this.unsafeCutover) this.gate.release();
         this.notify();
-        this.resumeSaves();
+        if (!this.unsafeCutover) this.resumeSaves();
       });
     this.notify();
     await admitted;
@@ -113,6 +133,8 @@ export class MigrationService {
 
   private async perform(preview: MigrationPreview): Promise<void> {
     let journal: MigrationJournal | null = null;
+    let cutoverAttempted = false;
+    let targetConfirmed = false;
     try {
       if (
         (await canonicalDirectory(preview.source)) !== preview.source ||
@@ -134,7 +156,7 @@ export class MigrationService {
       );
       journal = {
         status: {
-          id: randomUUID(),
+          id: preview.token,
           source: preview.source,
           target: preview.target,
           phase: 'copying',
@@ -150,7 +172,9 @@ export class MigrationService {
         sourceDirectories: {},
         targetDirectories: {},
       };
+      await this.backupHooks?.beforeMigration(preview);
       this.persist(journal);
+      await this.backupHooks?.migrationStarted(preview);
       for (const project of projects) {
         for (const part of [
           '',
@@ -240,10 +264,14 @@ export class MigrationService {
         throw new Error('迁移目录已被替换');
       this.checkCancellation();
       await syncDirectory(preview.target);
+      cutoverAttempted = true;
+      const generation = await this.backupHooks?.beforeCutover(journal);
       journal.switched = true;
       journal.status.phase = 'cleaning';
       // Root switch and recovery direction commit together, in one SQLite transaction.
-      this.store.commitLocation(preview.target, journal);
+      this.store.commitLocation(preview.target, journal, generation);
+      await this.backupHooks?.afterCutover();
+      targetConfirmed = true;
       this.notify();
       await cleanupMigration(journal, () => {
         if (journal) this.persist(journal);
@@ -251,10 +279,15 @@ export class MigrationService {
       journal.status.phase = 'completed';
       this.persist(journal);
     } catch (error) {
+      if (cutoverAttempted && !targetConfirmed) {
+        this.unsafeCutover = true;
+        this.notify();
+        return;
+      }
       if (!journal) {
         this.store.set('migration', {
           status: {
-            id: randomUUID(),
+            id: preview.token,
             source: preview.source,
             target: preview.target,
             phase: 'failed',
@@ -318,6 +351,7 @@ export class MigrationService {
       }
       this.persist(journal);
     }
+    await this.backupHooks?.afterMigration();
   }
 
   async retryCleanup(): Promise<void> {
@@ -336,6 +370,7 @@ export class MigrationService {
           journal.status.error = errorMessage(error);
         }
         this.persist(journal);
+        await this.backupHooks?.afterMigration();
       })
       .finally(() => {
         this.work = null;

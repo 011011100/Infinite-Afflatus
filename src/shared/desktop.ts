@@ -1,3 +1,4 @@
+import type { AppBackupInfo, AppBackupList } from './app-backup';
 import type { CanvasPatch } from './canvas/model';
 import type { SequenceExportJob, SequenceExportOptions } from './export';
 import type {
@@ -45,6 +46,10 @@ import type {
 } from './workspace-draft';
 
 export const IPC_CHANNELS = {
+  getAppBackups: 'backup:list',
+  createAppBackup: 'backup:create',
+  revealAppBackups: 'backup:reveal',
+  revealRetainedAppData: 'backup:reveal-retained',
   protectProjectEditDraft: 'draft:protect-project-edit',
   listProjectEditDrafts: 'draft:list-project-edits',
   acknowledgeProjectEditDraft: 'draft:acknowledge-project-edit',
@@ -125,6 +130,10 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  getAppBackups: () => Promise<AppBackupList>;
+  createAppBackup: () => Promise<AppBackupInfo>;
+  revealAppBackups: () => Promise<void>;
+  revealRetainedAppData: () => Promise<void>;
   protectProjectEditDraft: (
     projectId: string,
     input: ProjectEditDraftInput,

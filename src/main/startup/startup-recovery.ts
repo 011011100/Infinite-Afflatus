@@ -2,9 +2,10 @@ export type StartupRecoveryAction =
   | 'retry'
   | 'show-data'
   | 'show-projects'
+  | 'restore-backup'
   | 'quit';
 
-/** Location viewing cannot retry or mutate storage; only the explicit retry action opens again. */
+/** Location viewing never opens storage; retry or a confirmed restore starts the next open. */
 export async function runStartupRecovery<T>(
   open: () => Promise<T>,
   choose: (
@@ -15,6 +16,7 @@ export async function runStartupRecovery<T>(
     action: 'show-data' | 'show-projects',
     failure: unknown,
   ) => Promise<void>,
+  restoreBackup?: () => Promise<boolean>,
 ): Promise<T | null> {
   for (;;) {
     try {
@@ -26,10 +28,16 @@ export async function runStartupRecovery<T>(
         if (action === 'quit') return null;
         if (action === 'retry') break;
         try {
+          if (action === 'restore-backup') {
+            if (!restoreBackup) throw new Error('当前版本未提供备份恢复');
+            if (await restoreBackup()) break;
+            locationError = null;
+            continue;
+          }
           await reveal(action, failure);
           locationError = null;
         } catch (error) {
-          locationError = `无法打开该位置：${error instanceof Error ? error.message : String(error)}`;
+          locationError = `${action === 'restore-backup' ? '备份恢复未完成' : '无法打开该位置'}：${error instanceof Error ? error.message : String(error)}`;
         }
       }
     }

@@ -1,0 +1,5 @@
+{
+  "name": "app-backup-legacy-worker-authorizations",
+  "commit": "dd0a849ac0407ea81fe9c38ebcf1982ce373128e",
+  "description": "Fixed pre-backup public Library writer for genuine saved-but-not-cleaned staging and interrupted migration journals. This establishes legacy hazards, not the new backup format."
+}

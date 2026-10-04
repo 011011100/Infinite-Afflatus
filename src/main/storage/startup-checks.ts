@@ -6,6 +6,8 @@ import { isId } from '../projects/project-service';
 
 /** Extend this list when adding independent, durable application data. Empty setup folders are harmless. */
 export const MANAGED_DATA_DIRECTORIES = [
+  'app-backups',
+  'app-backup-retained',
   'staging',
   'export-work',
   'preview-work',
@@ -35,6 +37,8 @@ export async function requireCleanProfile(
   for (const suffix of ['-journal', '-wal', '-shm']) {
     if (await pathInfo(join(userData, `app.sqlite${suffix}`))) reject();
   }
+  for (const name of ['app-backup-anchor.json', 'app-backup-restore.json'])
+    if (await pathInfo(join(userData, name))) reject();
   const names = await readdir(userData);
   for (const name of names) {
     if (

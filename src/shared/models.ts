@@ -66,6 +66,8 @@ export interface MigrationStatus {
   total: number;
   error: string | null;
   warnings: string[];
+  /** Runtime-only: cutover evidence needs startup recovery before any further writes. */
+  restartRequired?: true;
 }
 
 export interface LibraryState {

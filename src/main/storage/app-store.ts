@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { closeSync, lstatSync, openSync } from 'node:fs';
-import type { DatabaseSync } from 'node:sqlite';
+import { lstat } from 'node:fs/promises';
+import { backup, type DatabaseSync } from 'node:sqlite';
 import type { ProjectSummary, SaveJob } from '../../shared/models';
 import {
   type AppStoreIdentity,
@@ -16,9 +18,12 @@ import {
 /** Fixed userData database: routing, queue and recovery journal survive a library move. */
 export class AppStore {
   private readonly db: DatabaseSync;
+  private readonly sourceIdentity: AppStoreIdentity;
+  private snapshots = new Set<Promise<void>>();
+  private closing: Promise<void> | null = null;
 
   constructor(
-    file: string,
+    private readonly file: string,
     defaultRoot: string,
     options: { mode?: 'create' | 'existing'; expected?: AppStoreIdentity } = {},
   ) {
@@ -64,6 +69,7 @@ export class AppStore {
           verifyAppStore(db);
         });
       this.db = db;
+      this.sourceIdentity = identity;
     } catch (error) {
       db.close();
       throw error;
@@ -137,14 +143,72 @@ export class AppStore {
     if (result.changes !== 1) throw new Error('保存任务已变化，未移除任务记录');
   }
 
-  commitLocation(root: string, journal: unknown): void {
+  commitLocation(root: string, journal: unknown, generation?: unknown): void {
     transaction(this.db, () => {
       this.set('root', root);
       this.set('migration', journal);
+      if (generation !== undefined) this.set('appBackupGeneration', generation);
     });
   }
 
-  close(): void {
-    this.db.close();
+  /** Binds first-time anchor initialization to the exact original file and logical contents. */
+  backupSourceEvidence() {
+    verifyAppStorePath(this.file, this.sourceIdentity);
+    const stat = lstatSync(this.file, { bigint: true });
+    const hash = createHash('sha256');
+    transaction(this.db, () => {
+      verifyAppStore(this.db);
+      for (const [table, order] of [
+        ['settings', 'key'],
+        ['projects', 'id'],
+        ['saves', 'id'],
+      ]) {
+        hash.update(table ?? '');
+        for (const row of this.db
+          .prepare(`SELECT * FROM ${table} ORDER BY ${order}`)
+          .iterate())
+          hash.update(JSON.stringify(row));
+      }
+    });
+    verifyAppStorePath(this.file, this.sourceIdentity);
+    return {
+      dev: String(stat.dev),
+      ino: String(stat.ino),
+      birthtimeNs: String(stat.birthtimeNs),
+      sha256: hash.digest('hex'),
+    };
+  }
+
+  /** The destination must be inside the caller's exclusively created temporary directory. */
+  snapshot(file: string): Promise<void> {
+    if (this.closing) return Promise.reject(new Error('应用数据库正在关闭'));
+    const operation = (async () => {
+      const existing = await lstat(file).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return null;
+        },
+      );
+      if (existing) throw new Error('备份临时数据库已存在，未覆盖');
+      verifyAppStorePath(this.file, this.sourceIdentity);
+      verifyAppStore(this.db);
+      await backup(this.db, file);
+      verifyAppStorePath(this.file, this.sourceIdentity);
+    })().finally(() => this.snapshots.delete(operation));
+    this.snapshots.add(operation);
+    return operation;
+  }
+
+  close(): Promise<void> {
+    if (!this.closing) {
+      if (!this.snapshots.size) {
+        this.db.close();
+        this.closing = Promise.resolve();
+      } else
+        this.closing = Promise.allSettled([...this.snapshots]).then(() =>
+          this.db.close(),
+        );
+    }
+    return this.closing;
   }
 }
