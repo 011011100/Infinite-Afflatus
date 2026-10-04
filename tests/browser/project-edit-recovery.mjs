@@ -56,6 +56,7 @@ const json = (value) => JSON.stringify(value);
 function metadata(key) {
   const db = new DatabaseSync(database, { readOnly: true });
   try {
+    db.exec('PRAGMA busy_timeout = 5000;');
     return db.prepare('SELECT value FROM metadata WHERE key = ?').get(key)
       ?.value;
   } finally {
