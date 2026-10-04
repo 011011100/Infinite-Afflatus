@@ -14,6 +14,7 @@ import { Writable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { test } from 'node:test';
 import { createPackage } from '@electron/asar';
+import { Filesystem } from '@electron/asar/lib/filesystem.js';
 import { stageApplication } from '../scripts/package-content.mjs';
 import { verifyAsar } from '../scripts/verify-package.mjs';
 
@@ -99,6 +100,25 @@ test('the final ASAR validator rejects private files added after staging', async
   const file = join(f.base, 'app.asar');
   await archive(f.stage, file);
   assert.throws(() => verifyAsar(file), /Unexpected packaged file/);
+});
+
+test('the ASAR validator accepts Windows native listing paths without weakening the allowlist', async (t) => {
+  const f = await fixture();
+  t.after(f.clean);
+  await stageApplication(f.root, f.stage);
+  const archive = join(f.base, 'app.asar');
+  await finished(await createPackage(f.stage, archive));
+  const listFiles = Filesystem.prototype.listFiles;
+  t.mock.method(
+    Filesystem.prototype,
+    'listFiles',
+    function (this: Filesystem, options: Parameters<typeof listFiles>[0]) {
+      return listFiles
+        .call(this, options)
+        .map((file) => file.replaceAll('/', '\\'));
+    },
+  );
+  assert.deepEqual(verifyAsar(archive), { asar: archive, files: 8 });
 });
 
 test('staging refuses unbundled production imports instead of shipping a broken no-node_modules app', async (t) => {

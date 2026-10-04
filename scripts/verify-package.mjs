@@ -7,7 +7,8 @@ import { APP_NAME, checkApplicationFiles } from './package-content.mjs';
 export function verifyAsar(archive) {
   const files = [];
   for (const path of listPackage(archive)) {
-    const file = path.replace(/^\//, '');
+    // ASAR lists native paths: Windows entries start with \\ and use \\ separators.
+    const file = path.replaceAll('\\', '/').replace(/^\//, '');
     const info = statFile(archive, file, false);
     if ('link' in info || info.unpacked)
       throw new Error(
