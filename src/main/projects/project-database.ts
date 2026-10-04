@@ -16,6 +16,10 @@ import type {
   ProjectSummary,
   Viewport,
 } from '../../shared/models';
+import {
+  type ProjectEditDraftInput,
+  projectEditDraftState,
+} from '../../shared/project-edit-draft';
 import type { ProxyRecord } from '../media/proxy-record';
 import { openDatabase, transaction } from '../storage/database';
 import {
@@ -225,6 +229,45 @@ export function patchProjectCanvas(
       current.canvas = applyCanvasPatch(current.canvas, patch);
       current.project.updatedAt = new Date().toISOString();
       setValue(db, 'canvas', current.canvas);
+      setValue(db, 'project', current.project);
+      return current;
+    },
+    expected,
+  );
+}
+
+/** A narrow recovery transaction never replaces unrelated cards, media, viewport or workspace. */
+export function restoreProjectEditDatabase(
+  file: string,
+  draft: ProjectEditDraftInput,
+  expected: ProjectIdentity,
+): ProjectSnapshot {
+  return withProject(
+    file,
+    true,
+    (db) => {
+      const current = snapshot(db);
+      const state = projectEditDraftState(draft, current);
+      if (state === 'conflict')
+        throw new Error(
+          '项目名称、裁剪或原素材与恢复基线不同，已保留副本；未覆盖项目',
+        );
+      if (state === 'submitted') return current;
+      if (draft.kind === 'name') {
+        // ProjectService validates the raw target before entering this transaction.
+        current.project.name = draft.target.trim();
+      } else {
+        const before = current.canvas.cards.find(
+          (card) => card.id === draft.baseline.id,
+        );
+        if (!before) throw new Error('原裁剪卡片不存在，恢复副本已保留');
+        current.canvas = applyCanvasPatch(current.canvas, {
+          before: [before],
+          after: [draft.target],
+        });
+        setValue(db, 'canvas', current.canvas);
+      }
+      current.project.updatedAt = new Date().toISOString();
       setValue(db, 'project', current.project);
       return current;
     },

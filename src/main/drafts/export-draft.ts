@@ -10,12 +10,33 @@ export async function exportDraft(
   destination: string,
   storage: string,
 ) {
+  return exportRecoveryRecord(
+    {
+      format: 'infinite-afflatus-workspace-rescue',
+      version: 1,
+      notice:
+        '只读镜头救援文件：含文本、参数、分组、素材引用及确认基线。不含原始媒体、未提交名称输入、主画布裁剪或撤销历史，不能作为完整项目包导入。',
+      draft: record,
+    },
+    destination,
+    storage,
+    '.afflatus-draft.json',
+  );
+}
+
+/** Both draft formats share no-replace publication, but retain independent envelopes. */
+export async function exportRecoveryRecord(
+  value: unknown,
+  destination: string,
+  storage: string,
+  suffix: string,
+) {
   if (
     !isAbsolute(destination) ||
-    !destination.endsWith('.afflatus-draft.json') ||
+    !destination.endsWith(suffix) ||
     overlaps(storage, destination)
   )
-    throw new Error('请选择恢复目录以外的 .afflatus-draft.json 文件');
+    throw new Error(`请选择恢复目录以外的 ${suffix} 文件`);
   const parent = dirname(destination);
   if ((await realpath(parent)) !== resolve(parent))
     throw new Error('导出目录不能包含符号链接');
@@ -30,19 +51,7 @@ export async function exportDraft(
   const identity = await handle.stat();
   let complete = false;
   try {
-    await handle.writeFile(
-      JSON.stringify(
-        {
-          format: 'infinite-afflatus-workspace-rescue',
-          version: 1,
-          notice:
-            '只读镜头救援文件：含文本、参数、分组、素材引用及确认基线。不含原始媒体、未提交名称输入、主画布裁剪或撤销历史，不能作为完整项目包导入。',
-          draft: record,
-        },
-        null,
-        2,
-      ),
-    );
+    await handle.writeFile(JSON.stringify(value, null, 2));
     await handle.sync();
     await syncDirectory(parent);
     complete = true;

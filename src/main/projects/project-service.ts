@@ -9,6 +9,7 @@ import type {
   Viewport,
 } from '../../shared/models';
 import type { ProjectRecoverySnapshot } from '../../shared/project-recovery';
+import { projectEditInput } from '../drafts/project-edit-validation';
 import type { AppStore } from '../storage/app-store';
 import { inside, safeFile, syncDirectory } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
@@ -16,6 +17,7 @@ import {
   createProjectDatabase,
   patchProjectCanvas,
   readProject,
+  restoreProjectEditDatabase,
   updateProject,
 } from './project-database';
 
@@ -109,6 +111,28 @@ export class ProjectService {
       const snapshot = patchProjectCanvas(
         await this.databasePath(id),
         patch,
+        this.summary(id),
+      );
+      this.store.putProject(snapshot.project);
+      return snapshot;
+    });
+  }
+
+  async restoreProjectEdit(
+    id: string,
+    input: unknown,
+    beforeWrite?: () => Promise<void>,
+  ): Promise<ProjectSnapshot> {
+    const draft = projectEditInput(input);
+    if (draft.kind === 'name') validateName(draft.target);
+    return this.gate.run(async () => {
+      const database = await this.databasePath(id);
+      // The draft may have waited behind another project operation. Check its
+      // exact durable key now, without holding the shared draft file queue.
+      await beforeWrite?.();
+      const snapshot = restoreProjectEditDatabase(
+        database,
+        draft,
         this.summary(id),
       );
       this.store.putProject(snapshot.project);

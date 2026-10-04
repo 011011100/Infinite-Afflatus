@@ -2,6 +2,22 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  protectProjectEditDraft: (projectId, input) =>
+    ipcRenderer.invoke(IPC_CHANNELS.protectProjectEditDraft, projectId, input),
+  listProjectEditDrafts: (projectId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.listProjectEditDrafts, projectId),
+  acknowledgeProjectEditDraft: (projectId, key) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.acknowledgeProjectEditDraft,
+      projectId,
+      key,
+    ),
+  recoverProjectEditDraft: (projectId, key) =>
+    ipcRenderer.invoke(IPC_CHANNELS.recoverProjectEditDraft, projectId, key),
+  discardProjectEditDraft: (projectId, key) =>
+    ipcRenderer.invoke(IPC_CHANNELS.discardProjectEditDraft, projectId, key),
+  exportProjectEditDraft: (projectId, input) =>
+    ipcRenderer.invoke(IPC_CHANNELS.exportProjectEditDraft, projectId, input),
   protectWorkspaceDraft: (projectId, input) =>
     ipcRenderer.invoke(IPC_CHANNELS.protectWorkspaceDraft, projectId, input),
   listWorkspaceDrafts: (projectId) =>

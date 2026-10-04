@@ -34,11 +34,17 @@ const optionalStat = (path: string) =>
   });
 
 /** Dedicated, bounded storage. Never follows links or erases an unrecognized draft. */
-export class DraftFiles {
+export class DraftFiles<T extends { seq: number } = WorkspaceDraftRecord> {
   private identity: Stats | null = null;
   readonly directory: string;
-  constructor(private readonly userData: string) {
-    this.directory = join(userData, 'workspace-drafts');
+  constructor(
+    private readonly userData: string,
+    private readonly format?: {
+      directory: string;
+      decode: (input: unknown) => T;
+    },
+  ) {
+    this.directory = join(userData, format?.directory ?? 'workspace-drafts');
   }
 
   async verify() {
@@ -69,7 +75,7 @@ export class DraftFiles {
     return names;
   }
 
-  async read(name: string): Promise<WorkspaceDraftRecord | null> {
+  async read(name: string): Promise<T | null> {
     await this.verify();
     const path = join(this.directory, name);
     const before = await optionalStat(path);
@@ -87,17 +93,14 @@ export class DraftFiles {
       const value = await handle.readFile('utf8');
       if (!sameFile(before, await handle.stat()))
         throw new Error('恢复草稿正在变化');
-      return draftRecord(JSON.parse(value));
+      const decode = this.format?.decode ?? draftRecord;
+      return decode(JSON.parse(value)) as T;
     } finally {
       await handle.close();
     }
   }
 
-  async write(
-    name: string,
-    record: WorkspaceDraftRecord,
-    expected: WorkspaceDraftRecord | null,
-  ) {
+  async write(name: string, record: T, expected: T | null) {
     const data = JSON.stringify(record);
     const size = Buffer.byteLength(data);
     if (size > MAX_DRAFT_BYTES)
@@ -151,12 +154,14 @@ export class DraftFiles {
     }
   }
 
-  async remove(name: string, seq: number) {
+  async remove(name: string, seq: number, expected?: T) {
     await this.verify();
     const path = join(this.directory, name);
     const previous = await optionalStat(path);
     const record = await this.read(name);
     if (!record || record.seq !== seq) return false;
+    if (expected && JSON.stringify(record) !== JSON.stringify(expected))
+      throw new Error('恢复草稿内容在清理期间变化，文件已保留');
     await this.verify();
     const current = await optionalStat(path);
     if (

@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { LibraryState } from '../../shared/models';
+import { ProjectEditDraftService } from '../drafts/project-edit-draft-service';
 import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
 import { GenerationService } from '../generation/generation-service';
@@ -46,6 +47,7 @@ export class Library {
   readonly packages: ProjectPackageService;
   readonly health: ProjectHealthService;
   readonly drafts: WorkspaceDraftService;
+  readonly editDrafts: ProjectEditDraftService;
   readonly referenceImports: ReferenceImportService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
@@ -61,6 +63,7 @@ export class Library {
     quota?: number,
   ) {
     this.drafts = new WorkspaceDraftService(userData);
+    this.editDrafts = new ProjectEditDraftService(userData);
     this.interactions = new InteractionSettingsStore(store);
     this.mediaTools = new MediaToolSettings(store);
     this.projects = new ProjectService(store, this.gate);
@@ -255,6 +258,7 @@ export class Library {
     await this.saves.idle();
     await this.gate.idle();
     await this.drafts.close();
+    await this.editDrafts.close();
     this.store.close();
   }
 }

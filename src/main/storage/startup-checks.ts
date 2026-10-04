@@ -11,6 +11,7 @@ export const MANAGED_DATA_DIRECTORIES = [
   'preview-work',
   'asset-recovery',
   'workspace-drafts',
+  'project-edit-drafts',
   'drafts',
   'recovery-drafts',
 ] as const;

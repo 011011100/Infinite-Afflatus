@@ -20,6 +20,12 @@ import type {
   Viewport,
 } from './models';
 import type {
+  ProjectEditDraftExport,
+  ProjectEditDraftInput,
+  ProjectEditDraftKey,
+  ProjectEditDraftList,
+} from './project-edit-draft';
+import type {
   ProjectHealthMode,
   ProjectHealthProgress,
   ProjectHealthReport,
@@ -39,6 +45,12 @@ import type {
 } from './workspace-draft';
 
 export const IPC_CHANNELS = {
+  protectProjectEditDraft: 'draft:protect-project-edit',
+  listProjectEditDrafts: 'draft:list-project-edits',
+  acknowledgeProjectEditDraft: 'draft:acknowledge-project-edit',
+  recoverProjectEditDraft: 'draft:recover-project-edit',
+  discardProjectEditDraft: 'draft:discard-project-edit',
+  exportProjectEditDraft: 'draft:export-project-edit',
   protectWorkspaceDraft: 'draft:protect-workspace',
   listWorkspaceDrafts: 'draft:list-workspaces',
   acknowledgeWorkspaceDraft: 'draft:acknowledge-workspace',
@@ -113,6 +125,27 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  protectProjectEditDraft: (
+    projectId: string,
+    input: ProjectEditDraftInput,
+  ) => Promise<number>;
+  listProjectEditDrafts: (projectId: string) => Promise<ProjectEditDraftList>;
+  acknowledgeProjectEditDraft: (
+    projectId: string,
+    key: ProjectEditDraftKey,
+  ) => Promise<boolean>;
+  recoverProjectEditDraft: (
+    projectId: string,
+    key: ProjectEditDraftKey,
+  ) => Promise<ProjectSnapshot>;
+  discardProjectEditDraft: (
+    projectId: string,
+    key: ProjectEditDraftKey,
+  ) => Promise<boolean>;
+  exportProjectEditDraft: (
+    projectId: string,
+    input: ProjectEditDraftExport,
+  ) => Promise<string | null>;
   protectWorkspaceDraft: (
     projectId: string,
     input: WorkspaceDraftInput,
