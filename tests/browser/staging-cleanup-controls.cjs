@@ -5,10 +5,12 @@ const { tmpdir } = require('node:os');
 const { join, resolve, basename } = require('node:path');
 const { app, BrowserWindow } = require('electron');
 const root = resolve(__dirname, '../..');
-const scratch = mkdtempSync(
-  join(root, 'src/renderer/.staging-cleanup-controls-'),
-);
-const profile = mkdtempSync(join(tmpdir(), 'afflatus-cleanup-controls-'));
+const scratch =
+  process.env.AFFLATUS_FIXTURE_SCRATCH ??
+  mkdtempSync(join(root, 'src/renderer/.staging-cleanup-controls-'));
+const profile =
+  process.env.AFFLATUS_FIXTURE_PROFILE ??
+  mkdtempSync(join(tmpdir(), 'afflatus-cleanup-controls-'));
 app.setPath('userData', profile);
 writeFileSync(
   join(scratch, 'index.html'),
@@ -40,7 +42,9 @@ app.whenReady().then(async () => {
     throw new Error(`Timed out: ${label}`);
   };
   const load = async (ready = true) => {
-    await win.loadURL(`http://127.0.0.1:5173/${basename(scratch)}/index.html`);
+    await win.loadURL(
+      `${process.env.AFFLATUS_FIXTURE_ORIGIN ?? 'http://127.0.0.1:5173'}/${basename(scratch)}/index.html`,
+    );
     await wait(
       'cleanupControls.state().inspections === 1',
       'one StrictMode inspection',
@@ -263,8 +267,16 @@ app.whenReady().then(async () => {
     console.error(await text());
   } finally {
     win.destroy();
-    rmSync(scratch, { recursive: true, force: true });
-    rmSync(profile, { recursive: true, force: true });
-    app.exit(failed ? 1 : 0);
+    try {
+      if (!process.env.AFFLATUS_FIXTURE_SCRATCH)
+        rmSync(scratch, { recursive: true, force: true });
+      if (!process.env.AFFLATUS_FIXTURE_PROFILE)
+        rmSync(profile, { recursive: true, force: true });
+    } catch (error) {
+      failed = true;
+      console.error('Fixture cleanup failed:', error);
+    } finally {
+      app.exit(failed ? 1 : 0);
+    }
   }
 });

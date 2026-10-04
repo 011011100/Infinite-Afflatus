@@ -32,6 +32,8 @@ jobs:
       - run: pnpm check
       - name: Build internal archive or installer and verify packaged contents
         run: pnpm package:local
+      - name: Verify renderer observer lifecycle and import and cleanup interactions
+        run: pnpm test:browser
       - name: Launch packaged app against an isolated library and verify saved content after restart
         run: node --import tsx tests/browser/packaged-delivery.mjs
       - name: Verify production startup failures preserve the original library

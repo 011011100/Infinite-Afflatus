@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: true
 patchedDependencies:
   '@electron/asar@3.4.1': patches/@electron__asar@3.4.1.patch
+  '@xyflow/react@12.12.0': patches/@xyflow__react@12.12.0.patch
+  '@xyflow/system@0.0.83': patches/@xyflow__system@0.0.83.patch

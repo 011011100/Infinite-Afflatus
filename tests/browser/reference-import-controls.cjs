@@ -5,8 +5,12 @@ const { tmpdir } = require('node:os');
 const { join, resolve, basename } = require('node:path');
 const { app, BrowserWindow } = require('electron');
 const root = resolve(__dirname, '../..');
-const scratch = mkdtempSync(join(root, 'src/renderer/.reference-controls-'));
-const profile = mkdtempSync(join(tmpdir(), 'afflatus-reference-controls-'));
+const scratch =
+  process.env.AFFLATUS_FIXTURE_SCRATCH ??
+  mkdtempSync(join(root, 'src/renderer/.reference-controls-'));
+const profile =
+  process.env.AFFLATUS_FIXTURE_PROFILE ??
+  mkdtempSync(join(tmpdir(), 'afflatus-reference-controls-'));
 app.setPath('userData', profile);
 writeFileSync(
   join(scratch, 'index.html'),
@@ -55,7 +59,7 @@ app.whenReady().then(async () => {
   const load = async (query = '') => {
     loadCount++;
     await win.loadURL(
-      `http://127.0.0.1:5173/${basename(scratch)}/index.html${query}`,
+      `${process.env.AFFLATUS_FIXTURE_ORIGIN ?? 'http://127.0.0.1:5173'}/${basename(scratch)}/index.html${query}`,
     );
     if (!query.includes('reject')) {
       await waitFor(`!!${button('素材画布')}`, 'project loaded');
@@ -445,8 +449,16 @@ app.whenReady().then(async () => {
   } finally {
     clearInterval(paint);
     win.destroy();
-    rmSync(scratch, { recursive: true, force: true });
-    rmSync(profile, { recursive: true, force: true });
-    app.exit(failed ? 1 : 0);
+    try {
+      if (!process.env.AFFLATUS_FIXTURE_SCRATCH)
+        rmSync(scratch, { recursive: true, force: true });
+      if (!process.env.AFFLATUS_FIXTURE_PROFILE)
+        rmSync(profile, { recursive: true, force: true });
+    } catch (error) {
+      failed = true;
+      console.error('Fixture cleanup failed:', error);
+    } finally {
+      app.exit(failed ? 1 : 0);
+    }
   }
 });

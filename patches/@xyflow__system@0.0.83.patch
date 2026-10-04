@@ -1,0 +1,60 @@
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 200b77265eca746bb1b712e41a9a92ab58f57c6d..5fd8c1bfceec42dc671ac6bc7f717a8e26af8d74 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -2966,9 +2966,8 @@ function XYPanZoom({ domNode, minZoom, maxZoom, translateExtent, viewport, onPan
+     /*
+      * Cache the pane extent and refresh it from a ResizeObserver. Otherwise d3-zoom falls back to its
+      * defaultExtent, which reads clientWidth/clientHeight and forces a synchronous layout while panning
+-     * and pinching. The observer is never disconnected on purpose: destroy() also runs to pause zooming
+-     * during a user selection, so disconnecting there would leave the cache stale. It becomes unreachable
+-     * and is garbage collected with the pane on unmount.
++     * and pinching. Internal destroy() only pauses zoom listeners during user selection;
++     * the public instance disposer disconnects this observer on final teardown.
+      */
+     let cachedExtent = [
+         [0, 0],
+@@ -3150,7 +3149,12 @@ function XYPanZoom({ domNode, minZoom, maxZoom, translateExtent, viewport, onPan
+     }
+     return {
+         update,
+-        destroy,
++        // Internal destroy() only unbinds zoom while selection is active. Final
++        // instance disposal also releases the observer; later instances own theirs.
++        destroy: () => {
++            destroy();
++            extentResizeObserver?.disconnect();
++        },
+         setViewport,
+         setViewportConstrained,
+         getViewport,
+diff --git a/dist/esm/index.mjs b/dist/esm/index.mjs
+index 200b77265eca746bb1b712e41a9a92ab58f57c6d..5fd8c1bfceec42dc671ac6bc7f717a8e26af8d74 100644
+--- a/dist/esm/index.mjs
++++ b/dist/esm/index.mjs
+@@ -2966,9 +2966,8 @@ function XYPanZoom({ domNode, minZoom, maxZoom, translateExtent, viewport, onPan
+     /*
+      * Cache the pane extent and refresh it from a ResizeObserver. Otherwise d3-zoom falls back to its
+      * defaultExtent, which reads clientWidth/clientHeight and forces a synchronous layout while panning
+-     * and pinching. The observer is never disconnected on purpose: destroy() also runs to pause zooming
+-     * during a user selection, so disconnecting there would leave the cache stale. It becomes unreachable
+-     * and is garbage collected with the pane on unmount.
++     * and pinching. Internal destroy() only pauses zoom listeners during user selection;
++     * the public instance disposer disconnects this observer on final teardown.
+      */
+     let cachedExtent = [
+         [0, 0],
+@@ -3150,7 +3149,12 @@ function XYPanZoom({ domNode, minZoom, maxZoom, translateExtent, viewport, onPan
+     }
+     return {
+         update,
+-        destroy,
++        // Internal destroy() only unbinds zoom while selection is active. Final
++        // instance disposal also releases the observer; later instances own theirs.
++        destroy: () => {
++            destroy();
++            extentResizeObserver?.disconnect();
++        },
+         setViewport,
+         setViewportConstrained,
+         getViewport,

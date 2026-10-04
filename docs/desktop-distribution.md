@@ -13,6 +13,7 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm test
 pnpm test:upgrade
+pnpm test:browser
 pnpm package:dir
 pnpm package:local
 ```
@@ -52,6 +53,10 @@ pnpm package:verify release/mac-arm64
 参考素材取消回归使用真实 512 MiB 文件；观察实际接收字节大于零且尚未完成后，分别点击取消按钮或关闭原生窗口。核对第一份完整素材引用保留、第二份仅有未完成部分文件、第三份没有开始，并在新进程重开后继续编辑保存；完整读取源文件并比对 SHA-256。该测试使用生产主进程、preload 和页面，只替换原生文件选择，不用模拟接收进度代替磁盘行为。
 
 另有真实项目失联回归：512 MiB 合法 WAV 接收途中移走项目数据库，在页面已进入不可用状态后继续完成导入。核对全部完整引用留在原镜头及独立恢复草稿、返回被阻止且未重建空库，再放回原数据库、显式重试读取和保存任务。新进程重开后，引用唯一、音频元数据可读取、完整源文件哈希不变。
+
+暂存清理回归同样使用真实接收、取消、预览、确认与新进程重开，并由固定历史提交创建旧部分文件和完整结果作为保护对照。只替换原生文件选择器，不模拟清理服务。历史写入需要完整 Git 历史，桌面工作流因此使用完整检出，缺少固定提交时必须失败。
+
+`pnpm test:browser` 另用随机高端口、独立 Vite 缓存和临时 Electron 配置运行尺寸监听器、导入离开和暂存确认交互；不连接或重启现有开发服务。这些真实 React 夹具使用模拟 IPC，不能证明真实磁盘或云端调用。父进程在 Electron 结束后清理本次临时目录，处理中断和超时；Windows 不在仍持有文件的 Electron 进程内删除其 profile。锁定的 xyflow ESM 补丁及范围见 [依赖补丁说明](../patches/README.md)。
 
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
 

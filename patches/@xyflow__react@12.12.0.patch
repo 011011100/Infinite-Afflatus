@@ -1,0 +1,66 @@
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895ae6b98f71 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -1280,12 +1280,25 @@ function useResizeHandler(domNode) {
+         if (domNode.current) {
+             updateDimensions();
+             window.addEventListener('resize', updateDimensions);
+-            const resizeObserver = new ResizeObserver(() => updateDimensions());
++            // Publishing store updates during ResizeObserver delivery can commit pending React
++            // layout changes and resize the same pane again in that delivery cycle.
++            let resizeFrame;
++            const resizeObserver = new ResizeObserver(() => {
++                if (resizeFrame !== undefined) {
++                    return;
++                }
++                resizeFrame = requestAnimationFrame(() => {
++                    resizeFrame = undefined;
++                    updateDimensions();
++                });
++            });
+             resizeObserver.observe(domNode.current);
+             return () => {
+                 window.removeEventListener('resize', updateDimensions);
+-                if (resizeObserver && domNode.current) {
+-                    resizeObserver.unobserve(domNode.current);
++                // React clears refs before passive cleanup, including StrictMode replay.
++                resizeObserver.disconnect();
++                if (resizeFrame !== undefined) {
++                    cancelAnimationFrame(resizeFrame);
+                 }
+             };
+         }
+diff --git a/dist/esm/index.mjs b/dist/esm/index.mjs
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895ae6b98f71 100644
+--- a/dist/esm/index.mjs
++++ b/dist/esm/index.mjs
+@@ -1280,12 +1280,25 @@ function useResizeHandler(domNode) {
+         if (domNode.current) {
+             updateDimensions();
+             window.addEventListener('resize', updateDimensions);
+-            const resizeObserver = new ResizeObserver(() => updateDimensions());
++            // Publishing store updates during ResizeObserver delivery can commit pending React
++            // layout changes and resize the same pane again in that delivery cycle.
++            let resizeFrame;
++            const resizeObserver = new ResizeObserver(() => {
++                if (resizeFrame !== undefined) {
++                    return;
++                }
++                resizeFrame = requestAnimationFrame(() => {
++                    resizeFrame = undefined;
++                    updateDimensions();
++                });
++            });
+             resizeObserver.observe(domNode.current);
+             return () => {
+                 window.removeEventListener('resize', updateDimensions);
+-                if (resizeObserver && domNode.current) {
+-                    resizeObserver.unobserve(domNode.current);
++                // React clears refs before passive cleanup, including StrictMode replay.
++                resizeObserver.disconnect();
++                if (resizeFrame !== undefined) {
++                    cancelAnimationFrame(resizeFrame);
+                 }
+             };
+         }

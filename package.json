@@ -23,6 +23,7 @@
     "package:verify": "node scripts/verify-package.mjs",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:upgrade": "node --import tsx --test --test-concurrency=1 tests/upgrade/*.test.ts",
+    "test:browser": "node --import tsx tests/browser/run-fixtures.mjs",
     "test:motion": "electron tests/browser/surface-motion.cjs",
     "test:text-drag": "electron tests/browser/text-block-drag.cjs"
   },
