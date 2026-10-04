@@ -61,8 +61,25 @@ ipcMain.handle = function (channel, listener) {
     }
   });
 };
+app.on('before-quit', () => append('before-quit-request', {}));
+app.on('browser-window-created', (_event, window) => {
+  window.on('close', () => append('window-close-request', { id: window.id }));
+});
 app.on('web-contents-created', (_event, contents) => {
   contents.setBackgroundThrottling(false);
+  contents.once('did-finish-load', () => {
+    append('initial-load-finished', { webContentsId: contents.id });
+  });
+  contents.on(
+    'did-fail-load',
+    (_event, errorCode, _description, _url, isMainFrame) => {
+      append('window-load-failed', {
+        webContentsId: contents.id,
+        errorCode,
+        isMainFrame,
+      });
+    },
+  );
   contents.on('render-process-gone', (_event, details) => {
     append('render-process-gone', { webContentsId: contents.id, ...details });
   });

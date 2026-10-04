@@ -83,6 +83,18 @@ async function click(selector) {
 async function snapshot() {
   return client.run(`window.desktop.openProject(${json(project.id)})`);
 }
+async function nativeRows() {
+  const text = await readFile(nativeLog, 'utf8').catch((error) => {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  });
+  // appendFileSync may be in the middle of the last JSONL record.
+  return text
+    .slice(0, text.lastIndexOf('\n') + 1)
+    .split('\n')
+    .filter(Boolean)
+    .map(JSON.parse);
+}
 async function mark(name) {
   await sleep(500);
   const sample = await client.run(
@@ -274,6 +286,20 @@ try {
     }
   }, 'production renderer');
   client = await connect(target.webSocketDebuggerUrl);
+  phase = 'initial-production-load';
+  await waitFor(
+    async () =>
+      (await nativeRows()).some((row) => row.kind === 'initial-load-finished'),
+    'original production loadFile completed before observation reload',
+  );
+  await waitFor(
+    () =>
+      client.run(
+        `document.readyState === 'complete' && !!document.querySelector('input[aria-label="新项目名称"]')`,
+      ),
+    'original production home ready before observation reload',
+  );
+  const initialLoadVerifiedAt = Date.now();
   await client.send('Page.enable');
   await client.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `(${installMediaResourceObserver.toString()})()`,
@@ -660,13 +686,37 @@ try {
     });
   }
   assert.deepEqual(sourceAfter, sourceBefore);
-  assert.deepEqual(client.errors, []);
-  const observation = await client.run('window.__mediaResources.result()');
-  const nativeResources = summarizeNativeResources(
-    (await readFile(nativeLog, 'utf8')).trim().split('\n').map(JSON.parse),
-    phases,
-    observation,
+  phase = 'startup-lifecycle-after-interactions';
+  if (count > 100) {
+    // The production close guard times out after 30s. Keep this isolated
+    // process alive beyond it so an accidental startup quit cannot hide in
+    // an otherwise faster resource run. This is not a performance timing.
+    await sleep(Math.max(0, 31000 - (Date.now() - initialLoadVerifiedAt)));
+  }
+  assert.equal(await client.run('document.readyState'), 'complete');
+  const startupLifecycleVerifiedAfterMs = Date.now() - initialLoadVerifiedAt;
+  const native = await nativeRows();
+  assert.equal(
+    native.filter((row) => row.kind === 'before-quit-request').length,
+    0,
+    'The measurement must not trigger production application quit',
   );
+  assert.equal(
+    native.filter((row) => row.kind === 'window-close-request').length,
+    0,
+    'The measurement must not trigger native window close',
+  );
+  assert.equal(
+    native.filter(
+      (row) => row.kind === 'window-load-failed' && row.value.isMainFrame,
+    ).length,
+    0,
+    'Both the original page and observation reload must finish without abort',
+  );
+  assert.ok(!log.includes('ERR_ABORTED'), 'No initial load abort is permitted');
+  const observation = await client.run('window.__mediaResources.result()');
+  assert.deepEqual(client.errors, []);
+  const nativeResources = summarizeNativeResources(native, phases, observation);
   if (bounded) {
     assert.ok(
       observation.managedActivePeak > 0 && observation.managedActivePeak <= 3,
@@ -704,6 +754,7 @@ try {
         editorReadyMs,
         splitReadyMs,
         regroupUndoReadyMs,
+        startupLifecycleVerifiedAfterMs,
         fullSequenceDuration: total,
         phases,
         observation,
@@ -726,6 +777,7 @@ try {
           'middle split and undo restore exact card content',
           'all source bytes unchanged',
           'renderer runtime exceptions absent',
+          'initial production load completes before observation reload; no load abort, native close or quit request',
         ],
         measurementLimits: [
           'source-active video elements are not decoder counts',
