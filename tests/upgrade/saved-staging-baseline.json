@@ -1,0 +1,5 @@
+{
+  "name": "saved-staging-before-startup-verification",
+  "commit": "dd0a849ac0407ea81fe9c38ebcf1982ce373128e",
+  "description": "Actual pre-fix Library/SaveQueue writer: durable saved acknowledgement and complete ready file remain after only the final staging cleanup fails. Ordinary startup must revalidate the committed target before deleting ready."
+}

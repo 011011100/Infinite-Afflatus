@@ -18,6 +18,7 @@ import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { ProjectHealthService } from '../recovery/project-health-service';
 import { SaveQueue } from '../saving/save-queue';
+import { savedResultVerifier } from '../saving/saved-result-verifier';
 import {
   type GeneratedResult,
   Staging,
@@ -132,6 +133,7 @@ export class Library {
       store,
       () => this.emit(),
       quota,
+      savedResultVerifier(store, this.projects),
     );
     this.saves = new SaveQueue(
       store,

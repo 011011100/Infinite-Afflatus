@@ -58,7 +58,7 @@ export function ProjectHealthButton({
           error={health.error}
         >
           <p className="text-sm leading-6 text-muted-foreground">
-            检查项目中的原始素材。文件缺失时，选择原文件即可恢复；卡片、裁剪、文本和生成组引用会保留。
+            检查项目中的原始素材。文件缺失时，点击“找到原文件”；如有保留副本，可确认校验后恢复，也可自行选择原文件。卡片、裁剪、文本和生成组引用会保留。
           </p>
           {health.busy && (
             <div role="status" className="mt-4 rounded-lg bg-muted p-4 text-sm">
@@ -154,7 +154,7 @@ export function ProjectHealthButton({
             </section>
           )}
           <p className="mt-5 text-xs leading-5 text-muted-foreground">
-            恢复会把内容一致的原文件复制回项目。已有文件不会被覆盖；内容已变化的文件，请先移出项目保留，再选择原文件恢复。
+            恢复会把内容一致的原文件复制回项目。已有文件不会被覆盖；内容已变化的文件，请先移出项目保留，点“重新检查位置”，再找到原文件恢复。
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <Button

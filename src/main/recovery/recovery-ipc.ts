@@ -7,6 +7,10 @@ import {
 import { IPC_CHANNELS } from '../../shared/desktop';
 import { isId } from '../projects/project-service';
 import type { Library } from '../storage/library';
+import {
+  findRetainedAssetSource,
+  validateRetainedAssetSource,
+} from './retained-asset-source';
 
 export function registerRecoveryIpc(
   library: Library,
@@ -41,26 +45,68 @@ export function registerRecoveryIpc(
       if (selecting) throw new Error('请先完成或取消当前文件选择');
       const epoch = library.health.cancellationVersion;
       selecting = true;
-      let choice: Electron.OpenDialogReturnValue;
+      const current = () => {
+        if (library.health.cancellationVersion !== epoch) return false;
+        if (trustedWindow(event) !== window || window.isDestroyed())
+          throw new Error('项目窗口已变化，请重新检查项目素材');
+        return true;
+      };
       try {
-        choice = await dialog.showOpenDialog(window, {
-          title: '选择内容完全相同的原素材',
-          buttonLabel: '验证并恢复',
-          properties: ['openFile'],
-        });
+        const retained = await findRetainedAssetSource(library, project, asset);
+        if (!current()) return null;
+        let source: string | undefined;
+        let useRetained = false;
+        if (retained) {
+          const answer = await dialog.showMessageBox(window, {
+            type: 'question',
+            title: '发现保留的素材副本',
+            message: '发现保留的素材副本，验证内容一致后恢复',
+            detail: `素材：${retained.name}\n大小：${retained.bytes.toLocaleString('zh-CN')} 字节\n保留位置：${retained.path}\n\n本次恢复仅补回缺失的原文件，不会覆盖已有文件，并会保留这份副本。`,
+            buttons: ['验证并恢复', '选择其他原文件', '取消'],
+            defaultId: 2,
+            cancelId: 2,
+            noLink: true,
+          });
+          if (!current() || answer.response === 2) return null;
+          if (answer.response === 0) {
+            source = retained.path;
+            useRetained = true;
+          } else if (answer.response !== 1) return null;
+        }
+        if (!source) {
+          const choice = await dialog.showOpenDialog(window, {
+            title: '选择内容完全相同的原素材',
+            buttonLabel: '验证并恢复',
+            properties: ['openFile'],
+          });
+          if (!current() || choice.canceled) return null;
+          if (
+            choice.filePaths.length !== 1 ||
+            typeof choice.filePaths[0] !== 'string' ||
+            !choice.filePaths[0]
+          )
+            throw new Error('请选择一个原素材文件');
+          source = choice.filePaths[0];
+        }
+        const report = await library.health.restore(
+          project,
+          asset,
+          source,
+          async () => {
+            if (!current()) throw new Error('素材恢复已取消');
+            if (useRetained && retained)
+              await validateRetainedAssetSource(library, retained);
+            if (!current()) throw new Error('素材恢复已取消');
+          },
+        );
+        library.emit();
+        return report;
+      } catch (error) {
+        if (!current()) return null;
+        throw error;
       } finally {
         selecting = false;
       }
-      if (library.health.cancellationVersion !== epoch) return null;
-      if (choice.canceled || !choice.filePaths[0]) return null;
-      trustedWindow(event);
-      const report = await library.health.restore(
-        project,
-        asset,
-        choice.filePaths[0],
-      );
-      library.emit();
-      return report;
     },
   );
   library.health.subscribe((progress) => {

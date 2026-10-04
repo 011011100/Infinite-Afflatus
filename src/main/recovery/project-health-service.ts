@@ -67,8 +67,13 @@ export class ProjectHealthService {
     projectId: string,
     assetId: string,
     source: string,
+    beforeRestore?: () => Promise<void>,
   ): Promise<ProjectHealthReport> {
     return this.run(async (signal) => {
+      // Native retained-copy consent is revalidated after admission to the
+      // write gate, never against a snapshot taken before queued work finishes.
+      await beforeRestore?.();
+      signal.throwIfAborted();
       await restoreAsset(
         this.projects,
         this.work,

@@ -66,6 +66,8 @@ jobs:
         run: node tests/browser/rescue-import.mjs
       - name: Verify application index backup and offline recovery preserve original data
         run: node --import tsx tests/browser/app-backup-recovery.mjs
+      - name: Verify ordinary restarts retain the last complete saved staging copy
+        run: node tests/browser/saved-staging-preservation.mjs
       - name: Verify partial reference imports preserve successful files and continued editing
         run: node tests/browser/reference-import.cjs
       - name: Verify cancellation and native close during real large-file reference intake

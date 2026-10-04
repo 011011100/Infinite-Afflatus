@@ -12,6 +12,7 @@ import {
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { SaveJob } from '../../shared/models';
+import { verifyFile } from '../recovery/verified-file';
 import type { AppStore } from '../storage/app-store';
 import { errorMessage } from '../storage/database';
 import {
@@ -20,6 +21,18 @@ import {
   sameContent,
   syncDirectory,
 } from '../storage/files';
+import {
+  directoryIdentity,
+  directoryIdentitySync,
+  ordinaryFileState,
+  ordinaryFileStateSync,
+  sameFileIdentity,
+  sameFileState,
+} from './file-state';
+import type {
+  SavedResultProof,
+  SavedResultVerifier,
+} from './saved-result-verifier';
 import {
   identity,
   type PartOwnership,
@@ -57,6 +70,7 @@ export class Staging {
     private readonly store: AppStore,
     private readonly notify: () => void,
     private readonly quota = 20 * 1024 ** 3,
+    private readonly verifySavedResult?: SavedResultVerifier,
   ) {
     this.ownership = new StagingOwnership(directory, store);
   }
@@ -341,18 +355,56 @@ export class Staging {
   async remove(job: SaveJob, signal?: AbortSignal): Promise<void> {
     // A changed cache file might be user data; do not delete it blindly.
     const file = this.path(job.id);
-    const verified = await fingerprint(file, signal);
-    if (!sameContent(verified, job)) throw new Error('暂存文件已变化，已保留');
-    const current = await lstat(file);
+    // Check this first: old saved jobs without a leftover must not scan projects
+    // or hash their original media on every startup.
+    const before = await ordinaryFileState(file);
+    const directory = await directoryIdentity(this.directory);
     if (
-      current.isSymbolicLink() ||
-      current.dev !== verified.device ||
-      current.ino !== verified.inode ||
-      current.size !== verified.size ||
-      current.mtimeMs !== verified.modified
+      !Number.isSafeInteger(job.size) ||
+      job.size < 0 ||
+      before.size !== BigInt(job.size)
     )
       throw new Error('暂存文件已变化，已保留');
+    const verified = await verifyFile(
+      file,
+      job.size,
+      signal ?? new AbortController().signal,
+      () => {},
+    );
+    if (
+      verified.size !== job.size ||
+      verified.sha256 !== job.sha256 ||
+      !sameFileState(before, verified.state)
+    )
+      throw new Error('暂存文件已变化，已保留');
+    if (!sameFileState(before, await ordinaryFileState(file)))
+      throw new Error('暂存文件已变化，已保留');
+    let proof: SavedResultProof | undefined;
+    if (job.status === 'saved') {
+      if (!this.verifySavedResult)
+        throw new Error('无法确认已保存目标，完整暂存副本已保留');
+      // The ordinary commit already checked its target before acknowledgement.
+      // Cleanup deliberately verifies it again; a saved flag is not evidence
+      // that the destination still exists after a restart or a lengthy hash.
+      proof = await this.verifySavedResult(job, signal);
+      await proof.recheck();
+    }
+    // The proof may have read a large destination. Do not let it authorize a
+    // replacement at the staging path while those reads were pending.
+    if (!sameFileIdentity(directory, await directoryIdentity(this.directory)))
+      throw new Error('暂存目录已变化，完整暂存副本已保留');
+    if (!sameFileState(before, await ordinaryFileState(file)))
+      throw new Error('暂存文件已变化，已保留');
     signal?.throwIfAborted();
+    // No further async reads between this decision and requesting unlink.
+    // This catches observable replacements; it is not a cross-process atomic
+    // snapshot of both files against arbitrary external filesystem writes.
+    proof?.assertCurrent();
+    if (
+      !sameFileIdentity(directory, directoryIdentitySync(this.directory)) ||
+      !sameFileState(before, ordinaryFileStateSync(file))
+    )
+      throw new Error('暂存位置已变化，完整暂存副本已保留');
     await unlink(file);
   }
 
