@@ -21,6 +21,7 @@ import { recordAsset } from '../../src/main/projects/project-database.ts';
 import { Library } from '../../src/main/storage/library.ts';
 import { connect, freePort, sleep, waitFor } from './desktop-client.mjs';
 import { installMediaResourceObserver } from './media-resource-observer.mjs';
+import { captureMediaProcessDiagnostics } from './media-resource-process-diagnostics.mjs';
 import { summarizeNativeResources } from './media-resource-summary.mjs';
 import { syntheticResourceVideo } from './synthetic-resource-video.mjs';
 
@@ -746,6 +747,14 @@ try {
 } catch (error) {
   console.error(`Media resource profiling failed during ${phase}`, error);
   console.error(log);
+  await captureMediaProcessDiagnostics({
+    child,
+    nativeLog,
+    directory: proof,
+    phase,
+  }).catch((diagnosticError) => {
+    console.error('OS failure diagnostics unavailable', diagnosticError);
+  });
   if (client) {
     console.error(
       await client
