@@ -2,6 +2,22 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  scanProjectHealth: (projectId, mode) =>
+    ipcRenderer.invoke(IPC_CHANNELS.scanProjectHealth, projectId, mode),
+  restoreMissingAsset: (projectId, assetId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.restoreMissingAsset, projectId, assetId),
+  cancelProjectHealth: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelProjectHealth),
+  onProjectHealthProgress: (listener) => {
+    const changed = (
+      _event: Electron.IpcRendererEvent,
+      state: Parameters<typeof listener>[0],
+    ) => listener(state);
+    ipcRenderer.on(IPC_CHANNELS.projectHealthProgress, changed);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.projectHealthProgress, changed);
+    };
+  },
   cancelProjectPackage: () =>
     ipcRenderer.invoke(IPC_CHANNELS.cancelProjectPackage),
   onLeaveCancelled: (listener) => {

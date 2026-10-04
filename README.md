@@ -70,6 +70,7 @@ pnpm exec electron tests/browser/material-tools.cjs # 复用开发服务的隔�
 | [开发与验证](docs/development.md) | 环境、目录、命令、检查、提交约定 |
 | [版本升级数据回归](docs/data-upgrade-testing.md) | GitHub 三系统测试、历史数据基线、验证范围与维护规则 |
 | [本地创作交付](docs/local-delivery.md) | MP4 导出、任务、项目包与副本、验证边界 |
+| [素材检查与恢复](docs/media-recovery.md) | 缺失素材诊断、完整校验、精确原文件恢复 |
 | [离开前保存](docs/saving-on-leave.md) | 草稿提交、失败留页、关闭握手与测试 |
 | [商业可用性推进](docs/commercial-readiness.md) | 当前质量差距与后续验收清单 |
 | [实施顺序](docs/roadmap.md) | 初始化、交互原型、真实媒体、云端生成的阶段划分 |

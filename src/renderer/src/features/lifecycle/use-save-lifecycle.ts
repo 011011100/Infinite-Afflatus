@@ -29,6 +29,12 @@ export function useSaveLifecycle() {
       keepFrozen: nativeClose,
       promise: Promise.resolve()
         .then(async () => {
+          // Long reads/copies share the write gate. Release them before waiting
+          // for drafts, including an older save pass already queued behind them.
+          await Promise.all([
+            window.desktop?.cancelProjectHealth?.(),
+            window.desktop?.cancelProjectPackage?.(),
+          ]);
           // A timed-out pass may already have scanned an editor that the user has
           // since changed. Drain it, then scan every editor again while frozen.
           await previous?.promise;

@@ -1,5 +1,9 @@
-export function mediaUrl(projectId: string, assetId: string): string {
-  return `afflatus-media://asset/${projectId}/${assetId}`;
+export function mediaUrl(
+  projectId: string,
+  assetId: string,
+  revision = 0,
+): string {
+  return `afflatus-media://asset/${projectId}/${assetId}${revision ? `?revision=${revision}` : ''}`;
 }
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '—';

@@ -5,6 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import type { Asset } from '../../../../shared/models';
 import { mediaUrl } from '../workspace/media';
+import {
+  mediaRevision,
+  useMediaRevision,
+} from '../workspace/use-media-revision';
 import { referenceIcons, referenceLabels } from './reference-card';
 
 export function ReferencePicker({
@@ -22,6 +26,7 @@ export function ReferencePicker({
   onAdd: (ids: string[]) => void;
   onClose: () => void;
 }) {
+  useMediaRevision(projectId);
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const available = assets.filter((asset) => !selectedIds.includes(asset.id));
@@ -64,7 +69,11 @@ export function ReferencePicker({
                   <div className="mb-2 grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-secondary text-muted-foreground">
                     {asset.kind === 'image' ? (
                       <img
-                        src={mediaUrl(projectId, asset.id)}
+                        src={mediaUrl(
+                          projectId,
+                          asset.id,
+                          mediaRevision(projectId, asset.id),
+                        )}
                         alt=""
                         loading="lazy"
                         className="size-full object-contain"

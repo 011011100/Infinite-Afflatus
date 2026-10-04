@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import type { MaterialNode } from '../../../../shared/generation/workspace';
+import { useMediaRevision } from '../workspace/use-media-revision';
 import { message } from './errors';
 
 export function GroupTextInput({
@@ -21,6 +22,7 @@ export function GroupTextInput({
   placeholder?: string;
 }) {
   const assetId = node.type === 'asset' ? node.assetId : null;
+  const revision = useMediaRevision(projectId, assetId ?? undefined);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (focus) input.current?.focus({ preventScroll: true });
@@ -28,6 +30,7 @@ export function GroupTextInput({
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    void revision;
     if (!assetId) return;
     let active = true;
     setSource(null);
@@ -43,7 +46,7 @@ export function GroupTextInput({
     return () => {
       active = false;
     };
-  }, [projectId, assetId]);
+  }, [projectId, assetId, revision]);
   const value =
     node.type === 'text' ? node.text : (node.textOverride ?? source);
   return (

@@ -1,4 +1,5 @@
-import { Redo2, Undo2, Ungroup } from 'lucide-react';
+import { Ungroup } from 'lucide-react';
+import { HistoryActions } from '@/components/canvas/history-actions';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -36,44 +37,9 @@ export function CanvasActions({
       className="flex items-center gap-1 rounded-xl border bg-background/95 p-1.5 shadow-sm"
       aria-label="画布操作"
     >
-      <Tooltip>
-        <TooltipTrigger
-          disabled={disabled || !canUndo}
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={disabled || !canUndo}
-              aria-label="撤销"
-              onClick={undo}
-            />
-          }
-        >
-          <Undo2 />
-        </TooltipTrigger>
-        <TooltipContent>
-          撤销{shortcuts.undo && ` · ${formatShortcut(shortcuts.undo, isMac)}`}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger
-          disabled={disabled || !canRedo}
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={disabled || !canRedo}
-              aria-label="重做"
-              onClick={redo}
-            />
-          }
-        >
-          <Redo2 />
-        </TooltipTrigger>
-        <TooltipContent>
-          重做{shortcuts.redo && ` · ${formatShortcut(shortcuts.redo, isMac)}`}
-        </TooltipContent>
-      </Tooltip>
+      <HistoryActions
+        {...{ disabled, canUndo, canRedo, undo, redo, shortcuts, isMac }}
+      />
       {canSplit && (
         <>
           <span className="mx-1 h-4 w-px bg-border" />

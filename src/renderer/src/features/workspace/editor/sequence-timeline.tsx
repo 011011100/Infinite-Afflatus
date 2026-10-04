@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import type { ClipTrim } from '../../../../../shared/canvas/trim';
 import type { ThumbnailFrame } from '../decode-thumbnail';
 import { mediaUrl } from '../media';
+import { mediaRevision, useMediaRevision } from '../use-media-revision';
 import { Filmstrip } from './filmstrip';
 import {
   formatTime,
@@ -56,6 +57,7 @@ export function SequenceTimeline({
   onCancel: () => void;
   onGesture: (active: boolean) => void;
 }) {
+  useMediaRevision(projectId);
   const track = useRef<HTMLDivElement>(null);
   const filmstripCache = useFilmstripCache();
   const total = totalDuration(clips);
@@ -167,7 +169,11 @@ export function SequenceTimeline({
                 >
                   <Filmstrip
                     cache={filmstripCache}
-                    source={mediaUrl(projectId, clip.asset.id)}
+                    source={mediaUrl(
+                      projectId,
+                      clip.asset.id,
+                      mediaRevision(projectId, clip.asset.id),
+                    )}
                     start={clip.range.start}
                     end={clip.range.end}
                     scale={scale}

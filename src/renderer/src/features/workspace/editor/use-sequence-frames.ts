@@ -3,9 +3,11 @@ import type { Asset } from '../../../../../shared/models';
 import { decodeThumbnail, type ThumbnailFrame } from '../decode-thumbnail';
 import { mediaUrl } from '../media';
 import { ThumbnailContext } from '../thumbnail-provider';
+import { mediaRevision, useMediaRevision } from '../use-media-revision';
 
 /** Reuse decoded canvas thumbnails; opening the editor does not decode every source again. */
 export function useSequenceFrames(projectId: string, assets: Asset[]) {
+  const revision = useMediaRevision(projectId);
   const cache = use(ThumbnailContext);
   if (!cache) throw new Error('ThumbnailProvider is missing');
   const [frames, setFrames] = useState<Map<string, ThumbnailFrame> | null>(
@@ -16,6 +18,7 @@ export function useSequenceFrames(projectId: string, assets: Asset[]) {
   useEffect(() => {
     // Retry token intentionally restarts failed metadata reads.
     void attempt;
+    void revision;
     let active = true;
     setError(null);
     const result = new Map<string, ThumbnailFrame>();
@@ -26,9 +29,16 @@ export function useSequenceFrames(projectId: string, assets: Asset[]) {
         await Promise.all(
           assets.slice(index, index + 3).map(async (asset) => {
             const frame = await cache?.load(
-              `${projectId}/${asset.id}/${asset.sha256}`,
+              `${projectId}/${asset.id}/${asset.sha256}/${mediaRevision(projectId, asset.id)}`,
               (signal) =>
-                decodeThumbnail(mediaUrl(projectId, asset.id), signal),
+                decodeThumbnail(
+                  mediaUrl(
+                    projectId,
+                    asset.id,
+                    mediaRevision(projectId, asset.id),
+                  ),
+                  signal,
+                ),
             );
             if (!frame?.duration || !Number.isFinite(frame.duration))
               throw new Error(`无法读取 ${asset.name} 的时长`);
@@ -45,6 +55,6 @@ export function useSequenceFrames(projectId: string, assets: Asset[]) {
     return () => {
       active = false;
     };
-  }, [cache, projectId, assets, attempt]);
+  }, [cache, projectId, assets, attempt, revision]);
   return { frames, error, retry: () => setAttempt((value) => value + 1) };
 }

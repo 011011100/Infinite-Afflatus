@@ -8,6 +8,7 @@ import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
+import { ProjectHealthService } from '../recovery/project-health-service';
 import { SaveQueue } from '../saving/save-queue';
 import { type GeneratedResult, Staging } from '../saving/staging';
 import { InteractionSettingsStore } from '../settings/interaction-settings';
@@ -26,6 +27,7 @@ export class Library {
   readonly proxies: ProxyService;
   readonly exports: SequenceExportService;
   readonly packages: ProjectPackageService;
+  readonly health: ProjectHealthService;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
   private exportListeners = new Set<() => void>();
@@ -41,6 +43,12 @@ export class Library {
   ) {
     this.interactions = new InteractionSettingsStore(store);
     this.projects = new ProjectService(store, this.gate);
+    this.health = new ProjectHealthService(
+      this.projects,
+      store,
+      this.gate,
+      userData,
+    );
     this.packages = new ProjectPackageService(
       this.projects,
       store,
@@ -110,6 +118,7 @@ export class Library {
       const library = new Library(store, canonicalUserData, quota);
       await library.migration.recover();
       await library.packages.recover();
+      await library.health.recover();
       await library.projects.discover();
       await library.staging.recover();
       await library.proxies.recover();
@@ -172,6 +181,8 @@ export class Library {
   }
 
   private async shutdown(): Promise<void> {
+    this.packages.cancel();
+    await this.health.close();
     await this.packages.close();
     await this.exports.close();
     await this.proxies.close();

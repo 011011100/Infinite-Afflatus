@@ -3,6 +3,7 @@ import type { Asset } from '../../../../shared/models';
 import { decodeThumbnail, type ThumbnailFrame } from './decode-thumbnail';
 import { mediaUrl } from './media';
 import { ThumbnailCache } from './thumbnail-cache';
+import { useMediaRevision } from './use-media-revision';
 
 export const ThumbnailContext =
   createContext<ThumbnailCache<ThumbnailFrame> | null>(null);
@@ -16,7 +17,8 @@ export function ThumbnailProvider({ children }: { children: ReactNode }) {
 export function useThumbnail(projectId: string, asset: Asset) {
   const cache = use(ThumbnailContext);
   if (!cache) throw new Error('ThumbnailProvider is missing');
-  const key = `${projectId}/${asset.id}/${asset.sha256}`;
+  const revision = useMediaRevision(projectId, asset.id);
+  const key = `${projectId}/${asset.id}/${asset.sha256}/${revision}`;
   const [loaded, setLoaded] = useState<{
     key: string;
     frame: ThumbnailFrame | undefined;
@@ -26,7 +28,7 @@ export function useThumbnail(projectId: string, asset: Asset) {
     let active = true;
     void cache
       .load(key, (signal) =>
-        decodeThumbnail(mediaUrl(projectId, asset.id), signal),
+        decodeThumbnail(mediaUrl(projectId, asset.id, revision), signal),
       )
       .then(
         (frame) => active && setLoaded({ key, frame, failed: false }),
@@ -35,7 +37,7 @@ export function useThumbnail(projectId: string, asset: Asset) {
     return () => {
       active = false;
     };
-  }, [cache, key, projectId, asset.id]);
+  }, [cache, key, projectId, asset.id, revision]);
   return loaded.key === key
     ? loaded
     : { key, frame: cache.get(key), failed: false };

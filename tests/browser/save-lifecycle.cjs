@@ -55,6 +55,25 @@ app.whenReady().then(async () => {
 
     await load();
     await run(
+      'document.querySelector("#hold-gate").click(); document.querySelector("#edit").click(); document.querySelector("#home").click();',
+    );
+    await sleep(180);
+    assert.equal(
+      await run('document.querySelector("#page").textContent'),
+      'home',
+    );
+    assert.equal(
+      await run(
+        'JSON.parse(document.querySelector("#result").textContent).name',
+      ),
+      'unsaved draft',
+    );
+    console.log(
+      'PASS navigation cancels gated media checks and package copying before flushing drafts',
+    );
+
+    await load();
+    await run(
       'document.querySelector("#fail").click(); document.querySelector("#edit").click(); document.querySelector("#home").click();',
     );
     await sleep(180);

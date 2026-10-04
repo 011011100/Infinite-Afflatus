@@ -7,6 +7,8 @@ const {
   rmSync,
   mkdirSync,
   writeFileSync,
+  unlinkSync,
+  readFileSync,
   realpathSync,
 } = require('node:fs');
 const { tmpdir } = require('node:os');
@@ -131,9 +133,30 @@ async function main() {
     'reopened window',
   );
   const reopened = BrowserWindow.getAllWindows()[0];
+  let capturing = false;
+  const paintTimer = setInterval(async () => {
+    if (capturing || reopened.isDestroyed()) return;
+    capturing = true;
+    try {
+      await reopened.webContents.capturePage();
+    } catch {
+      /* Window may close between frames. */
+    } finally {
+      capturing = false;
+    }
+  }, 100);
+  reopened.once('closed', () => clearInterval(paintTimer));
+  let missingMediaExpected = false;
   reopened.webContents.setBackgroundThrottling(false);
   reopened.webContents.on('console-message', (details) => {
-    if (details.level === 'error') errors.push(details.message);
+    if (
+      details.level === 'error' &&
+      !(
+        missingMediaExpected &&
+        details.message.startsWith('Failed to load resource:')
+      )
+    )
+      errors.push(details.message);
   });
   const next = (script) => reopened.webContents.executeJavaScript(script);
   await waitFor(
@@ -231,11 +254,28 @@ async function main() {
     'close task modal',
   );
   await next(
-    `Array.from(document.querySelectorAll('li button')).find(b => b.textContent.includes('未命名项目')).click()`,
+    `window.desktop.renameProject(${JSON.stringify(projectId)}, '备份验证项目')`,
+  );
+  await waitFor(
+    () =>
+      next(
+        `!!Array.from(document.querySelectorAll('li button')).find(b => b.textContent.includes('备份验证项目'))`,
+      ),
+    'renamed backup project',
+  );
+  await next(
+    `Array.from(document.querySelectorAll('li button')).find(b => b.textContent.includes('备份验证项目')).click()`,
   );
   await waitFor(
     () => next(`!!document.querySelector('button[aria-label="返回项目首页"]')`),
     'open imported project',
+  );
+  await waitFor(
+    () =>
+      next(
+        `!!Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === '项目备份' && !b.disabled)`,
+      ),
+    'project is ready for backup',
   );
   await next(
     `Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === '项目备份').click()`,
@@ -253,6 +293,98 @@ async function main() {
   await waitFor(
     () => next(`!document.querySelector('dialog')`),
     'close backup preview',
+  );
+  // Open with a genuinely missing managed file, then repair through the native picker/IPC/UI.
+  await next(
+    `document.querySelector('button[aria-label="返回项目首页"]').click()`,
+  );
+  await waitFor(
+    () => next(`!!document.querySelector('input[aria-label="新项目名称"]')`),
+    'home before missing media',
+  );
+  const managed = join(
+    process.env.AFFLATUS_PROJECTS_DIR,
+    imported.project.folder,
+    imported.assets[0].relativePath,
+  );
+  const database = join(
+    process.env.AFFLATUS_PROJECTS_DIR,
+    imported.project.folder,
+    'project.sqlite',
+  );
+  unlinkSync(managed);
+  missingMediaExpected = true;
+  await next(
+    `window.desktop.renameProject(${JSON.stringify(imported.project.id)}, '恢复验证项目')`,
+  );
+  await waitFor(
+    () =>
+      next(
+        `!!Array.from(document.querySelectorAll('li button')).find(b => b.textContent.includes('恢复验证项目'))`,
+      ),
+    'unopened missing-media project',
+  );
+  const savedDatabase = readFileSync(database);
+  await next(
+    `Array.from(document.querySelectorAll('li button')).find(b => b.textContent.includes('恢复验证项目')).click()`,
+  );
+  await waitFor(
+    () =>
+      next(`!!document.querySelector('button[aria-label="1 个素材需要检查"]')`),
+    'automatic missing media check',
+  );
+  await waitFor(
+    () => next(`!!document.querySelector('[title="缩略图读取失败"]')`),
+    'missing thumbnail error',
+  );
+  await next(
+    `document.querySelector('button[aria-label="1 个素材需要检查"]').click()`,
+  );
+  await waitFor(
+    () =>
+      next(
+        `!!document.querySelector('dialog[open].is-open')?.textContent.includes('原文件缺失')`,
+      ),
+    'health issues modal',
+  );
+  if (process.env.AFFLATUS_TEST_SCREENSHOTS) {
+    await sleep(350);
+    await reopened.webContents.capturePage();
+    await sleep(100);
+    writeFileSync(
+      join(process.env.AFFLATUS_TEST_SCREENSHOTS, 'delivery-health.png'),
+      (await reopened.webContents.capturePage()).toPNG(),
+    );
+  }
+  await next(
+    `Array.from(document.querySelectorAll('dialog button')).find(b => b.textContent.trim() === '找到原文件').click()`,
+  );
+  await waitFor(
+    () =>
+      next(
+        `!!document.querySelector('dialog')?.textContent.includes('未发现缺失或大小异常的素材')`,
+      ),
+    'restored media report',
+  );
+  await waitFor(
+    () =>
+      next(
+        `!document.querySelector('[title="缩略图读取失败"]') && document.querySelector('[data-video-thumbnail] canvas')?.width === 320`,
+      ),
+    'same-ID restored thumbnail retries',
+  );
+  assert.deepEqual(readFileSync(managed), readFileSync(source));
+  assert.deepEqual(readFileSync(database), savedDatabase);
+  missingMediaExpected = false;
+  await next(
+    `document.querySelector('dialog button[aria-label="关闭"]').click()`,
+  );
+  await waitFor(
+    () => next(`!document.querySelector('dialog')`),
+    'close health check',
+  );
+  console.log(
+    'PASS actual missing media auto-detection, exact-byte UI restore and thumbnail refresh preserve project database',
   );
   await next(`document.querySelector('button[aria-label^="播放 "]').click()`);
   await waitFor(
@@ -288,9 +420,14 @@ async function main() {
   );
 }
 main()
-  .catch((error) => {
+  .catch(async (error) => {
     failed = true;
     console.error(error);
+    const current = BrowserWindow.getAllWindows()[0];
+    if (current)
+      console.error(
+        await current.webContents.executeJavaScript('document.body.innerText'),
+      );
   })
   .finally(async () => {
     for (const window of BrowserWindow.getAllWindows()) window.destroy();

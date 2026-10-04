@@ -20,7 +20,12 @@ let releaseSlowSave: (() => void) | null = null;
 let holdNextSave = false;
 let requestCount = 0;
 let writes = 0;
+let gate: Promise<unknown> | null = null;
+let releaseHealth: (() => void) | null = null;
+let releasePackage: (() => void) | null = null;
 window.desktop = {
+  cancelProjectHealth: async () => releaseHealth?.(),
+  cancelProjectPackage: async () => releasePackage?.(),
   getGenerationWorkspace: async () => structuredClone(stored),
   saveGenerationWorkspace: async (_projectId, workspace) => {
     writes += 1;
@@ -84,6 +89,14 @@ function Check() {
     { request: number; saved: boolean; name: string | undefined }[]
   >([]);
   usePendingSave(
+    'writer behind long-running read/copy gate',
+    async () => {
+      await gate;
+      return true;
+    },
+    -20,
+  );
+  usePendingSave(
     'slow editor after the shot',
     async () => {
       if (!holdNextSave) return true;
@@ -103,6 +116,22 @@ function Check() {
       <output id="page">{open ? 'editor' : 'home'}</output>
       <output id="result">{result}</output>
       <output id="native-results">{JSON.stringify(nativeResults)}</output>
+      <button
+        type="button"
+        id="hold-gate"
+        onClick={() => {
+          gate = Promise.all([
+            new Promise<void>((resolve) => {
+              releaseHealth = resolve;
+            }),
+            new Promise<void>((resolve) => {
+              releasePackage = resolve;
+            }),
+          ]);
+        }}
+      >
+        Hold read/copy gate
+      </button>
       <button
         type="button"
         id="hold-save"

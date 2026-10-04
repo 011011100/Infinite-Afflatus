@@ -7,6 +7,7 @@ import { useContentMotion } from '@/components/ui/use-surface-motion';
 import { ExportTaskButton } from '@/features/export/export-dialog';
 import { SaveLifecycleStatus } from '@/features/lifecycle/save-lifecycle-status';
 import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
+import { ProjectHealthButton } from '@/features/projects/project-health';
 import { ProjectHome } from '@/features/projects/project-home';
 import { ProjectPackageActions } from '@/features/projects/project-package-actions';
 import { useLibrary } from '@/features/projects/use-library';
@@ -64,6 +65,15 @@ export function App() {
         )}
         <div className="ml-auto flex items-center gap-2">
           <ExportTaskButton />
+          {project && (
+            <ProjectHealthButton
+              key={`health:${project.project.id}`}
+              projectId={project.project.id}
+              disabled={
+                busy || library?.writeBlocked === true || lifecycle.saving
+              }
+            />
+          )}
           {project && (
             <ProjectPackageActions
               key={project.project.id}

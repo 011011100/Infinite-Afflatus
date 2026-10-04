@@ -462,12 +462,15 @@ function CanvasContent({
           shot={shots.activeShot}
           longPressSplit={interactions.longPressSplit}
           labelShortcut={interactions.shortcuts.locateLabels}
+          shortcuts={interactions.shortcuts}
+          history={shots.historyFor(shots.activeShot.id)}
           snapshot={document.snapshot}
           blocked={blocked}
           saving={shots.saving}
           error={shots.error}
-          onChange={(update) => {
-            if (shots.activeId) shots.updateShot(shots.activeId, update);
+          onChange={(update, options) => {
+            if (shots.activeId)
+              shots.updateShot(shots.activeId, update, options);
           }}
           beforeClose={shots.flush}
           onClose={shots.dismiss}

@@ -19,6 +19,7 @@ import {
   validateName,
   validateViewport,
 } from '../projects/project-service';
+import { registerRecoveryIpc } from '../recovery/recovery-ipc';
 import { localFileStream } from '../storage/files';
 import type { Library } from '../storage/library';
 
@@ -44,6 +45,7 @@ export function registerDesktop(
   registerGenerationIpc(library, trustedWindow);
   registerExportIpc(library, trustedWindow);
   registerPackageIpc(library, trustedWindow);
+  registerRecoveryIpc(library, trustedWindow, getWindow);
   ipcMain.handle(IPC_CHANNELS.appInfo, (event) => {
     trustedWindow(event);
     return {

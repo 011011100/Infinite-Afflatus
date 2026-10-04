@@ -1,5 +1,5 @@
 import type { NodeChange, NodePositionChange } from '@xyflow/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imageInputError } from '../../../../shared/generation/image-generation';
 import { joinMaterials } from '../../../../shared/generation/join-materials';
 import {
@@ -11,6 +11,7 @@ import {
   materialSize,
   type Size,
 } from '../../../../shared/generation/node-geometry';
+import type { ShotUpdate } from '../../../../shared/generation/shot-history';
 import {
   groupMaterials,
   type Point,
@@ -34,7 +35,7 @@ export function useMaterialFlow(
   projectId: string,
   blocked: boolean,
   longPressSplit: boolean,
-  update: (change: (shot: ShotWorkspace) => ShotWorkspace) => void,
+  update: ShotUpdate,
 ) {
   const [selected, setSelected] = useState<string[]>([]);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -44,19 +45,44 @@ export function useMaterialFlow(
   } | null>(null);
   const [measurements, setMeasurements] = useState<Record<string, Size>>({});
   const [positions, setPositions] = useState<Record<string, Point>>({});
-  const { sizes, rename, resize, labelChange, labelRemove, groupSize } =
-    useMaterialNodeEdits(shot, blocked, update);
+  const {
+    sizes,
+    rename,
+    resize,
+    labelChange,
+    labelRemove,
+    groupSize,
+    resetSizes,
+  } = useMaterialNodeEdits(shot, blocked, update);
   const remove = (id: string) =>
     update((current) => removeMaterial(current, id));
   const text = (id: string, value: string) =>
-    update((current) => ({
-      ...current,
-      nodes: current.nodes.map((node) =>
-        node.id === id && node.type === 'text'
-          ? { ...node, text: value }
-          : node,
+    update(
+      (current) => ({
+        ...current,
+        nodes: current.nodes.map((node) =>
+          node.id === id && node.type === 'text'
+            ? { ...node, text: value }
+            : node,
+        ),
+      }),
+      { mergeKey: `text:${id}` },
+    );
+  useEffect(() => {
+    setActiveGroup((id) =>
+      id && shot.groups.some((group) => group.id === id) ? id : null,
+    );
+    const ids = new Set(
+      [...shot.nodes, ...shot.groups, ...(shot.labels ?? [])].map(
+        (node) => node.id,
       ),
-    }));
+    );
+    setSelected((current) =>
+      current.some((id) => !ids.has(id))
+        ? current.filter((id) => ids.has(id))
+        : current,
+    );
+  }, [shot.nodes, shot.groups, shot.labels]);
   const ungroup = (id: string) => {
     if (blocked) return;
     update((current) => ungroupMaterials(current, id));
@@ -261,5 +287,12 @@ export function useMaterialFlow(
     activeGroup,
     setActiveGroup,
     finishMove,
+    resetTransient: () => {
+      setPositions({});
+      setMeasurements({});
+      setSelected([]);
+      setDetached(null);
+      resetSizes();
+    },
   };
 }

@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal';
 import { cn } from '@/lib/utils';
 import type { Asset } from '../../../../shared/models';
 import { mediaUrl } from '../workspace/media';
+import { useMediaRevision } from '../workspace/use-media-revision';
 import { message } from './errors';
 
 export const referenceLabels = {
@@ -51,8 +52,11 @@ export function ReferenceCard({
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const url = mediaUrl(projectId, asset.id);
+  const revision = useMediaRevision(projectId, asset.id);
+  const url = mediaUrl(projectId, asset.id, revision);
   useEffect(() => {
+    void revision;
+    setError(null);
     if (asset.kind !== 'text') return;
     let active = true;
     void window.desktop
@@ -66,7 +70,7 @@ export function ReferenceCard({
     return () => {
       active = false;
     };
-  }, [projectId, asset.id, asset.kind]);
+  }, [projectId, asset.id, asset.kind, revision]);
 
   return (
     <article

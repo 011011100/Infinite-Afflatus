@@ -1,12 +1,18 @@
 import { ArrowLeft, Check, LoaderCircle } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { HistoryActions } from '@/components/canvas/history-actions';
 import { Button } from '@/components/ui/button';
+import { isMac } from '@/lib/platform';
 import {
   appendGroupText,
   editMaterialText,
   reorderGroupMembers,
 } from '../../../../shared/generation/group-editing';
 import { imageReferenceCount } from '../../../../shared/generation/image-generation';
+import type {
+  ShotHistoryActions,
+  ShotUpdate,
+} from '../../../../shared/generation/shot-history';
 import type {
   GenerationGroup,
   ShotWorkspace,
@@ -18,6 +24,13 @@ import { ImageGenerationSettings } from './image-generation-parameters';
 import { MaterialArc } from './material-arc';
 import { useGroupStageMotion } from './use-group-stage-motion';
 import './group-stage.css';
+
+const parameterMergeKey = (id: string, before: object, after: object) =>
+  `parameters:${id}:${Object.entries(after)
+    .filter(([key, value]) => Reflect.get(before, key) !== value)
+    .map(([key]) => key)
+    .sort()
+    .join(',')}`;
 
 export function GroupStage({
   shot,
@@ -31,6 +44,7 @@ export function GroupStage({
   update,
   detach,
   onClose,
+  history,
 }: {
   shot: ShotWorkspace;
   group: GenerationGroup;
@@ -40,13 +54,15 @@ export function GroupStage({
   saving: boolean;
   error: string | null;
   origin: () => { x: number; y: number; width: number; height: number };
-  update: (change: (shot: ShotWorkspace) => ShotWorkspace) => void;
+  update: ShotUpdate;
+  history?: ShotHistoryActions | undefined;
   detach: (id: string, at?: { x: number; y: number }) => void;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const requestClose = useGroupStageMotion(dialog, origin, onClose);
   const placeholderId = useRef(crypto.randomUUID());
+  const checkedPlaceholder = useRef(false);
   const [focusId, setFocusId] = useState<string | null>(null);
   const members = shot.nodes.filter((node) => node.groupId === group.id);
   const textNodes = members.filter(
@@ -62,12 +78,16 @@ export function GroupStage({
   const textIds = new Set(textNodes.map((node) => node.id));
   const media = members.filter((node) => !textIds.has(node.id));
   useLayoutEffect(() => {
-    if (disabled || textNodes.length || members.length >= 32) return;
+    if (disabled || checkedPlaceholder.current) return;
+    checkedPlaceholder.current = true;
+    if (textNodes.length || members.length >= 32) return;
     // A strict-mode replay uses the same ID; append is idempotent.
     if (shot.nodes.some((node) => node.id === placeholderId.current))
       placeholderId.current = crypto.randomUUID();
     const id = placeholderId.current;
-    update((current) => appendGroupText(current, group.id, id));
+    update((current) => appendGroupText(current, group.id, id), {
+      record: false,
+    });
   }, [
     disabled,
     textNodes.length,
@@ -103,6 +123,19 @@ export function GroupStage({
           <ArrowLeft />
           收起组合
         </Button>
+        {history && (
+          <fieldset
+            className="flex gap-1 rounded-full border bg-background/90 px-1 shadow-sm"
+            aria-label="组合编辑撤销操作"
+          >
+            <HistoryActions
+              {...history}
+              disabled={disabled}
+              shortcuts={{ undo: null, redo: null }}
+              isMac={isMac}
+            />
+          </fieldset>
+        )}
         <span
           className="flex items-center gap-1.5 text-xs text-muted-foreground"
           role="status"
@@ -151,7 +184,9 @@ export function GroupStage({
             focusId={focusId}
             edit={(id, text) => {
               if (!disabled)
-                update((current) => editMaterialText(current, id, text));
+                update((current) => editMaterialText(current, id, text), {
+                  mergeKey: `text:${id}`,
+                });
             }}
             add={add}
             reorder={(ids) => {
@@ -174,28 +209,46 @@ export function GroupStage({
               value={group.parameters}
               references={imageReferenceCount(members, assets)}
               onChange={(parameters) =>
-                update((current) => ({
-                  ...current,
-                  groups: current.groups.map((item) =>
-                    item.id === group.id && item.kind === 'image'
-                      ? { ...item, parameters }
-                      : item,
-                  ),
-                }))
+                update(
+                  (current) => ({
+                    ...current,
+                    groups: current.groups.map((item) =>
+                      item.id === group.id && item.kind === 'image'
+                        ? { ...item, parameters }
+                        : item,
+                    ),
+                  }),
+                  {
+                    mergeKey: parameterMergeKey(
+                      group.id,
+                      group.parameters,
+                      parameters,
+                    ),
+                  },
+                )
               }
             />
           ) : (
             <GenerationSettings
               value={group.parameters}
               onChange={(parameters) =>
-                update((current) => ({
-                  ...current,
-                  groups: current.groups.map((item) =>
-                    item.id === group.id && item.kind !== 'image'
-                      ? { ...item, parameters }
-                      : item,
-                  ),
-                }))
+                update(
+                  (current) => ({
+                    ...current,
+                    groups: current.groups.map((item) =>
+                      item.id === group.id && item.kind !== 'image'
+                        ? { ...item, parameters }
+                        : item,
+                    ),
+                  }),
+                  {
+                    mergeKey: parameterMergeKey(
+                      group.id,
+                      group.parameters,
+                      parameters,
+                    ),
+                  },
+                )
               }
             />
           )}

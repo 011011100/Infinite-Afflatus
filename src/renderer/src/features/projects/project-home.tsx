@@ -1,7 +1,15 @@
-import { ArchiveRestore, ArrowUpRight, Clapperboard, Plus } from 'lucide-react';
-import { useState } from 'react';
+import {
+  ArchiveRestore,
+  ArrowUpRight,
+  Clapperboard,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import type { ProjectSummary } from '../../../../shared/models';
 
 export function ProjectHome({
@@ -22,6 +30,28 @@ export function ProjectHome({
   onCancelImport: () => Promise<void>;
 }) {
   const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
+  const [order, setOrder] = useState('updated');
+  const visible = useMemo(() => {
+    const words = query
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    return projects
+      .filter((project) => {
+        const name = project.name.normalize('NFKC').toLocaleLowerCase();
+        return words.every((word) => name.includes(word));
+      })
+      .sort((left, right) =>
+        order === 'name'
+          ? left.name.localeCompare(right.name, 'zh-CN', { numeric: true }) ||
+            right.updatedAt.localeCompare(left.updatedAt)
+          : right.updatedAt.localeCompare(left.updatedAt) ||
+            left.name.localeCompare(right.name, 'zh-CN'),
+      );
+  }, [projects, query, order]);
   return (
     <main className="flex-1 overflow-auto px-10 py-16">
       <div className="mx-auto max-w-4xl">
@@ -57,9 +87,6 @@ export function ProjectHome({
         <div className="mt-14 flex items-center justify-between border-b pb-3">
           <h2 className="text-sm font-medium">我的项目</h2>
           <div className="flex items-center gap-4">
-            <span className="text-xs text-muted-foreground">
-              {projects.length} 个项目
-            </span>
             <Button
               variant="ghost"
               size="sm"
@@ -71,6 +98,45 @@ export function ProjectHome({
             </Button>
           </div>
         </div>
+        {projects.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="relative min-w-48 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+              <Input
+                type="search"
+                aria-label="搜索项目"
+                placeholder="搜索项目名称"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="pl-9 pr-10"
+              />
+              {query && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute right-2 top-2"
+                  aria-label="清除项目搜索"
+                  onClick={() => setQuery('')}
+                >
+                  <X />
+                </Button>
+              )}
+            </div>
+            <Select
+              aria-label="项目排序"
+              value={order}
+              onChange={(event) => setOrder(event.target.value)}
+            >
+              <option value="updated">最近修改</option>
+              <option value="name">项目名称</option>
+            </Select>
+            <span role="status" className="text-xs text-muted-foreground">
+              {query.trim()
+                ? `${visible.length} / ${projects.length} 个项目`
+                : `${projects.length} 个项目`}
+            </span>
+          </div>
+        )}
         {importingPackage && (
           <div
             className="mt-4 flex items-center gap-3 rounded-lg border bg-background p-3 text-sm"
@@ -90,9 +156,20 @@ export function ProjectHome({
           <div className="py-16 text-center text-sm text-muted-foreground">
             还没有项目。创建后，随时可以回来继续。
           </div>
+        ) : visible.length === 0 ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            <p>没有找到匹配的项目</p>
+            <Button
+              variant="ghost"
+              className="mt-2"
+              onClick={() => setQuery('')}
+            >
+              清除搜索
+            </Button>
+          </div>
         ) : (
           <ul className="divide-y">
-            {projects.map((project) => (
+            {visible.map((project) => (
               <li key={project.id}>
                 <button
                   type="button"

@@ -12,9 +12,18 @@ import type {
   ProjectSnapshot,
   Viewport,
 } from './models';
+import type {
+  ProjectHealthMode,
+  ProjectHealthProgress,
+  ProjectHealthReport,
+} from './project-health';
 import type { ProjectPackageInfo } from './project-package';
 
 export const IPC_CHANNELS = {
+  scanProjectHealth: 'health:scan',
+  restoreMissingAsset: 'health:restore',
+  cancelProjectHealth: 'health:cancel',
+  projectHealthProgress: 'health:progress',
   cancelProjectPackage: 'package:cancel',
   saveBeforeLeave: 'lifecycle:save-before-leave',
   saveBeforeLeaveResult: 'lifecycle:save-before-leave-result',
@@ -65,6 +74,18 @@ export interface ProxyResult {
 
 /** Only specific desktop capabilities cross the preload boundary. */
 export interface DesktopBridge {
+  scanProjectHealth: (
+    projectId: string,
+    mode: ProjectHealthMode,
+  ) => Promise<ProjectHealthReport>;
+  restoreMissingAsset: (
+    projectId: string,
+    assetId: string,
+  ) => Promise<ProjectHealthReport | null>;
+  cancelProjectHealth: () => Promise<void>;
+  onProjectHealthProgress: (
+    listener: (state: ProjectHealthProgress | null) => void,
+  ) => () => void;
   cancelProjectPackage: () => Promise<void>;
   onSaveBeforeLeave: (listener: () => Promise<boolean>) => () => void;
   onLeaveCancelled: (listener: () => void) => () => void;

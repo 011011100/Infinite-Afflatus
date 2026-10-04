@@ -1,0 +1,7 @@
+{
+  "name": "project-package-v1",
+  "scenario": "image-workspace",
+  "commit": "8b70add2f30f1df960bcc70e0afdd1fb91609109",
+  "formatVersion": 1,
+  "description": "Initial .afflatus package exporter with video/image groups, media references, text overrides, labels and trims"
+}

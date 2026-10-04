@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  type ShotEditOptions,
+  ShotHistory,
+  type ShotHistoryActions,
+} from '../../../../shared/generation/shot-history';
+import {
   type GenerationWorkspace,
   newShot,
   type Point,
@@ -21,6 +26,7 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
   const saved = useRef(0);
   const pending = useRef<Promise<boolean> | null>(null);
   const locked = useRef(blocked);
+  const history = useRef(new ShotHistory());
   locked.current = blocked;
   const flush = useCallback((): Promise<boolean> => {
     if (pending.current) return pending.current;
@@ -89,21 +95,51 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
     return () => clearTimeout(timer);
   }, [workspace, blocked, flush]);
   const updateShot = useCallback(
-    (id: string, update: (shot: ShotWorkspace) => ShotWorkspace) => {
-      change((doc) => ({
-        ...doc,
-        shots: doc.shots.map((shot) => (shot.id === id ? update(shot) : shot)),
-      }));
+    (
+      id: string,
+      update: (shot: ShotWorkspace) => ShotWorkspace,
+      options?: ShotEditOptions,
+    ) => {
+      change((doc) => {
+        let changed = false;
+        const shots = doc.shots.map((shot) => {
+          if (shot.id !== id) return shot;
+          const next = update(shot);
+          if (next === shot || JSON.stringify(next) === JSON.stringify(shot))
+            return shot;
+          history.current.record(shot, next, options);
+          changed = true;
+          return next;
+        });
+        return changed ? { ...doc, shots } : doc;
+      });
     },
     [change],
   );
+  const restore = (id: string, direction: 'undo' | 'redo') => {
+    change((doc) => {
+      let changed = false;
+      const shots = doc.shots.map((shot) => {
+        if (shot.id !== id) return shot;
+        const next = history.current[direction](shot);
+        changed ||= next !== shot;
+        return next;
+      });
+      return changed ? { ...doc, shots } : doc;
+    });
+  };
+  const open = (id: string | null) => {
+    if (activeId) history.current.breakMerge(activeId);
+    if (id) history.current.breakMerge(id);
+    setActiveId(id);
+  };
   const create = (position: Point, asset?: Asset) => {
     if (!current.current || blocked) return;
     const existing =
       asset &&
       current.current.shots.find((shot) => shot.sourceAssetId === asset.id);
     if (existing) {
-      setActiveId(existing.id);
+      open(existing.id);
       return;
     }
     const id = crypto.randomUUID();
@@ -120,7 +156,7 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
         ),
       ],
     }));
-    setActiveId(id);
+    open(id);
   };
   return {
     shots: workspace?.shots ?? [],
@@ -130,9 +166,15 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
     setError,
     activeShot: workspace?.shots.find((shot) => shot.id === activeId),
     activeId,
-    open: setActiveId,
+    open,
     create,
     updateShot,
+    historyFor: (id: string): ShotHistoryActions => ({
+      ...history.current.state(id),
+      undo: () => restore(id, 'undo'),
+      redo: () => restore(id, 'redo'),
+      breakMerge: () => history.current.breakMerge(id),
+    }),
     flush,
     retry: async () => {
       if (current.current) return flush();
@@ -147,6 +189,6 @@ export function useShotWorkspace(projectId: string, blocked: boolean) {
         return false;
       }
     },
-    dismiss: () => setActiveId(null),
+    dismiss: () => open(null),
   };
 }

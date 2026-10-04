@@ -4,6 +4,7 @@ import {
   resizeMaterial,
   type Size,
 } from '../../../../shared/generation/node-geometry';
+import type { ShotUpdate } from '../../../../shared/generation/shot-history';
 import type {
   CanvasLabel,
   ShotWorkspace,
@@ -12,7 +13,7 @@ import type {
 export function useMaterialNodeEdits(
   shot: ShotWorkspace,
   blocked: boolean,
-  update: (change: (shot: ShotWorkspace) => ShotWorkspace) => void,
+  update: ShotUpdate,
 ) {
   const [sizes, setSizes] = useState<Record<string, Size>>({});
   const rename = (id: string, name: string) => {
@@ -44,12 +45,15 @@ export function useMaterialNodeEdits(
     patch: Partial<Pick<CanvasLabel, 'name' | 'color' | 'pinned'>>,
   ) => {
     if (blocked) return;
-    update((current) => ({
-      ...current,
-      labels: (current.labels ?? []).map((label) =>
-        label.id === id ? { ...label, ...patch } : label,
-      ),
-    }));
+    update(
+      (current) => ({
+        ...current,
+        labels: (current.labels ?? []).map((label) =>
+          label.id === id ? { ...label, ...patch } : label,
+        ),
+      }),
+      patch.color !== undefined ? { mergeKey: `label-color:${id}` } : undefined,
+    );
   };
   const labelRemove = (id: string) => {
     if (!blocked)
@@ -76,5 +80,13 @@ export function useMaterialNodeEdits(
         }),
         base,
       );
-  return { sizes, rename, resize, labelChange, labelRemove, groupSize };
+  return {
+    sizes,
+    rename,
+    resize,
+    labelChange,
+    labelRemove,
+    groupSize,
+    resetSizes: () => setSizes({}),
+  };
 }

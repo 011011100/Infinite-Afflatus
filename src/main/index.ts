@@ -51,7 +51,10 @@ if (!app.requestSingleInstanceLock()) {
       registerDesktop(library, () => mainWindow);
       saveLifecycle = new SaveLifecycle(
         () => mainWindow,
-        () => library?.packages.cancel(),
+        () => {
+          library?.packages.cancel();
+          library?.health.cancel();
+        },
       );
       serveProjectMedia(library);
       showWindow();

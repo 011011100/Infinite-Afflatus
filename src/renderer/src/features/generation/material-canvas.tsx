@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
+import { HistoryActions } from '@/components/canvas/history-actions';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -28,9 +29,16 @@ import {
 } from '@/components/ui/context-menu';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import { isMac } from '@/lib/platform';
+import type {
+  ShotHistoryActions,
+  ShotUpdate,
+} from '../../../../shared/generation/shot-history';
 import type { ShotWorkspace } from '../../../../shared/generation/workspace';
 import { defaultInteractionSettings } from '../../../../shared/interaction/settings';
-import type { Shortcut } from '../../../../shared/interaction/shortcuts';
+import type {
+  Shortcut,
+  Shortcuts,
+} from '../../../../shared/interaction/shortcuts';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { GenerationGroupCard } from './generation-group';
 import { GroupStage } from './group-stage';
@@ -44,6 +52,7 @@ import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
 import { useMaterialGroupHover } from './use-material-group-hover';
+import { useMaterialHistory } from './use-material-history';
 import { useMaterialSelection } from './use-material-selection';
 import { useMaterialViewport } from './use-material-viewport';
 import './generation.css';
@@ -60,6 +69,8 @@ export function MaterialCanvas({
   blocked,
   longPressSplit,
   labelShortcut = defaultInteractionSettings().shortcuts.locateLabels,
+  shortcuts = defaultInteractionSettings().shortcuts,
+  history,
   saving,
   error,
   onChange,
@@ -72,9 +83,11 @@ export function MaterialCanvas({
   blocked: boolean;
   longPressSplit: boolean;
   labelShortcut?: Shortcut | null;
+  shortcuts?: Shortcuts;
+  history?: ShotHistoryActions;
   saving: boolean;
   error: string | null;
-  onChange: (change: (shot: ShotWorkspace) => ShotWorkspace) => void;
+  onChange: ShotUpdate;
   onClose: () => void;
   beforeClose: () => Promise<boolean>;
   retry: () => Promise<boolean>;
@@ -164,12 +177,35 @@ export function MaterialCanvas({
     onChanges: model.onChanges,
     finishMove: model.finishMove,
   });
+  const undoRedo = useMaterialHistory(
+    page,
+    history,
+    shortcuts,
+    disabled || picker || selection.open,
+    () => {
+      navigation.cancel();
+      model.resetTransient();
+    },
+  );
+  const historyActions = history
+    ? { ...history, undo: undoRedo.undo, redo: undoRedo.redo }
+    : undefined;
   return createPortal(
     <section
       ref={page}
       tabIndex={-1}
       aria-label={`${shot.name}素材子画布`}
       className="fixed inset-0 z-50 flex min-h-0 flex-col bg-canvas outline-none"
+      onPointerDownCapture={undoRedo.onPointerDownCapture}
+      onBlurCapture={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest(
+            'input, textarea, select, [contenteditable="true"]',
+          )
+        )
+          history?.breakMerge?.();
+      }}
     >
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-5">
         <Button
@@ -183,6 +219,19 @@ export function MaterialCanvas({
         <span className="h-4 border-l" />
         <span className="max-w-52 truncate text-sm">{shot.name}</span>
         <span className="text-xs text-muted-foreground">素材画布</span>
+        {historyActions && (
+          <fieldset
+            className="ml-1 flex items-center gap-1 border-l pl-2"
+            aria-label="素材撤销操作"
+          >
+            <HistoryActions
+              {...historyActions}
+              disabled={disabled || picker || !!editingGroup}
+              shortcuts={shortcuts}
+              isMac={isMac}
+            />
+          </fieldset>
+        )}
         <span
           className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
           role="status"
@@ -439,6 +488,7 @@ export function MaterialCanvas({
           saving={saving}
           error={error}
           update={onChange}
+          history={historyActions}
           onClose={() => model.setActiveGroup(null)}
           detach={(id, at) =>
             model.detach(
