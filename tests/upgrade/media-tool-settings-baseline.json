@@ -1,0 +1,6 @@
+{
+  "name": "media-tool-settings-v1",
+  "scenario": "image-workspace",
+  "commit": "309d0b7e517ae619575d291e9702ac904d08a941",
+  "description": "Two explicit media-tool paths written by the fixed first MediaToolSettings implementation through public choose; version inspection is controlled storage-test data, not media execution"
+}

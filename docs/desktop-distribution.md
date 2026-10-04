@@ -58,7 +58,9 @@ pnpm package:verify release/mac-arm64
 
 暂存清理回归同样使用真实接收、取消、预览、确认与新进程重开，并由固定历史提交创建旧部分文件和完整结果作为保护对照。只替换原生文件选择器，不模拟清理服务。历史写入需要完整 Git 历史，桌面工作流因此使用完整检出，缺少固定提交时必须失败。
 
-`pnpm test:browser` 另用随机高端口、独立 Vite 缓存和临时 Electron 配置运行尺寸监听器、导入离开和暂存确认交互；不连接或重启现有开发服务。这些真实 React 夹具使用模拟 IPC，不能证明真实磁盘或云端调用。父进程在 Electron 结束后清理本次临时目录，处理中断和超时；Windows 不在仍持有文件的 Electron 进程内删除其 profile。锁定的 xyflow ESM 补丁及范围见 [依赖补丁说明](../patches/README.md)。
+`pnpm test:browser` 另用随机高端口、独立 Vite 缓存和临时 Electron 配置运行尺寸监听器、导入离开、暂存确认与媒体组件设置交互；不连接或重启现有开发服务。这些真实 React 夹具使用模拟 IPC，不能证明真实磁盘或云端调用。父进程在 Electron 结束后清理本次临时目录，处理中断和超时；Windows 不在仍持有文件的 Electron 进程内删除其 profile。锁定的 xyflow ESM 补丁及范围见 [依赖补丁说明](../patches/README.md)。
+
+`tests/browser/media-tool-settings-desktop.cjs` 另在生产构建上验证三次独立启动：通过原生选择入口验证并保存两项路径、重启读取与单项重置、未知版本配置保留及明确清除。测试生成只返回版本的可执行程序，Windows 使用本机 .NET Framework 编译器生成可执行 `.exe`，缺少编译器时失败而不跳过；实际执行子进程、SQLite、preload 和页面，源程序哈希须不变。这证明组件配置链路，不证明 FFmpeg 编解码能力或系统安装器行为。
 
 2026-10-05，提交 `9ccde342582c693cf0da35719e04d730bf773d72` 的 [内部包验证](https://github.com/011011100/Infinite-Afflatus/actions/runs/37216999812) 在 Windows 与 macOS 均通过：原生构建、ASAR 内容校验、实际包内程序启动、视频组件状态展示、文字保存及重启读取。Windows 构建了 NSIS 安装程序，但自动启动测试使用其未压缩应用目录，未执行安装器。
 
