@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@electron/asar@3.4.1': 1d3e9743b764a826f2fe645cda558b76bdd459d198dd0bddfdd3ad3b5553cec4
-  '@xyflow/react@12.12.0': 93eaaf788729e9b11ca368fc941b6bb12a20a852ea033db482048643e7644e46
+  '@xyflow/react@12.12.0': 53a4e2a2a51d0b0181a2bd5bf51c4d6607f2a8c8ec0375a63ef4ccd617705ad9
   '@xyflow/system@0.0.83': 5af3e7d2dc3aea027f6620dd4977c597eb64c10f56176e38bf9a2baba78aec72
 
 importers:
@@ -21,7 +21,7 @@ importers:
         version: 2.1.2(gsap@3.15.0)(react@19.3.0)
       '@xyflow/react':
         specifier: 12.12.0
-        version: 12.12.0(patch_hash=93eaaf788729e9b11ca368fc941b6bb12a20a852ea033db482048643e7644e46)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 12.12.0(patch_hash=53a4e2a2a51d0b0181a2bd5bf51c4d6607f2a8c8ec0375a63ef4ccd617705ad9)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -4283,7 +4283,7 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
-  '@xyflow/react@12.12.0(patch_hash=93eaaf788729e9b11ca368fc941b6bb12a20a852ea033db482048643e7644e46)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@xyflow/react@12.12.0(patch_hash=53a4e2a2a51d0b0181a2bd5bf51c4d6607f2a8c8ec0375a63ef4ccd617705ad9)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@xyflow/system': 0.0.83(patch_hash=5af3e7d2dc3aea027f6620dd4977c597eb64c10f56176e38bf9a2baba78aec72)
       classcat: 5.0.5

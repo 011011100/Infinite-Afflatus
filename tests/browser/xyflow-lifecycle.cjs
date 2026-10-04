@@ -168,9 +168,88 @@ app.whenReady().then(async () => {
       disposed.writesAtDisposal,
       'disposed canvas never publishes another size',
     );
-    assert.deepEqual(errors, []);
     console.log(
       'PASS rapid size changes publish one final size outside observer delivery; unmount cancels pending measurement',
+    );
+    await run(
+      'xyflowControls.show(true); xyflowControls.reportNodeMeasurements(true)',
+    );
+    await wait(
+      'xyflowControls.stats().active===3',
+      'reopened measurement view',
+    );
+    await run('xyflowControls.resizeNode(160)');
+    await wait(
+      'xyflowControls.dimensions().height===392',
+      'measured node summary changes the ancestor pane height',
+    );
+    assert.equal(
+      (await stats()).nodeWritesDuringDelivery,
+      0,
+      'node measurements are never published while native observers are being notified',
+    );
+    assert.equal(await run('xyflowControls.nodeWidth()'), 160);
+    assert.deepEqual(
+      errors,
+      [],
+      'node summary changes the pane without native warnings',
+    );
+    const beforeNodeBurst = await stats();
+    await run('xyflowControls.resizeNode(180); xyflowControls.resizeNode(200)');
+    await wait(
+      'xyflowControls.nodeWidth()===200',
+      'latest node width in burst',
+    );
+    const afterNodeBurst = await stats();
+    assert.equal(
+      afterNodeBurst.nodeDimensionWrites - beforeNodeBurst.nodeDimensionWrites,
+      1,
+    );
+    assert.equal(
+      afterNodeBurst.scheduledResizeFrames -
+        beforeNodeBurst.scheduledResizeFrames,
+      1,
+    );
+    // Remove the optional summary before explicitly tearing down a node inside
+    // delivery; the fixture's own teardown must not resize an observed ancestor.
+    await run('xyflowControls.reportNodeMeasurements(false)');
+    await wait('xyflowControls.dimensions().height===420', 'summary closes');
+    await run(
+      'xyflowControls.replaceOnNodeResize(); xyflowControls.resizeNode(210)',
+    );
+    await wait(
+      'xyflowControls.stats().replacementIsNew && xyflowControls.nodeWidth()===100',
+      'replaced same-id node keeps its own measurement',
+    );
+    const replaced = await stats();
+    assert.deepEqual(replaced.nodeMeasurements, [100]);
+    assert.ok(
+      replaced.cancelledResizeFrames > afterNodeBurst.cancelledResizeFrames,
+    );
+    assert.equal(replaced.nodeWritesDuringDelivery, 0);
+    assert.deepEqual(
+      errors,
+      [],
+      'same-id node replacement has no native warnings',
+    );
+    await run(
+      'xyflowControls.unmountOnNodeResize(); xyflowControls.resizeNode(220)',
+    );
+    await wait('xyflowControls.stats().active===0', 'node-triggered teardown');
+    const nodeDisposed = await stats();
+    assert.equal(nodeDisposed.pendingResizeFrames, 0);
+    assert.ok(
+      nodeDisposed.cancelledResizeFrames > replaced.cancelledResizeFrames,
+    );
+    await sleep(50);
+    assert.equal(
+      (await stats()).nodeDimensionWrites,
+      nodeDisposed.nodeWritesAtDisposal,
+    );
+    assert.equal((await stats()).nodeWritesDuringDelivery, 0);
+    assert.deepEqual(errors, []);
+    console.log(
+      'PASS node measurement updates an ancestor pane outside observer delivery, coalesces the latest size and cancels on unmount',
     );
   } catch (error) {
     failed = true;

@@ -1,5 +1,5 @@
 diff --git a/dist/esm/index.js b/dist/esm/index.js
-index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895ae6b98f71 100644
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..a2b3a3878071195ad08cb7d96aefa01f9cd32c87 100644
 --- a/dist/esm/index.js
 +++ b/dist/esm/index.js
 @@ -1280,12 +1280,25 @@ function useResizeHandler(domNode) {
@@ -31,8 +31,66 @@ index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895a
                  }
              };
          }
+@@ -2150,8 +2163,16 @@ function useResizeObserver() {
+         if (typeof ResizeObserver === 'undefined') {
+             return null;
+         }
+-        return new ResizeObserver((entries) => {
+-            const updates = new Map();
++        let resizeFrame;
++        const updates = new Map();
++        const cancelResize = () => {
++            if (resizeFrame !== undefined) {
++                cancelAnimationFrame(resizeFrame);
++                resizeFrame = undefined;
++            }
++            updates.clear();
++        };
++        const observer = new ResizeObserver((entries) => {
+             entries.forEach((entry) => {
+                 const id = entry.target.getAttribute('data-id');
+                 updates.set(id, {
+@@ -2160,8 +2181,37 @@ function useResizeObserver() {
+                     force: true,
+                 });
+             });
+-            updateNodeInternals(updates);
++            // Node measurements also publish synchronous store updates. A consumer can
++            // change an already delivered ancestor pane, creating a resize loop.
++            if (resizeFrame === undefined) {
++                resizeFrame = requestAnimationFrame(() => {
++                    resizeFrame = undefined;
++                    const current = new Map(Array.from(updates).filter(([id, update]) =>
++                        update.nodeElement.isConnected && update.nodeElement.getAttribute('data-id') === id));
++                    updates.clear();
++                    if (current.size) {
++                        updateNodeInternals(current);
++                    }
++                });
++            }
+         });
++        return {
++            observe: observer.observe.bind(observer),
++            unobserve: (target) => {
++                const id = target.getAttribute('data-id');
++                if (updates.get(id)?.nodeElement === target) {
++                    updates.delete(id);
++                    if (!updates.size) {
++                        cancelResize();
++                    }
++                }
++                observer.unobserve(target);
++            },
++            disconnect: () => {
++                cancelResize();
++                observer.disconnect();
++            },
++        };
+     });
+     useEffect(() => {
+         return () => {
 diff --git a/dist/esm/index.mjs b/dist/esm/index.mjs
-index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895ae6b98f71 100644
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..a2b3a3878071195ad08cb7d96aefa01f9cd32c87 100644
 --- a/dist/esm/index.mjs
 +++ b/dist/esm/index.mjs
 @@ -1280,12 +1280,25 @@ function useResizeHandler(domNode) {
@@ -64,3 +122,61 @@ index 422889fc98ea26cf4c4b45d6d7b84479550f4728..14d09532d89d6a0607afffc525b7895a
                  }
              };
          }
+@@ -2150,8 +2163,16 @@ function useResizeObserver() {
+         if (typeof ResizeObserver === 'undefined') {
+             return null;
+         }
+-        return new ResizeObserver((entries) => {
+-            const updates = new Map();
++        let resizeFrame;
++        const updates = new Map();
++        const cancelResize = () => {
++            if (resizeFrame !== undefined) {
++                cancelAnimationFrame(resizeFrame);
++                resizeFrame = undefined;
++            }
++            updates.clear();
++        };
++        const observer = new ResizeObserver((entries) => {
+             entries.forEach((entry) => {
+                 const id = entry.target.getAttribute('data-id');
+                 updates.set(id, {
+@@ -2160,8 +2181,37 @@ function useResizeObserver() {
+                     force: true,
+                 });
+             });
+-            updateNodeInternals(updates);
++            // Node measurements also publish synchronous store updates. A consumer can
++            // change an already delivered ancestor pane, creating a resize loop.
++            if (resizeFrame === undefined) {
++                resizeFrame = requestAnimationFrame(() => {
++                    resizeFrame = undefined;
++                    const current = new Map(Array.from(updates).filter(([id, update]) =>
++                        update.nodeElement.isConnected && update.nodeElement.getAttribute('data-id') === id));
++                    updates.clear();
++                    if (current.size) {
++                        updateNodeInternals(current);
++                    }
++                });
++            }
+         });
++        return {
++            observe: observer.observe.bind(observer),
++            unobserve: (target) => {
++                const id = target.getAttribute('data-id');
++                if (updates.get(id)?.nodeElement === target) {
++                    updates.delete(id);
++                    if (!updates.size) {
++                        cancelResize();
++                    }
++                }
++                observer.unobserve(target);
++            },
++            disconnect: () => {
++                cancelResize();
++                observer.disconnect();
++            },
++        };
+     });
+     useEffect(() => {
+         return () => {
