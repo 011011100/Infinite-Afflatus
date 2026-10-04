@@ -1,0 +1,7 @@
+{
+  "name": "root-relocation-v1-interrupted-publication",
+  "commit": "025586b295817ceeed8714b6c317678ed6a3b924",
+  "dataCommit": "0550d2cbe736daf7443e8570a18c57a6aec1b4bd",
+  "formatVersion": 1,
+  "description": "The immutable pre-relocation Library writes projects, drafts and queue data. The immutable v1 RootRelocationService then produces real durable intents interrupted before live publication or before independent-anchor publication; no current code writes either historical format."
+}
