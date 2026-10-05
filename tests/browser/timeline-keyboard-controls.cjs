@@ -23,7 +23,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 writeFileSync(
   join(scratch, 'index.html'),
-  `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>时间轨道键盘回归</title></head><body><div id="root"></div><script type="module" src="/@fs/${root}/tests/browser/timeline-keyboard-controls.fixture.tsx"></script></body></html>`,
+  `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>时间轨道键盘回归</title></head><body><div id="root"></div><script>window.timelineInputEvents=[];for(const type of ['keydown','keyup','click'])window.addEventListener(type,event=>timelineInputEvents.push({type,key:event.key,detail:event.detail,trusted:event.isTrusted,target:event.target?.getAttribute('aria-label'),active:document.activeElement?.getAttribute('aria-label')}),true)</script><script type="module" src="/@fs/${root}/tests/browser/timeline-keyboard-controls.fixture.tsx"></script></body></html>`,
 );
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
@@ -98,9 +98,6 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL(`${origin}/${basename(scratch)}/index.html`);
     await wait('typeof timelineControls!=="undefined"', 'timeline mounted');
-    await run(
-      `window.timelineInputEvents=[]; for(const type of ['keydown','keyup','click']) document.addEventListener(type,event=>timelineInputEvents.push({type,key:event.key,detail:event.detail,trusted:event.isTrusted}),true)`,
-    );
     await focus();
     await key('Enter');
     await assertStart(false);
@@ -215,6 +212,11 @@ app.whenReady().then(async () => {
       'typeof editorCapture!=="undefined"&&editorCapture().pending===null&&!editorCapture().error',
       'real editor playback loaded',
     );
+    await run('prepareEditorCapture()');
+    await wait(
+      'editorCapture().pending===null&&!editorCapture().error&&!editorCapture().playing&&Math.abs(editorCapture().time)<0.001',
+      'real controller paused and sought to the combination start',
+    );
     win.focus();
     win.webContents.focus();
     for (const [label, target] of [
@@ -224,8 +226,23 @@ app.whenReady().then(async () => {
       await run(
         `document.querySelector('[role=slider][aria-label=${label}]').focus()`,
       );
+      await wait(
+        `document.hasFocus()&&document.activeElement===document.querySelector('[role=slider][aria-label=${label}]')`,
+        `${label} owns native keyboard focus`,
+      );
+      const before = await run('timelineInputEvents.length');
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+      await wait(
+        `timelineInputEvents.slice(${before}).some(event=>event.type==='keydown'&&event.key==='ArrowRight')`,
+        `${label} receives native keydown`,
+      );
+      const delivered = await run(
+        `timelineInputEvents.slice(${before}).find(event=>event.type==='keydown'&&event.key==='ArrowRight')`,
+      );
+      assert.equal(delivered.trusted, true);
+      assert.equal(delivered.target, label);
+      assert.equal(delivered.active, label);
       await wait(
         `Math.abs(editorCapture().time-${target})<0.001`,
         `${label} receives native arrow through editor capture`,

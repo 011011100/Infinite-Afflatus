@@ -147,6 +147,12 @@ function EditorCaptureFixture() {
   });
   useLayoutEffect(() => {
     Object.assign(window, {
+      prepareEditorCapture: () => {
+        // The actual editor autoplays on entry. Establish a paused start through
+        // its real controller before testing relative keyboard seeking.
+        editor.playback.pause();
+        editor.seek(0);
+      },
       editorCapture: () => ({
         time: editor.time,
         selected: editor.selected,

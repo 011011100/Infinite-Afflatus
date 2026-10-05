@@ -16,7 +16,7 @@ const profile =
 app.setPath('userData', profile);
 writeFileSync(
   join(scratch, 'index.html'),
-  `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>素材键盘回归</title></head><body><div id="root"></div><script>window.materialInputEvents=[];window.addEventListener('keydown',event=>materialInputEvents.push({key:event.key,repeat:event.repeat,trusted:event.isTrusted}),true)</script><script type="module" src="/@fs/${root}/tests/browser/material-keyboard-controls.fixture.tsx"></script></body></html>`,
+  `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>素材键盘回归</title></head><body><div id="root"></div><script>window.materialInputEvents=[];window.addEventListener('keydown',event=>materialInputEvents.push({key:event.key,repeat:event.repeat,trusted:event.isTrusted}),true);window.materialPointerEvents=[];for(const type of ['mousedown','mouseup','click'])window.addEventListener(type,event=>materialPointerEvents.push({type,trusted:event.isTrusted,label:event.target.closest?.('[data-label-id]')?.dataset.labelId??null}),true)</script><script type="module" src="/@fs/${root}/tests/browser/material-keyboard-controls.fixture.tsx"></script></body></html>`,
 );
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
@@ -441,35 +441,65 @@ app.whenReady().then(async () => {
           'custom label key installed',
         );
       }
-      const beforeJump = (await state()).current;
       await focus(node('solo'));
+      // React Flow may pan an offscreen node into view on focus. Take the
+      // comparison after that real focus update, before activating the marker.
+      await painted();
+      const beforeJump = (await state()).current;
       wc.sendInputEvent({ type: 'keyDown', keyCode: labelKey });
       await wait(
         '!!document.querySelector("nav[aria-label=标签位置]")',
         'held label markers visible',
       );
-      const marker = `nav[aria-label=标签位置] button[data-label-id=${labelKey === 'L' ? 'pinned' : 'far'}]`;
+      const markerId = labelKey === 'L' ? 'pinned' : 'far';
+      const marker = `nav[aria-label=标签位置] button[data-label-id=${markerId}]`;
       await focus(marker);
+      await painted();
       assert.equal(
         await run('!!document.querySelector("nav[aria-label=标签位置]")'),
         true,
       );
       const point = await run(
-        `(()=>{const r=document.querySelector(${JSON.stringify(marker)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`,
+        `(()=>{const r=document.querySelector(${JSON.stringify(marker)}).getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);return {x,y,hit:document.elementFromPoint(x,y)?.closest('[data-label-id]')?.dataset.labelId}})()`,
       );
-      wc.sendInputEvent({ type: 'mouseMove', ...point });
+      assert.equal(
+        point.hit,
+        markerId,
+        'measured click point hits the visible marker',
+      );
+      const pointerStart = await run('materialPointerEvents.length');
+      const coordinates = { x: point.x, y: point.y };
+      wc.sendInputEvent({ type: 'mouseMove', ...coordinates });
       wc.sendInputEvent({
         type: 'mouseDown',
         button: 'left',
         clickCount: 1,
-        ...point,
+        ...coordinates,
       });
+      await wait(
+        `materialPointerEvents.slice(${pointerStart}).some(event=>event.type==='mousedown'&&event.label===${JSON.stringify(markerId)}&&event.trusted)`,
+        'real mousedown delivered to held marker',
+      );
       wc.sendInputEvent({
         type: 'mouseUp',
         button: 'left',
         clickCount: 1,
-        ...point,
+        ...coordinates,
       });
+      await wait(
+        `materialPointerEvents.slice(${pointerStart}).some(event=>event.type==='click'&&event.label===${JSON.stringify(markerId)}&&event.trusted)`,
+        'real click delivered before releasing the locator key',
+      );
+      assert.deepEqual(
+        await run(
+          `materialPointerEvents.slice(${pointerStart}).filter(event=>event.label===${JSON.stringify(markerId)}).map(event=>({type:event.type,trusted:event.trusted}))`,
+        ),
+        [
+          { type: 'mousedown', trusted: true },
+          { type: 'mouseup', trusted: true },
+          { type: 'click', trusted: true },
+        ],
+      );
       wc.sendInputEvent({ type: 'keyUp', keyCode: labelKey });
       await wait(
         '!document.querySelector("nav[aria-label=标签位置]")',
@@ -578,6 +608,7 @@ app.whenReady().then(async () => {
     console.error('renderer errors', errors);
     console.error('fixture state', await state());
     console.error('native input', await run('materialInputEvents'));
+    console.error('native pointer', await run('materialPointerEvents'));
   } finally {
     win.destroy();
     try {
