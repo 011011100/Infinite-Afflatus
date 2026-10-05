@@ -23,6 +23,8 @@ const available = [
   'thumbnail-visibility-controls',
   'rescue-import-controls',
   'project-package-controls',
+  'timeline-keyboard-controls',
+  'material-keyboard-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

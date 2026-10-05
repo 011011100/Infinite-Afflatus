@@ -165,7 +165,10 @@ export function SequenceTimeline({
                   className="group/clip-surface relative block size-full overflow-hidden rounded-[inherit] bg-muted text-left outline-none"
                   onClick={(event) => {
                     onSelect(index);
-                    seekAt(event.clientX);
+                    if (event.detail === 0) {
+                      onSeek(clip.offset);
+                      viewport.reveal(clip.offset);
+                    } else seekAt(event.clientX);
                   }}
                 >
                   <Filmstrip

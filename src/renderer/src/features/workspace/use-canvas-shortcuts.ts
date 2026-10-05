@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { canvasControls } from '@/components/canvas/keyboard-boundary';
 import { isMac } from '@/lib/platform';
 import {
   type ShortcutAction,
@@ -42,6 +43,13 @@ export function useCanvasShortcuts({
       const name = shortcutAction(event, shortcuts, isMac);
       const action = name && actions[name];
       if (!action) return;
+      if (
+        /^Arrow(Left|Right|Up|Down)$/.test(event.key) &&
+        event.target instanceof Element &&
+        event.target.closest(canvasControls) &&
+        !event.target.closest('[data-video-thumbnail]')
+      )
+        return;
       // Native button activation keeps working when focus is on a toolbar control.
       if (
         event.key === ' ' &&

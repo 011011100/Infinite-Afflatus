@@ -1,5 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Pin, PinOff, X } from 'lucide-react';
+import { stopCanvasControlKeys } from '@/components/canvas/keyboard-boundary';
 import { Button } from '@/components/ui/button';
 import { EditableName } from '@/components/ui/editable-name';
 import type { CanvasLabel } from '../../../../shared/generation/workspace';
@@ -20,7 +21,9 @@ export type LabelFlowNode = Node<
 export function LabelCard({ id, data, selected }: NodeProps<LabelFlowNode>) {
   const { label, blocked, change } = data;
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Only a bubbling boundary for nested controls; React Flow owns node keyboard interaction.
     <div
+      onKeyDown={stopCanvasControlKeys}
       className="canvas-label material-handle flex h-full items-center gap-2 rounded-xl border bg-card px-3 shadow-sm"
       data-pinned={label.pinned}
       style={{

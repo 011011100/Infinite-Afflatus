@@ -39,7 +39,7 @@ export function InteractionSettings({
         <p>
           <span className="font-medium">双击卡片</span>
           <span className="ml-3 text-muted-foreground">
-            打开浮层播放，组合按原顺序播放。
+            打开全窗口播放与裁剪，组合按原顺序播放。
           </span>
         </p>
         <label className="flex cursor-pointer items-center justify-between gap-4">
@@ -64,9 +64,14 @@ export function InteractionSettings({
           画布快捷键
         </h3>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          点击右侧按键重新设置。可用字母、数字、空格，搭配
+          点击右侧按键重新设置。可用字母、数字、空格、方向键，搭配
           {isMac ? ' ⌘、Shift' : ' Ctrl、Shift'}
           。输入文字或打开弹窗时不会触发画布操作。
+        </p>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          素材画布默认用方向键每次移动所选素材 5 个画布单位，Shift 加方向键移动
+          20
+          个单位。每次按下执行一步，按住不重复；按钮、输入框和媒体控件保留原有键盘操作。
         </p>
         <div className="mt-3 divide-y">
           {SHORTCUT_ACTIONS.map((action) => (

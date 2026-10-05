@@ -10,6 +10,7 @@ import type { GenerationWorkspace } from '../../src/shared/generation/workspace'
 import type { InteractionSettings } from '../../src/shared/interaction/settings';
 import type { ProjectSnapshot, SaveJob } from '../../src/shared/models';
 import { fileHash } from './history';
+import { withMovementDefaults } from './interaction-settings-expectations';
 
 export interface AppBackupV1State {
   writerCommit: string;
@@ -54,7 +55,10 @@ export async function assertBackupV1Reopen(contract: RestoredAppBackupV1) {
       [],
       'Historical acknowledgements and ready jobs must not run after recovery',
     );
-    assert.deepEqual(library.interactions.get(), state.settings);
+    assert.deepEqual(
+      library.interactions.get(),
+      withMovementDefaults(state.settings),
+    );
     for (const project of state.projects)
       assert.deepEqual(
         await library.projects.open(project.project.id),

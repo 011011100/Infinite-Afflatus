@@ -1,0 +1,6 @@
+{
+  "name": "movement-shortcuts-legacy",
+  "scenario": "image-workspace",
+  "commit": "6a11cc94149d7bad4a78e3a8b8eca7ea302a7d2d",
+  "description": "Five configurable actions before material-canvas movement shortcuts"
+}

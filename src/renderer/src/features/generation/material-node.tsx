@@ -1,5 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Type, X } from 'lucide-react';
+import { stopCanvasControlKeys } from '@/components/canvas/keyboard-boundary';
 import { useLongPressSplit } from '@/components/canvas/use-long-press-split';
 import { Button } from '@/components/ui/button';
 import { EditableName } from '@/components/ui/editable-name';
@@ -42,7 +43,9 @@ export function MaterialCard({
     () => data.detach(id),
   );
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Only a bubbling boundary for nested controls; React Flow owns node keyboard interaction.
     <div
+      onKeyDown={stopCanvasControlKeys}
       onPointerDownCapture={(event) => {
         if (
           !material.groupId ||

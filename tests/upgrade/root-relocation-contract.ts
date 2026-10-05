@@ -10,6 +10,7 @@ import type { ProjectSnapshot, SaveJob } from '../../src/shared/models';
 import type { ProjectEditDraftRecord } from '../../src/shared/project-edit-draft';
 import type { WorkspaceDraftRecord } from '../../src/shared/workspace-draft';
 import { fileHash } from './history';
+import { withMovementDefaults } from './interaction-settings-expectations';
 
 export interface HistoricalFile {
   path: string;
@@ -128,7 +129,10 @@ export async function assertRelocatedLibrary(
   const [primary, independent, pending] = state.projects;
   assert.ok(primary && independent && pending);
   assert.equal(library.store.root, contract.newRoot);
-  assert.deepEqual(library.interactions.get(), state.settings);
+  assert.deepEqual(
+    library.interactions.get(),
+    withMovementDefaults(state.settings),
+  );
   assert.deepEqual(library.store.get('relocationOpaqueSetting'), {
     value: '不能白名单重建 settings',
     count: 29,

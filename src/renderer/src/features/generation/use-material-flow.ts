@@ -6,6 +6,7 @@ import {
   detachMaterial,
   materialSelection,
 } from '../../../../shared/generation/material-groups';
+import { moveMaterials } from '../../../../shared/generation/move-materials';
 import {
   LABEL_SIZE,
   materialSize,
@@ -287,6 +288,11 @@ export function useMaterialFlow(
     activeGroup,
     setActiveGroup,
     finishMove,
+    moveSelected: (delta: Readonly<Point>) => {
+      if (blocked) return;
+      update((current) => moveMaterials(current, selected, delta));
+      setPositions({});
+    },
     resetTransient: () => {
       setPositions({});
       setMeasurements({});

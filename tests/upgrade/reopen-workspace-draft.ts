@@ -5,6 +5,7 @@ import type { GenerationWorkspace } from '../../src/shared/generation/workspace'
 import type { WorkspaceDraftRecord } from '../../src/shared/workspace-draft';
 import { assertQueue, withoutTimestamp } from './checks';
 import { assertOriginalFiles, fileHash, type HistoricalData } from './history';
+import { withMovementDefaults } from './interaction-settings-expectations';
 
 export interface HistoricalWorkspaceDraft {
   writerCommit: string;
@@ -67,7 +68,10 @@ try {
     await library.generation.read(original.project.id),
     expected.draft,
   );
-  assert.deepEqual(library.interactions.get(), expected.settings);
+  assert.deepEqual(
+    library.interactions.get(),
+    withMovementDefaults(expected.settings),
+  );
   assert.deepEqual(await library.drafts.list(original.project.id), {
     drafts: [],
     issues: [],

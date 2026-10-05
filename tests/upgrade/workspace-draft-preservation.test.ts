@@ -17,6 +17,7 @@ import {
   history,
   runNode,
 } from './history';
+import { withMovementDefaults } from './interaction-settings-expectations';
 import type {
   HistoricalWorkspaceDraft,
   WorkspaceDraftContract,
@@ -139,7 +140,10 @@ for (const mode of ['unsubmitted', 'last-submitted'] as const) {
         await library.generation.read(original.project.id),
         f.expected.draft,
       );
-      assert.deepEqual(library.interactions.get(), f.expected.settings);
+      assert.deepEqual(
+        library.interactions.get(),
+        withMovementDefaults(f.expected.settings),
+      );
       assert.deepEqual(await library.drafts.list(original.project.id), {
         drafts: [],
         issues: [],

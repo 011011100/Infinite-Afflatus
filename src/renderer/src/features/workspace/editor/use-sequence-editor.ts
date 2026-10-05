@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { canvasControls } from '@/components/canvas/keyboard-boundary';
 import { isMac } from '@/lib/platform';
 import type {
   CanvasCard,
@@ -205,7 +206,13 @@ export function useSequenceEditor(
       )
         return;
       const action = shortcutAction(event, props.shortcuts, isMac);
-      if (!action || action === 'split' || action === 'locateLabels') return;
+      if (action !== 'play' && action !== 'undo' && action !== 'redo') return;
+      if (
+        /^Arrow(Left|Right|Up|Down)$/.test(event.key) &&
+        event.target instanceof Element &&
+        event.target.closest(canvasControls)
+      )
+        return;
       if (
         event.key === ' ' &&
         event.target instanceof Element &&

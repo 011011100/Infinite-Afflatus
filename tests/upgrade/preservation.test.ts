@@ -7,6 +7,7 @@ import type { GenerationWorkspace } from '../../src/shared/generation/workspace'
 import type { ProjectSnapshot } from '../../src/shared/models';
 import { assertIntegrity, assertQueue, assertWorkspace } from './checks';
 import { assertOriginalFiles, baselines, history, runNode } from './history';
+import { withMovementDefaults } from './interaction-settings-expectations';
 
 for (const baseline of baselines) {
   test(`${baseline.name}: old writer -> new reader/editor -> two process restarts preserves data`, async (t) => {
@@ -17,7 +18,7 @@ for (const baseline of baselines) {
     const library = await Library.open(f.app, f.defaultRoot);
     let wantedWorkspace: GenerationWorkspace;
     let wantedProject: ProjectSnapshot;
-    const wantedSettings = {
+    const wantedSettings = withMovementDefaults({
       ...expected.settings,
       shortcuts: {
         ...expected.settings.shortcuts,
@@ -25,7 +26,7 @@ for (const baseline of baselines) {
           ? expected.settings.shortcuts.locateLabels
           : { key: 'l', mod: false, shift: false, alt: false },
       },
-    };
+    });
     const wantedDraft = {
       ...expected.draft,
       prompt: `${expected.draft.prompt}\n新版追加，原内容保留`,

@@ -1,4 +1,5 @@
 import {
+  MOVE_SHORTCUT_ACTIONS,
   SHORTCUT_ACTIONS,
   SHORTCUT_LABELS,
   type Shortcuts,
@@ -22,6 +23,14 @@ export function defaultInteractionSettings(): InteractionSettings {
       split: { key: 'g', mod: true, shift: true, alt: false },
       undo: { key: 'z', mod: true, shift: false, alt: false },
       redo: { key: 'z', mod: true, shift: true, alt: false },
+      moveLeft: { key: 'arrowleft', mod: false, shift: false, alt: false },
+      moveRight: { key: 'arrowright', mod: false, shift: false, alt: false },
+      moveUp: { key: 'arrowup', mod: false, shift: false, alt: false },
+      moveDown: { key: 'arrowdown', mod: false, shift: false, alt: false },
+      moveLeftFast: { key: 'arrowleft', mod: false, shift: true, alt: false },
+      moveRightFast: { key: 'arrowright', mod: false, shift: true, alt: false },
+      moveUpFast: { key: 'arrowup', mod: false, shift: true, alt: false },
+      moveDownFast: { key: 'arrowdown', mod: false, shift: true, alt: false },
     },
   };
 }
@@ -55,7 +64,7 @@ export function validateInteractionSettings(
   }
 }
 
-/** Upgrade only the missing action; preserve all older custom bindings and explicit nulls. */
+/** Add missing actions without rewriting older custom bindings or explicit nulls. */
 export function upgradeInteractionSettings(
   value: unknown,
 ): InteractionSettings {
@@ -63,15 +72,19 @@ export function upgradeInteractionSettings(
   if (
     next?.version === 1 &&
     next.shortcuts &&
-    !Object.hasOwn(next.shortcuts, 'locateLabels')
+    typeof next.shortcuts === 'object'
   ) {
-    const binding = defaultInteractionSettings().shortcuts.locateLabels;
-    const conflict =
-      binding &&
-      Object.values(next.shortcuts).some(
-        (other) => other && sameShortcut(binding, other),
-      );
-    next.shortcuts.locateLabels = conflict ? null : binding;
+    const defaults = defaultInteractionSettings().shortcuts;
+    for (const action of ['locateLabels', ...MOVE_SHORTCUT_ACTIONS] as const) {
+      if (Object.hasOwn(next.shortcuts, action)) continue;
+      const binding = defaults[action];
+      const conflict =
+        binding &&
+        Object.values(next.shortcuts).some(
+          (other) => other && sameShortcut(binding, other),
+        );
+      next.shortcuts[action] = conflict ? null : binding;
+    }
   }
   validateInteractionSettings(next);
   return next;

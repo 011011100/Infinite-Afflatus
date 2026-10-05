@@ -7,8 +7,6 @@ import type { CanvasLabel } from '../../../../../shared/generation/workspace';
 import {
   formatShortcut,
   type Shortcut,
-  sameShortcut,
-  shortcutFromKey,
 } from '../../../../../shared/interaction/shortcuts';
 import { labelMarkers } from './geometry';
 
@@ -20,12 +18,14 @@ const editable = (target: EventTarget | null) =>
 export function LabelLocator({
   labels,
   shortcut,
+  held,
   disabled,
   jump,
   cancel,
 }: {
   labels: CanvasLabel[];
   shortcut: Shortcut | null;
+  held: boolean;
   disabled: boolean;
   jump: (label: CanvasLabel) => void;
   cancel: () => void;
@@ -33,16 +33,13 @@ export function LabelLocator({
   const viewport = useViewport();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
-  const [held, setHeld] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (disabled) {
-      setHeld(false);
       setOpen(false);
       return;
     }
     const reset = () => {
-      setHeld(false);
       setOpen(false);
     };
     const down = (event: KeyboardEvent) => {
@@ -51,52 +48,21 @@ export function LabelLocator({
         cancel();
         return;
       }
-      if (
-        event.defaultPrevented ||
-        editable(event.target) ||
-        document.querySelector('dialog[open]') ||
-        !shortcut
-      )
-        return;
-      // Holding Space on a focused button must retain native activation.
-      if (
-        event.key === ' ' &&
-        event.target instanceof Element &&
-        event.target.closest('button')
-      )
-        return;
-      const pressed = shortcutFromKey(event, isMac);
-      if (pressed && sameShortcut(pressed, shortcut)) {
-        event.preventDefault();
-        setHeld(true);
-      }
-    };
-    const up = (event: KeyboardEvent) => {
-      if (!shortcut) return;
-      const key = event.key === ' ' ? 'Space' : event.key.toLowerCase();
-      if (
-        key === shortcut.key ||
-        (shortcut.mod && !(isMac ? event.metaKey : event.ctrlKey)) ||
-        (shortcut.shift && !event.shiftKey)
-      )
-        setHeld(false);
     };
     const focus = (event: FocusEvent) => {
       if (editable(event.target)) reset();
     };
     window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
     window.addEventListener('blur', reset);
     window.addEventListener('focusin', focus);
     document.addEventListener('visibilitychange', reset);
     return () => {
       window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
       window.removeEventListener('blur', reset);
       window.removeEventListener('focusin', focus);
       document.removeEventListener('visibilitychange', reset);
     };
-  }, [shortcut, disabled, cancel]);
+  }, [disabled, cancel]);
   return (
     <>
       <Panel position="top-right">

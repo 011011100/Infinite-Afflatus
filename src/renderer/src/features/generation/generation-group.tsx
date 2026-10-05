@@ -1,5 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Expand, Image, Sparkles, Ungroup } from 'lucide-react';
+import { stopCanvasControlKeys } from '@/components/canvas/keyboard-boundary';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { GenerationGroup } from '../../../../shared/generation/workspace';
@@ -22,7 +23,9 @@ export function GenerationGroupCard({
   selected,
 }: NodeProps<GenerationGroupNode>) {
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Only a bubbling boundary for nested controls; React Flow owns node keyboard interaction.
     <div
+      onKeyDown={stopCanvasControlKeys}
       data-generation-group-frame
       data-generation-kind={data.group.kind ?? 'video'}
       data-receiving={data.receiving || undefined}

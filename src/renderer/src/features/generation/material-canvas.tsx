@@ -16,7 +16,7 @@ import {
   Ungroup,
   Upload,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HistoryActions } from '@/components/canvas/history-actions';
@@ -60,8 +60,8 @@ import { ReferencePicker } from './reference-picker';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
 import { useMaterialGroupHover } from './use-material-group-hover';
-import { useMaterialHistory } from './use-material-history';
 import { useMaterialSelection } from './use-material-selection';
+import { useMaterialShortcuts } from './use-material-shortcuts';
 import { useMaterialViewport } from './use-material-viewport';
 import './generation.css';
 
@@ -71,6 +71,7 @@ const nodeTypes = {
   generationGroup: GenerationGroupCard,
 };
 const edges: Edge[] = [];
+const defaultShortcuts = defaultInteractionSettings().shortcuts;
 export function MaterialCanvas({
   shot,
   snapshot,
@@ -78,8 +79,8 @@ export function MaterialCanvas({
   projectUnavailable,
   unavailableNotice,
   longPressSplit,
-  labelShortcut = defaultInteractionSettings().shortcuts.locateLabels,
-  shortcuts = defaultInteractionSettings().shortcuts,
+  labelShortcut,
+  shortcuts = defaultShortcuts,
   history,
   saving,
   recovering = false,
@@ -112,6 +113,13 @@ export function MaterialCanvas({
   const page = useRef<HTMLElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState(false);
+  // Older callers provide just labelShortcut; newer callers pass the full settings.
+  const resolvedLabelShortcut =
+    labelShortcut === undefined ? shortcuts.locateLabels : labelShortcut;
+  const scopedShortcuts = useMemo(
+    () => ({ ...shortcuts, locateLabels: resolvedLabelShortcut }),
+    [shortcuts, resolvedLabelShortcut],
+  );
   const { closing, requestClose } = usePageMotion(page, onClose, async () => {
     let token: string | null = null;
     const captured = capturePendingSaves();
@@ -229,15 +237,20 @@ export function MaterialCanvas({
     onChanges: model.onChanges,
     finishMove: model.finishMove,
   });
-  const undoRedo = useMaterialHistory(
+  const undoRedo = useMaterialShortcuts(
     page,
     history,
-    shortcuts,
+    scopedShortcuts,
     disabled || picker || selection.open,
     () => {
       navigation.cancel();
       model.resetTransient();
     },
+    (delta) => {
+      navigation.cancel();
+      model.moveSelected(delta);
+    },
+    !!editingGroup,
   );
   const historyActions = history
     ? { ...history, undo: undoRedo.undo, redo: undoRedo.redo }
@@ -416,7 +429,8 @@ export function MaterialCanvas({
             <CanvasControls />
             <LabelLocator
               labels={shot.labels ?? []}
-              shortcut={labelShortcut}
+              shortcut={resolvedLabelShortcut}
+              held={undoRedo.labelsHeld}
               disabled={disabled || picker || !!editingGroup}
               jump={navigation.jump}
               cancel={navigation.cancel}

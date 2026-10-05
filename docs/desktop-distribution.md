@@ -74,6 +74,8 @@ pnpm package:verify release/mac-arm64
 
 `tests/browser/project-package-progress.mjs` 验证项目包实际写入进度和取消：隔离的生产进程以合法音频及文本建立真实项目，导出／导入／副本核对完整镜头数据与素材哈希；复制中点击取消、延迟原生选择、镜头文字编辑后返回和原生关闭，再独立重开验证保存与清理。复制仅对本次拥有的临时文件写入施加延迟，进度必须来自生产写入；清理核对其他文件与源文件保持。脚本在两端桌面工作流执行，不依赖 FFmpeg，不替代媒体编解码和人工操作系统文件选择验收。
 
+`tests/browser/material-keyboard-persistence.mjs` 通过四个隔离的生产进程验证素材键盘编辑：真实按键完成默认及自定义移动、撤销重做，设置页保存与清除按键，再关闭重开核对 SQLite。组合保留成员相对坐标、参数和素材，固定标签与文本输入不被移动；旧方向键清除后不得出现仅画面变化。移走本次测试的项目数据库制造实际保存失败，返回与原生关闭必须保留编辑器和独立恢复草稿，放回原库后明确重试再核对完整位置。源文件和无关项目按 SHA-256 保持。此流程运行生产页面、preload 与保存服务；与模拟 IPC 的键盘界面回归分开记录，不证明云端生成或安装器升级。
+
 提交 `6a11cc94149d7bad4a78e3a8b8eca7ea302a7d2d` 的[项目包进度验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37246228576)在 Windows／macOS 均通过上述七进程流程；两端各 91 项界面回归、100／1000 视频资源与编辑及所有既有生产恢复流程通过。Windows NSIS 安装、同版本覆盖和卸载保留资料也通过。[macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37246228576/artifacts/11319292108)和[Windows 内部安装包](https://github.com/011011100/Infinite-Afflatus/actions/runs/37246228576/artifacts/11319068133)保留七天；它们仍为未签名验收构建物，不代表正式签名或历史安装版升级已验证。相同提交三系统历史升级各 53 项通过且无跳过。
 
 提交 `368eb9caaa2b94e3f85ad470d69454100ad0c1d6` 的[目录定位验收](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112)在 Windows／macOS 均通过上述七进程流程；两端各 81 项界面回归、100／1000 视频资源和编辑、原有启动／恢复／导入／清理及包内保存重开继续通过。Windows 安装、同版本覆盖和卸载保留资料也通过。[macOS 内部 ZIP](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112/artifacts/11318646221)与[Windows 内部安装包](https://github.com/011011100/Infinite-Afflatus/actions/runs/37243959112/artifacts/11318438006)为未签名验收构建物；相同提交三系统历史升级各 53 项通过，正式签名及跨历史安装版升级仍未验证。
