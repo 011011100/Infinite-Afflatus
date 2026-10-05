@@ -14,6 +14,7 @@ import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
 import { defaultInteractionSettings } from '../../src/shared/interaction/settings';
 import type { ProjectSnapshot } from '../../src/shared/models';
 import type { WorkspaceDraftRecord } from '../../src/shared/workspace-draft';
+import { projectPackageMock } from './project-package-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
@@ -165,6 +166,7 @@ const controls = {
 };
 Object.assign(window, { importControls: controls });
 window.desktop = {
+  ...projectPackageMock().bridge,
   ...drafts.bridge,
   recoverWorkspaceDraft: async (...args) => {
     recoveryCalls++;

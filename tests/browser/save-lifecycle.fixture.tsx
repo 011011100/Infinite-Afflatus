@@ -6,6 +6,7 @@ import { usePendingSave } from '@/features/lifecycle/use-pending-save';
 import { useSaveLifecycle } from '@/features/lifecycle/use-save-lifecycle';
 import type { DesktopBridge } from '../../src/shared/desktop';
 import { emptyWorkspace, newShot } from '../../src/shared/generation/workspace';
+import { projectPackageMock } from './project-package-mock';
 import { referenceImportMock } from './reference-import-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
@@ -29,6 +30,7 @@ let releaseExport: (() => void) | null = null;
 const drafts = workspaceDraftMock(() => stored);
 window.desktop = {
   ...referenceImportMock().bridge,
+  ...projectPackageMock(() => releasePackage?.()).bridge,
   ...drafts.bridge,
   cancelProjectHealth: async () => releaseHealth?.(),
   cancelProjectPackage: async () => releasePackage?.(),

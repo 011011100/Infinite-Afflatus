@@ -14,6 +14,7 @@ import { ReferenceImportService } from '../generation/reference-import-service';
 import { MediaToolSettings } from '../media/media-tool-settings';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
+import { PackageRequests } from '../packages/package-requests';
 import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { ProjectHealthService } from '../recovery/project-health-service';
@@ -52,6 +53,7 @@ export class Library {
   readonly proxies: ProxyService;
   readonly exports: SequenceExportService;
   readonly packages: ProjectPackageService;
+  readonly packageRequests: PackageRequests;
   readonly health: ProjectHealthService;
   readonly drafts: WorkspaceDraftService;
   readonly editDrafts: ProjectEditDraftService;
@@ -89,6 +91,7 @@ export class Library {
       this.gate,
       userData,
     );
+    this.packageRequests = new PackageRequests(this.packages);
     this.exports = new SequenceExportService(
       this.projects,
       this.gate,
@@ -289,6 +292,7 @@ export class Library {
       this.stagingCleanup.close(),
       this.health.close(),
       this.packages.close(),
+      this.packageRequests.close(),
       this.exports.close(),
     ]);
     const errors = stopped.flatMap((result) =>

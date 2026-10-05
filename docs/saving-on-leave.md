@@ -12,10 +12,14 @@
 
 主进程关闭窗口或退出时发送带随机标识的保存请求；只接受当前受信窗口主 frame 对同一请求的布尔回执。成功后才销毁窗口，或继续关闭后台存储。保存中禁用页面编辑；失败或超时保留窗口，过时回执不能授权后来的一次关闭。超时不代表已保存，应用不强制退出。
 
+项目包操作从等待界面草稿时就登记请求。离开时立即暂停本窗口的新请求，使尚未完成的保存回执不能再启动复制；主进程同时停止参考素材接收和项目包操作，等待两者结束及清理，再接受保存完成。原生文件选择迟到不重新启动任务，过早的界面回执也不能绕过主进程等待。镜头返回主画布采用相同的暂停／释放规则；取消备份弹窗本身只收起进度，不等同于离开项目。
+
 验证：
 
 - `tests/save-lifecycle.test.ts` 覆盖导入与草稿的保存顺序、失败后重试、视口写入串行与保留、错误窗口／过时回执拒绝及超时。
 - `tests/native-import-leave.test.ts` 覆盖原生关闭等待接收停下、提前回执、超时重试与独立暂停，以及 macOS 新窗口恢复旧窗口的保存。
+- `tests/native-package-leave.test.ts` 覆盖两类操作都结束才接受关闭、清理失败保留窗口、提前回执与超时后的独立恢复；`tests/browser/project-package-controls.fixture.tsx` 覆盖保存前取消和界面反馈。
+- `node tests/browser/project-package-progress.mjs` 通过真实项目包复制、镜头文字编辑、返回主画布与原生关闭，重开核对草稿和未完成文件的清理。
 - `node tests/browser/reference-import-cancel.cjs` 在生产 Electron 中执行大文件实际接收、按钮取消和原生关闭，再重开核对完整引用与原文件字节。
 - `tests/trim-save-queue.test.ts` 覆盖等待全部裁剪操作和保留失败手势后重试。
 - `pnpm exec electron tests/browser/save-lifecycle.cjs` 复用现有开发服务与合成草稿，检查防抖前返回、失败留页恢复及退出确认后冻结。该测试使用模拟桌面接口；真实 IPC／SQLite 关闭重开另由桌面交付回归验证。

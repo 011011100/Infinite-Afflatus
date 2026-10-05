@@ -186,11 +186,13 @@ async function main() {
   );
   assert.equal(info.assetCount, 1);
   const packagePath = await next(
-    `window.desktop.exportProjectPackage(${JSON.stringify(projectId)})`,
+    `window.desktop.exportProjectPackage(${JSON.stringify(projectId)}, crypto.randomUUID())`,
   );
   assert.equal(packagePath, backup);
   assert.ok(existsSync(backup));
-  const imported = await next('window.desktop.importProjectPackage()');
+  const imported = await next(
+    'window.desktop.importProjectPackage(crypto.randomUUID())',
+  );
   assert.notEqual(imported.project.id, projectId);
   const importedWorkspace = await next(
     `window.desktop.getGenerationWorkspace(${JSON.stringify(imported.project.id)})`,

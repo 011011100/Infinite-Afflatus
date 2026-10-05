@@ -20,6 +20,7 @@ import {
   projectEditDraftState,
 } from '../../src/shared/project-edit-draft';
 import { projectEditDraftMock } from './project-edit-draft-mock';
+import { projectPackageMock } from './project-package-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
@@ -79,6 +80,7 @@ let controls: {
 } | null = null;
 
 window.desktop = {
+  ...projectPackageMock().bridge,
   ...workspaceDraftMock(() => workspace).bridge,
   ...journal.bridge,
   getLibrary: async () => structuredClone(library),

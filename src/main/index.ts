@@ -60,7 +60,6 @@ if (!app.requestSingleInstanceLock()) {
       saveLifecycle = new SaveLifecycle(
         () => mainWindow,
         () => {
-          library?.packages.cancel();
           library?.health.cancel();
           library?.stagingCleanup.cancel();
           void library?.exports.cancelPreparation().catch((error: unknown) => {
@@ -68,6 +67,7 @@ if (!app.requestSingleInstanceLock()) {
           });
         },
         library.referenceImports,
+        library.packageRequests,
       );
       serveProjectMedia(library);
       showWindow();

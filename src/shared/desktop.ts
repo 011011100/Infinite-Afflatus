@@ -31,7 +31,10 @@ import type {
   ProjectHealthProgress,
   ProjectHealthReport,
 } from './project-health';
-import type { ProjectPackageInfo } from './project-package';
+import type {
+  ProjectPackageInfo,
+  ProjectPackageProgress,
+} from './project-package';
 import type { ProjectRecoverySnapshot } from './project-recovery';
 import type { RescueImportPreview, RescueImportResult } from './rescue-import';
 import type {
@@ -74,6 +77,9 @@ export const IPC_CHANNELS = {
   cancelProjectHealth: 'health:cancel',
   projectHealthProgress: 'health:progress',
   cancelProjectPackage: 'package:cancel',
+  projectPackageProgress: 'package:progress',
+  preparePackageOperationsForLeave: 'package:prepare-for-leave',
+  resumePackageOperations: 'package:resume-after-leave',
   saveBeforeLeave: 'lifecycle:save-before-leave',
   saveBeforeLeaveResult: 'lifecycle:save-before-leave-result',
   leaveCancelled: 'lifecycle:leave-cancelled',
@@ -199,13 +205,27 @@ export interface DesktopBridge {
   onProjectHealthProgress: (
     listener: (state: ProjectHealthProgress | null) => void,
   ) => () => void;
-  cancelProjectPackage: () => Promise<void>;
+  cancelProjectPackage: (requestId?: string) => Promise<void>;
+  onProjectPackageProgress: (
+    listener: (progress: ProjectPackageProgress) => void,
+  ) => () => void;
+  preparePackageOperationsForLeave: () => Promise<string>;
+  resumePackageOperations: (token: string) => Promise<void>;
   onSaveBeforeLeave: (listener: () => Promise<boolean>) => () => void;
   onLeaveCancelled: (listener: () => void) => () => void;
-  inspectProjectPackage: (id: string) => Promise<ProjectPackageInfo>;
-  exportProjectPackage: (id: string) => Promise<string | null>;
-  importProjectPackage: () => Promise<ProjectSnapshot | null>;
-  duplicateProject: (id: string) => Promise<ProjectSnapshot>;
+  inspectProjectPackage: (
+    id: string,
+    requestId: string,
+  ) => Promise<ProjectPackageInfo | null>;
+  exportProjectPackage: (
+    id: string,
+    requestId: string,
+  ) => Promise<string | null>;
+  importProjectPackage: (requestId: string) => Promise<ProjectSnapshot | null>;
+  duplicateProject: (
+    id: string,
+    requestId: string,
+  ) => Promise<ProjectSnapshot | null>;
   startExport: (
     projectId: string,
     cardId: string,

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { type FileHandle, open } from 'node:fs/promises';
 import { checkSpace, safeFile } from '../storage/files';
+import type { PackageProgressReporter } from './package-progress';
 
 export const PACKAGE_MAGIC = Buffer.from('AFFLATUS-PACKAGE\n');
 export const MAX_MANIFEST_BYTES = 8 * 1024 * 1024;
@@ -104,6 +105,7 @@ async function writeAll(
   handle: FileHandle,
   data: Buffer,
   signal?: AbortSignal,
+  written?: (bytes: number) => void,
 ) {
   let offset = 0;
   while (offset < data.length) {
@@ -115,6 +117,7 @@ async function writeAll(
     );
     if (!bytesWritten) throw new Error('项目包写入中断');
     offset += bytesWritten;
+    written?.(bytesWritten);
   }
 }
 
@@ -154,8 +157,13 @@ export async function unpackPackage(
   destination: string,
   create: (path: string) => Promise<FileHandle>,
   signal?: AbortSignal,
+  progress?: PackageProgressReporter,
 ): Promise<PackageManifest> {
   const { manifest, start } = await readPackageHeader(input, signal);
+  progress?.start(
+    manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
+    manifest.entries.length,
+  );
   await checkSpace(
     destination,
     manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
@@ -163,6 +171,7 @@ export async function unpackPackage(
   let position = start;
   for (const entry of manifest.entries) {
     signal?.throwIfAborted();
+    progress?.file(entry.path);
     const output = await create(entry.path);
     const hash = createHash('sha256');
     try {
@@ -174,13 +183,16 @@ export async function unpackPackage(
           signal,
         );
         hash.update(chunk);
-        await writeAll(output, chunk, signal);
+        await writeAll(output, chunk, signal, (bytes) =>
+          progress?.written(bytes),
+        );
         position += chunk.length;
         remaining -= chunk.length;
       }
       if (hash.digest('hex') !== entry.sha256)
         throw new Error(`项目包文件校验失败：${entry.path}`);
       await output.sync();
+      progress?.verified();
     } finally {
       await output.close();
     }
@@ -193,8 +205,13 @@ export async function packProject(
   manifest: PackageManifest,
   source: (entry: PackageEntry) => Promise<string>,
   signal?: AbortSignal,
+  progress?: PackageProgressReporter,
 ): Promise<void> {
   validateManifest(manifest);
+  progress?.start(
+    manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
+    manifest.entries.length,
+  );
   const bytes = Buffer.from(JSON.stringify(manifest));
   if (bytes.length > MAX_MANIFEST_BYTES)
     throw new Error('项目包清单体积超出支持范围');
@@ -205,6 +222,7 @@ export async function packProject(
   await writeAll(output, bytes, signal);
   for (const entry of manifest.entries) {
     signal?.throwIfAborted();
+    progress?.file(entry.path);
     const input = await open(
       await source(entry),
       constants.O_RDONLY | constants.O_NOFOLLOW,
@@ -224,7 +242,9 @@ export async function packProject(
         size += chunk.length;
         if (size > entry.size) throw new Error('项目素材正在被修改');
         hash.update(chunk);
-        await writeAll(output, chunk, signal);
+        await writeAll(output, chunk, signal, (bytes) =>
+          progress?.written(bytes),
+        );
       }
       const after = await input.stat();
       if (
@@ -233,11 +253,13 @@ export async function packProject(
         before.mtimeMs !== after.mtimeMs
       )
         throw new Error('项目素材校验失败，请等待保存完成后重试');
+      progress?.verified();
     } finally {
       await input.close();
     }
   }
   signal?.throwIfAborted();
+  progress?.update({ phase: 'finalizing', fileName: null });
   await output.sync();
 }
 

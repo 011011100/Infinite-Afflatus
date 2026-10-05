@@ -142,6 +142,10 @@ export class PackageWork {
     if (this.released) return;
     if (this.recovery) {
       await this.recovery.clean(this.id);
+      if (this.recovery.records().some((record) => record.id === this.id))
+        throw new Error(
+          '项目包临时文件尚未清理完毕，已保留清理记录；请确认磁盘可用后重新打开应用',
+        );
       return;
     }
     const root = await lstat(this.root).catch(() => null);

@@ -8,6 +8,7 @@ import {
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { LibrarySession, projectErrorMessage } from './library-session';
 import { projectRecoveryGuards } from './project-recovery-guards';
+import { useProjectPackageOperation } from './use-project-package-operation';
 
 export function useLibrary() {
   const [session] = useState(
@@ -29,7 +30,6 @@ export function useLibrary() {
   const [error, setError] = useState<string | null>(null);
   const [operations, setOperations] = useState(0);
   const activeOperations = useRef(0);
-  const [importingPackage, setImportingPackage] = useState(false);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const report = useCallback(
@@ -43,6 +43,8 @@ export function useLibrary() {
     },
     [session],
   );
+
+  const packageImport = useProjectPackageOperation(report);
 
   const refresh = useCallback(async () => {
     await session.refresh();
@@ -116,13 +118,21 @@ export function useLibrary() {
       const snapshot = await window.desktop.createProject(name);
       session.activate(snapshot);
     });
-  const importPackage = () => {
-    setImportingPackage(true);
-    return run(async () => {
-      const snapshot = await window.desktop.importProjectPackage();
-      if (!snapshot) return;
-      session.activate(snapshot);
-    }).finally(() => setImportingPackage(false));
+  const importPackage = async () => {
+    setError(null);
+    activeOperations.current++;
+    try {
+      await packageImport.run(
+        (requestId) => window.desktop.importProjectPackage(requestId),
+        (snapshot) => {
+          session.activate(snapshot);
+          return `已导入「${snapshot.project.name}」。`;
+        },
+        false,
+      );
+    } finally {
+      activeOperations.current--;
+    }
   };
   const home = () => {
     session.home();
@@ -135,13 +145,12 @@ export function useLibrary() {
     refreshProjectAfterEdit,
     reportProjectFailure: (reason: unknown) => session.failProject(reason),
     error,
-    busy: operations > 0,
+    busy: operations > 0 || packageImport.busy,
     run,
     open,
     create,
     importPackage,
-    importingPackage,
-    cancelPackage: () => run(() => window.desktop.cancelProjectPackage()),
+    packageImport,
     home,
     report,
     clearError: () => setError(null),

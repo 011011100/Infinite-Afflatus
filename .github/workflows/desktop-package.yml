@@ -70,6 +70,9 @@ jobs:
         run: node --import tsx tests/browser/app-backup-recovery.mjs
       - name: Verify ordinary restarts retain the last complete saved staging copy
         run: node tests/browser/saved-staging-preservation.mjs
+      - name: Verify real project package progress, cancellation and saved edits across restarts
+        timeout-minutes: 5
+        run: node tests/browser/project-package-progress.mjs
       - name: Verify partial reference imports preserve successful files and continued editing
         run: node tests/browser/reference-import.cjs
       - name: Verify cancellation and native close during real large-file reference intake

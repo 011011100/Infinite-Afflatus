@@ -14,6 +14,7 @@ import type {
   ProjectSnapshot,
 } from '../../src/shared/models';
 import { projectEditDraftMock } from './project-edit-draft-mock';
+import { projectPackageMock } from './project-package-mock';
 import { workspaceDraftMock } from './workspace-draft-mock';
 import '../../src/renderer/src/styles.css';
 
@@ -81,6 +82,7 @@ const validate = () => {
   if (!available) throw new Error('模拟项目数据库离线');
 };
 window.desktop = {
+  ...projectPackageMock().bridge,
   ...workspaceDraftMock(() => workspace).bridge,
   ...projectEditDraftMock(() => remote).bridge,
   getLibrary: async () => structuredClone(library),

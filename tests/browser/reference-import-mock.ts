@@ -1,4 +1,5 @@
 import type { DesktopBridge } from '../../src/shared/desktop';
+import { projectPackageMock } from './project-package-mock';
 
 /** Independent pause tokens, matching the lifetime of a real leave request. */
 export function referenceImportMock() {
@@ -39,5 +40,5 @@ export function referenceImportMock() {
       pauses.delete(token);
     },
   };
-  return { bridge, pauses };
+  return { bridge: { ...bridge, ...projectPackageMock().bridge }, pauses };
 }

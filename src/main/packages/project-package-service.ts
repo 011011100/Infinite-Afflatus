@@ -39,8 +39,15 @@ import {
   unpackPackage,
   validateManifest,
 } from './package-format';
+import {
+  PackageCancelledError,
+  PackageProgressReporter,
+  type ProjectPackageControls,
+} from './package-progress';
 import { PackageRecovery } from './package-recovery';
 import { PackageWork } from './package-work';
+
+export type { ProjectPackageControls } from './package-progress';
 
 /** Whole operations hold the gate, so migrations and shutdown cannot invalidate their paths. */
 export class ProjectPackageService {
@@ -64,16 +71,24 @@ export class ProjectPackageService {
   }
 
   cancel(): void {
-    this.controller?.abort(new Error('项目包操作已取消'));
+    this.controller?.abort(new PackageCancelledError());
   }
 
   async close(): Promise<void> {
     this.closing = true;
     this.cancel();
-    await this.running?.catch(() => undefined);
+    await this.running?.catch((error: unknown) => {
+      if (!(error instanceof PackageCancelledError)) throw error;
+    });
   }
 
-  private run<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  private run<T>(
+    operation: (
+      signal: AbortSignal,
+      progress: PackageProgressReporter,
+    ) => Promise<T>,
+    controls: ProjectPackageControls = {},
+  ): Promise<T> {
     if (this.closing)
       return Promise.reject(new Error('应用正在关闭，无法处理项目包'));
     if (this.running)
@@ -82,25 +97,45 @@ export class ProjectPackageService {
       );
     const controller = new AbortController();
     this.controller = controller;
+    const progress = new PackageProgressReporter(controls.onProgress);
+    const abort = () => controller.abort(new PackageCancelledError());
+    controls.signal?.addEventListener('abort', abort, { once: true });
+    if (controls.signal?.aborted) abort();
     const result = this.gate.run(async () => {
       controller.signal.throwIfAborted();
-      try {
-        return await operation(controller.signal);
-      } catch (error) {
-        if (controller.signal.aborted) throw controller.signal.reason;
-        throw error;
-      }
+      progress.update({ phase: 'preparing' });
+      return operation(controller.signal, progress);
     });
-    const completed = result.finally(() => {
-      this.running = null;
-      this.controller = null;
-    });
+    const completed = result
+      .then(
+        (value) => {
+          progress.update({ phase: 'completed', canCancel: false });
+          return value;
+        },
+        (error: unknown) => {
+          progress.update({
+            phase:
+              error instanceof PackageCancelledError ? 'cancelled' : 'failed',
+            canCancel: false,
+          });
+          throw error;
+        },
+      )
+      .finally(() => {
+        controls.signal?.removeEventListener('abort', abort);
+        this.running = null;
+        this.controller = null;
+      });
     this.running = completed;
+    progress.update({ phase: 'waiting' });
     return completed;
   }
 
-  inspect(projectId: string): Promise<ProjectPackageInfo> {
-    return this.run(async (signal) => {
+  inspect(
+    projectId: string,
+    controls?: ProjectPackageControls,
+  ): Promise<ProjectPackageInfo> {
+    return this.run(async (signal, progress) => {
       const database = await this.projects.databasePath(projectId);
       const databaseSize = (await lstat(database)).size;
       if (databaseSize > MAX_DATABASE_BYTES)
@@ -109,23 +144,28 @@ export class ProjectPackageService {
       if (snapshot.project.id !== projectId)
         throw new Error('项目文件与索引不匹配');
       let bytes = databaseSize;
+      progress.update({ phase: 'verifying', totalFiles: entries.length });
       for (const entry of entries) {
         signal.throwIfAborted();
         const path = await safeFile(dirname(database), entry.path);
         if ((await lstat(path)).size !== entry.size)
           throw new Error('项目素材缺失或已改变，请修复后导出');
         bytes += entry.size;
+        progress.update({ fileName: entry.path });
+        progress.verified();
       }
+      signal.throwIfAborted();
       if (bytes > MAX_PACKAGE_BYTES) throw new Error('项目包体积超出支持范围');
       return this.info(snapshot, bytes);
-    });
+    }, controls);
   }
 
   export(
     projectId: string,
     destination: string,
+    controls?: ProjectPackageControls,
   ): Promise<ProjectPackageExport> {
-    return this.run(async (signal) => {
+    return this.run(async (signal, progress) => {
       if (
         typeof destination !== 'string' ||
         !destination.trim() ||
@@ -176,11 +216,17 @@ export class ProjectPackageService {
                 entry.path,
               ),
             signal,
+            progress,
           );
         } finally {
           await output.close();
         }
         signal.throwIfAborted();
+        progress.update({
+          phase: 'finalizing',
+          canCancel: false,
+          fileName: null,
+        });
         // Publish atomically without ever replacing a prior backup or exposing incomplete bytes.
         try {
           await link(temporary, path);
@@ -200,11 +246,14 @@ export class ProjectPackageService {
       } finally {
         await work.cleanup();
       }
-    });
+    }, controls);
   }
 
-  import(path: string): Promise<ProjectSnapshot> {
-    return this.run(async (signal) => {
+  import(
+    path: string,
+    controls?: ProjectPackageControls,
+  ): Promise<ProjectSnapshot> {
+    return this.run(async (signal, progress) => {
       if ((await lstat(path)).isSymbolicLink())
         throw new Error('项目包不能是符号链接');
       const input = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -219,22 +268,29 @@ export class ProjectPackageService {
           work.root,
           (relativePath) => destination.createFile(relativePath),
           signal,
+          progress,
         );
         const after = await input.stat();
         if (after.size !== before.size || after.mtimeMs !== before.mtimeMs)
           throw new Error('项目包正在被其他程序修改，请稍后重试');
         const database = join(work.root, 'project.sqlite');
+        signal.throwIfAborted();
+        progress.update({ phase: 'verifying', fileName: null });
         const { snapshot } = validatePackageDatabase(database, manifest);
-        return await this.commit(work, snapshot.project.name, signal);
+        return await this.commit(work, snapshot.project.name, signal, progress);
       } finally {
         await input.close();
         await work?.cleanup();
       }
-    });
+    }, controls);
   }
 
-  duplicate(projectId: string, name?: string): Promise<ProjectSnapshot> {
-    return this.run(async (signal) => {
+  duplicate(
+    projectId: string,
+    name?: string,
+    controls?: ProjectPackageControls,
+  ): Promise<ProjectSnapshot> {
+    return this.run(async (signal, progress) => {
       const work = await PackageWork.create(this.store.root, this.recovery);
       try {
         const { snapshot, manifest, original } = await this.prepare(
@@ -246,9 +302,17 @@ export class ProjectPackageService {
           work.root,
           manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
         );
+        const media = manifest.entries.filter(
+          (entry) => entry.path !== 'project.sqlite',
+        );
+        progress.start(
+          media.reduce((sum, entry) => sum + entry.size, 0),
+          media.length,
+        );
         for (const entry of manifest.entries) {
           signal.throwIfAborted();
           if (entry.path === 'project.sqlite') continue;
+          progress.file(entry.path);
           const input = await open(
             await safeFile(original, entry.path),
             constants.O_RDONLY | constants.O_NOFOLLOW,
@@ -271,6 +335,7 @@ export class ProjectPackageService {
                 if (size > entry.size) throw new Error('项目素材正在被修改');
                 hash.update(chunk);
                 await output.writeFile(chunk);
+                progress.written((chunk as Buffer).length);
               }
               if (
                 size !== entry.size ||
@@ -279,6 +344,7 @@ export class ProjectPackageService {
               )
                 throw new Error('项目素材正在被修改');
               await output.sync();
+              progress.verified();
             } finally {
               await output.close();
             }
@@ -290,11 +356,12 @@ export class ProjectPackageService {
           work,
           name ?? `${snapshot.project.name.slice(0, 97)} 副本`,
           signal,
+          progress,
         );
       } finally {
         await work.cleanup();
       }
-    });
+    }, controls);
   }
 
   private async prepare(
@@ -334,8 +401,14 @@ export class ProjectPackageService {
     return { snapshot, manifest, original: dirname(source) };
   }
 
-  private async commit(work: PackageWork, name: string, signal: AbortSignal) {
+  private async commit(
+    work: PackageWork,
+    name: string,
+    signal: AbortSignal,
+    progress: PackageProgressReporter,
+  ) {
     signal.throwIfAborted();
+    progress.update({ phase: 'finalizing', fileName: null });
     const id = randomUUID();
     const project: ProjectSummary = {
       id,
@@ -363,6 +436,7 @@ export class ProjectPackageService {
     const target = inside(this.store.root, id);
     await this.requireMissing(target);
     signal.throwIfAborted();
+    progress.update({ canCancel: false });
     await rename(work.root, target);
     // The journal deliberately retains the former temporary paths. A crash after this
     // atomic rename leaves a complete discoverable project, never a cleanup target.

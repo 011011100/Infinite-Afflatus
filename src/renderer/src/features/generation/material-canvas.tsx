@@ -32,6 +32,7 @@ import {
   capturePendingSaves,
   flushPendingChanges,
 } from '@/features/lifecycle/pending-saves';
+import { pausePackageOperations } from '@/features/projects/package-leave-pause';
 import { isMac } from '@/lib/platform';
 import type {
   ShotHistoryActions,
@@ -114,8 +115,16 @@ export function MaterialCanvas({
   const { closing, requestClose } = usePageMotion(page, onClose, async () => {
     let token: string | null = null;
     const captured = capturePendingSaves();
+    const packages = pausePackageOperations();
     try {
-      token = await window.desktop.prepareReferenceImportsForLeave();
+      const stops = await Promise.allSettled([
+        window.desktop.prepareReferenceImportsForLeave().then((value) => {
+          token = value;
+        }),
+        packages.ready,
+      ]);
+      const failed = stops.find((result) => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
       const completed = await captured;
       const flushed = await flushPendingChanges();
       if (!completed || !flushed) return false;
@@ -124,13 +133,12 @@ export function MaterialCanvas({
       setLocalError(message(reason));
       return false;
     } finally {
-      if (token) {
-        try {
-          await window.desktop.resumeReferenceSaves(token);
-        } catch (reason) {
-          setLocalError(message(reason));
-        }
-      }
+      const releases = await Promise.allSettled([
+        ...(token ? [window.desktop.resumeReferenceSaves(token)] : []),
+        packages.release(),
+      ]);
+      const failed = releases.find((result) => result.status === 'rejected');
+      if (failed?.status === 'rejected') setLocalError(message(failed.reason));
     }
   });
   const model = useMaterialFlow(

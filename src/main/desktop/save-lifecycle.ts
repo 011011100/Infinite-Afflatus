@@ -3,10 +3,16 @@ import { IPC_CHANNELS } from '../../shared/desktop';
 import type { ReferenceImportService } from '../generation/reference-import-service';
 import { SaveRequest } from './save-request';
 
+type LeaveOperations = Pick<
+  ReferenceImportService,
+  'prepareForLeave' | 'resumeAfterLeave' | 'resumeOwner'
+>;
+type LeaveTokens = { references: string | null; packages: string | null };
+
 export class SaveLifecycle {
   private preparation: {
     window: BrowserWindow;
-    ready: Promise<string | null>;
+    ready: Promise<LeaveTokens>;
     result: Promise<boolean>;
   } | null = null;
   private readonly closedOwners = new Set<number>();
@@ -27,10 +33,8 @@ export class SaveLifecycle {
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
     private readonly beforeSave: () => void = () => {},
-    private readonly referenceImports?: Pick<
-      ReferenceImportService,
-      'prepareForLeave' | 'resumeAfterLeave' | 'resumeOwner'
-    >,
+    private readonly referenceImports?: LeaveOperations,
+    private readonly packageRequests?: LeaveOperations,
   ) {
     ipcMain.handle(
       IPC_CHANNELS.saveBeforeLeaveResult,
@@ -72,23 +76,20 @@ export class SaveLifecycle {
     const owner = window.webContents.id;
     const attempt = {
       window,
-      ready:
-        this.referenceImports?.prepareForLeave(owner) ?? Promise.resolve(null),
+      ready: this.prepareOperations(owner),
       result: Promise.resolve(false),
     };
     this.preparation = attempt;
     // Observe failures even when an unresponsive renderer never acknowledges.
     void attempt.ready.catch((error: unknown) => {
-      console.warn('Reference import leave preparation failed:', error);
+      console.warn('File operation leave preparation failed:', error);
     });
     attempt.result = this.requests.request(window).then((saved) => {
       if (!saved) {
         // A timeout returns promptly. Release this lease when cleanup finishes;
         // it must never unlock a later attempt's independent lease.
         void attempt.ready
-          .then((token) => {
-            if (token) this.referenceImports?.resumeAfterLeave(owner, token);
-          })
+          .then((tokens) => this.resumeOperations(owner, tokens))
           .catch(() => undefined);
       }
       if (this.preparation === attempt) this.preparation = null;
@@ -97,11 +98,53 @@ export class SaveLifecycle {
     return attempt.result;
   }
 
+  private async prepareOperations(owner: number): Promise<LeaveTokens> {
+    // Both kinds stop admission before either is awaited. A failed preparation
+    // still waits for the other cleanup, then releases only this attempt's lease.
+    const results = await Promise.allSettled([
+      this.referenceImports?.prepareForLeave(owner) ?? Promise.resolve(null),
+      this.packageRequests?.prepareForLeave(owner) ?? Promise.resolve(null),
+    ]);
+    const tokens: LeaveTokens = {
+      references: results[0].status === 'fulfilled' ? results[0].value : null,
+      packages: results[1].status === 'fulfilled' ? results[1].value : null,
+    };
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (errors.length) {
+      try {
+        this.resumeOperations(owner, tokens);
+      } catch (error) {
+        errors.push(error);
+      }
+      throw new AggregateError(errors, '文件操作未能安全停止');
+    }
+    return tokens;
+  }
+
+  private resumeOperations(owner: number, tokens: LeaveTokens): void {
+    const errors: unknown[] = [];
+    for (const [service, token] of [
+      [this.referenceImports, tokens.references],
+      [this.packageRequests, tokens.packages],
+    ] as const) {
+      try {
+        if (token) service?.resumeAfterLeave(owner, token);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) throw new AggregateError(errors, '未能恢复文件操作');
+  }
+
   protect(window: BrowserWindow, isQuitting: () => boolean): void {
     // macOS can keep the application alive after its only window was closed.
     // Reopening releases leases belonging only to those destroyed windows.
-    for (const owner of this.closedOwners)
+    for (const owner of this.closedOwners) {
       this.referenceImports?.resumeOwner(owner);
+      this.packageRequests?.resumeOwner(owner);
+    }
     this.closedOwners.clear();
     const owner = window.webContents.id;
     window.once('closed', () => this.closedOwners.add(owner));

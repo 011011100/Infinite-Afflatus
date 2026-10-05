@@ -1,15 +1,13 @@
 import { Archive, Copy, Download, LoaderCircle } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
-import { flushPendingChanges } from '@/features/lifecycle/pending-saves';
 import type { ProjectPackageInfo } from '../../../../shared/project-package';
-
-function sizeLabel(bytes: number): string {
-  return bytes >= 1024 ** 3
-    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
-    : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-}
+import {
+  ProjectPackageStatus,
+  packageSizeLabel,
+} from './project-package-status';
+import { useProjectPackageOperation } from './use-project-package-operation';
 
 export function ProjectPackageActions({
   projectId,
@@ -26,51 +24,19 @@ export function ProjectPackageActions({
   const openRef = useRef(open);
   openRef.current = open;
   const [info, setInfo] = useState<ProjectPackageInfo | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const revision = useRef(0);
-  useEffect(() => {
-    revision.current += 1;
-    setInfo(null);
-    setNotice(null);
-    setError(null);
-    setOpen(false);
-    return () => {
-      revision.current += 1;
-    };
-  }, []);
-  const run = async (operation: () => Promise<string | null>) => {
-    const current = revision.current;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      if (!(await flushPendingChanges()))
-        throw new Error('还有修改未保存，请先重试保存。');
-      const result = await operation();
-      if (current === revision.current) setNotice(result);
-    } catch (reason) {
-      if (current === revision.current)
-        setError(
-          reason instanceof Error
-            ? reason.message.replace(
-                /^Error invoking remote method '[^']+': (Error: )?/,
-                '',
-              )
-            : String(reason),
-        );
-      if (!openRef.current) report(reason);
-    } finally {
-      if (current === revision.current) setBusy(false);
-    }
-  };
+  const operation = useProjectPackageOperation((reason) => {
+    if (!openRef.current) report(reason);
+  });
+  const { busy } = operation;
   const inspect = () => {
     setOpen(true);
-    void run(async () => {
-      setInfo(await window.desktop.inspectProjectPackage(projectId));
-      return null;
-    });
+    void operation.run(
+      (requestId) => window.desktop.inspectProjectPackage(projectId, requestId),
+      (value) => {
+        setInfo(value);
+        return null;
+      },
+    );
   };
   return (
     <>
@@ -91,7 +57,7 @@ export function ProjectPackageActions({
         <Modal
           title="项目备份与副本"
           onClose={() => setOpen(false)}
-          error={error}
+          error={operation.error}
         >
           <p className="truncate text-sm font-medium">{projectName}</p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -99,50 +65,24 @@ export function ProjectPackageActions({
           </p>
           {info && (
             <p className="mt-4 rounded-lg bg-muted p-3 text-sm">
-              {info.assetCount} 个素材 · 预计 {sizeLabel(info.bytes)}
+              {info.assetCount} 个素材 · 预计 {packageSizeLabel(info.bytes)}
             </p>
           )}
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             备份不包含可重建缓存或应用设置。导入会创建独立项目，保留现有项目。请选择新的文件名，不覆盖已有备份。
           </p>
-          {notice && (
-            <p
-              role="status"
-              className="mt-4 break-all rounded-lg bg-primary/10 p-3 text-sm"
-            >
-              {notice}
-            </p>
-          )}
-          {busy && (
-            <p
-              role="status"
-              className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"
-            >
-              <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
-              正在读取或复制项目，请稍候…
-            </p>
-          )}
-          {busy && (
-            <Button
-              className="mt-3"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void window.desktop.cancelProjectPackage().catch(report)
-              }
-            >
-              取消处理
-            </Button>
-          )}
+          <ProjectPackageStatus operation={operation} />
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="outline"
               disabled={busy || disabled || !info}
               onClick={() =>
-                void run(async () => {
-                  const copy = await window.desktop.duplicateProject(projectId);
-                  return `已创建「${copy.project.name}」，可返回项目首页打开。`;
-                })
+                void operation.run(
+                  (requestId) =>
+                    window.desktop.duplicateProject(projectId, requestId),
+                  (copy) =>
+                    `已创建「${copy.project.name}」，可返回项目首页打开。`,
+                )
               }
             >
               <Copy />
@@ -151,11 +91,11 @@ export function ProjectPackageActions({
             <Button
               disabled={busy || disabled || !info}
               onClick={() =>
-                void run(async () => {
-                  const path =
-                    await window.desktop.exportProjectPackage(projectId);
-                  return path ? `项目包已保存：${path}` : null;
-                })
+                void operation.run(
+                  (requestId) =>
+                    window.desktop.exportProjectPackage(projectId, requestId),
+                  (path) => `项目包已保存：${path}`,
+                )
               }
             >
               <Download />

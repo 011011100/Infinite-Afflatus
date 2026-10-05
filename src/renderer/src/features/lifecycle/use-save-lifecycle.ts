@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { pausePackageOperations } from '../projects/package-leave-pause';
 import { capturePendingSaves, flushPendingChanges } from './pending-saves';
 
 type SaveAttempt = {
   epoch: number;
   keepFrozen: boolean;
   referencePause: string | null;
+  packages: ReturnType<typeof pausePackageOperations>;
   promise: Promise<boolean>;
 };
 
-async function releaseReferencePause(attempt: SaveAttempt): Promise<void> {
-  const token = attempt.referencePause;
-  if (!token) return;
+async function releasePauses(attempt: SaveAttempt): Promise<void> {
+  const reference = attempt.referencePause;
   attempt.referencePause = null;
-  await window.desktop.resumeReferenceSaves(token);
+  const results = await Promise.allSettled([
+    ...(reference ? [window.desktop.resumeReferenceSaves(reference)] : []),
+    attempt.packages.release(),
+  ]);
+  const failed = results.find((result) => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
 }
 
 export function useSaveLifecycle() {
@@ -32,11 +38,13 @@ export function useSaveLifecycle() {
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
     const captured = capturePendingSaves();
+    const packages = pausePackageOperations();
     let successful = false;
     const attempt: SaveAttempt = {
       epoch: currentEpoch,
       keepFrozen: nativeClose,
       referencePause: null,
+      packages,
       promise: Promise.resolve()
         .then(async () => {
           // Long reads/copies share the write gate. Release them before waiting
@@ -46,7 +54,7 @@ export function useSaveLifecycle() {
               attempt.referencePause = token;
             }),
             window.desktop?.cancelProjectHealth?.(),
-            window.desktop?.cancelProjectPackage?.(),
+            packages.ready,
             window.desktop?.cancelExportPreparation?.(),
             window.desktop.cancelStagingOperations(),
           ]);
@@ -84,10 +92,10 @@ export function useSaveLifecycle() {
             !attempt.keepFrozen
           ) {
             try {
-              await releaseReferencePause(attempt);
+              await releasePauses(attempt);
             } catch {
               if (epoch.current === currentEpoch)
-                setError('素材仍在等待保存，请重试保存或重新打开应用。');
+                setError('保存或项目包操作仍暂停，请重试保存或重新打开应用。');
             }
           }
           // After a successful native acknowledgement stay frozen until the
@@ -112,7 +120,7 @@ export function useSaveLifecycle() {
         epoch.current += 1;
         const attempt = pending.current;
         if (attempt)
-          void releaseReferencePause(attempt).catch(() => {
+          void releasePauses(attempt).catch(() => {
             // The existing timeout notice keeps the failed attempt visible.
           });
         setSaving(false);

@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import type { ProjectSummary } from '../../../../shared/models';
+import { ProjectPackageStatus } from './project-package-status';
+import type { ProjectPackageOperationState } from './use-project-package-operation';
 
 export function ProjectHome({
   projects,
@@ -18,16 +20,14 @@ export function ProjectHome({
   onCreate,
   onOpen,
   onImport,
-  importingPackage = false,
-  onCancelImport,
+  packageImport,
 }: {
   projects: ProjectSummary[];
   disabled: boolean;
   onCreate: (name: string) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
   onImport: () => Promise<void>;
-  importingPackage?: boolean;
-  onCancelImport: () => Promise<void>;
+  packageImport: ProjectPackageOperationState;
 }) {
   const [name, setName] = useState('');
   const [query, setQuery] = useState('');
@@ -137,21 +137,7 @@ export function ProjectHome({
             </span>
           </div>
         )}
-        {importingPackage && (
-          <div
-            className="mt-4 flex items-center gap-3 rounded-lg border bg-background p-3 text-sm"
-            role="status"
-          >
-            <span>正在读取项目包并复制素材…</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void onCancelImport()}
-            >
-              取消导入
-            </Button>
-          </div>
-        )}
+        <ProjectPackageStatus operation={packageImport} />
         {projects.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
             还没有项目。创建后，随时可以回来继续。

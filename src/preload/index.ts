@@ -60,8 +60,22 @@ const desktop: DesktopBridge = {
       ipcRenderer.removeListener(IPC_CHANNELS.projectHealthProgress, changed);
     };
   },
-  cancelProjectPackage: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.cancelProjectPackage),
+  cancelProjectPackage: (requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelProjectPackage, requestId),
+  onProjectPackageProgress: (listener) => {
+    const progress = (
+      _event: Electron.IpcRendererEvent,
+      value: Parameters<typeof listener>[0],
+    ) => listener(value);
+    ipcRenderer.on(IPC_CHANNELS.projectPackageProgress, progress);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.projectPackageProgress, progress);
+    };
+  },
+  preparePackageOperationsForLeave: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.preparePackageOperationsForLeave),
+  resumePackageOperations: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.resumePackageOperations, token),
   onLeaveCancelled: (listener) => {
     const cancel = () => listener();
     ipcRenderer.on(IPC_CHANNELS.leaveCancelled, cancel);
@@ -86,14 +100,14 @@ const desktop: DesktopBridge = {
       ipcRenderer.removeListener(IPC_CHANNELS.saveBeforeLeave, request);
     };
   },
-  inspectProjectPackage: (id) =>
-    ipcRenderer.invoke(IPC_CHANNELS.inspectProjectPackage, id),
-  exportProjectPackage: (id) =>
-    ipcRenderer.invoke(IPC_CHANNELS.exportProjectPackage, id),
-  importProjectPackage: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.importProjectPackage),
-  duplicateProject: (id) =>
-    ipcRenderer.invoke(IPC_CHANNELS.duplicateProject, id),
+  inspectProjectPackage: (id, requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.inspectProjectPackage, id, requestId),
+  exportProjectPackage: (id, requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.exportProjectPackage, id, requestId),
+  importProjectPackage: (requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.importProjectPackage, requestId),
+  duplicateProject: (id, requestId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.duplicateProject, id, requestId),
   startExport: (projectId, cardId, options) =>
     ipcRenderer.invoke(IPC_CHANNELS.startExport, projectId, cardId, options),
   listExports: () => ipcRenderer.invoke(IPC_CHANNELS.listExports),

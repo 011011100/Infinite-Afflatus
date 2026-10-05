@@ -221,8 +221,7 @@ export function App() {
             onCreate={state.create}
             onOpen={state.open}
             onImport={state.importPackage}
-            importingPackage={state.importingPackage}
-            onCancelImport={state.cancelPackage}
+            packageImport={state.packageImport}
           />
         )}
       </div>
