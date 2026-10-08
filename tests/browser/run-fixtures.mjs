@@ -25,6 +25,7 @@ const available = [
   'project-package-controls',
   'timeline-keyboard-controls',
   'material-keyboard-controls',
+  'save-focus-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

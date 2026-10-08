@@ -1,5 +1,6 @@
 import { type RefObject, useLayoutEffect, useRef } from 'react';
 import { instantMotion } from '@/lib/input-method';
+import { registerModal } from '@/lib/modal-hosts';
 
 type Origin = { x: number; y: number; width: number; height: number };
 export function useGroupStageMotion(
@@ -29,6 +30,7 @@ export function useGroupStageMotion(
     const instant = instantMotion();
     dialog.dataset.instant = String(instant);
     dialog.showModal();
+    const releaseHost = registerModal(dialog);
     void dialog.offsetWidth;
     const frame = requestAnimationFrame(() => {
       if (!closing.current) dialog.dataset.open = 'true';
@@ -45,6 +47,7 @@ export function useGroupStageMotion(
       ),
     );
     return () => {
+      releaseHost();
       alive.current = false;
       cancelAnimationFrame(frame);
       animations.current.forEach((animation) => {

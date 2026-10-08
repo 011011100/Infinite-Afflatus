@@ -117,10 +117,22 @@ export function GroupStage({
   return (
     <dialog
       ref={dialog}
+      closedby="none"
       className="group-stage"
       aria-label={
         group.kind === 'image' ? '图片生成组合编辑' : '视频生成组合编辑'
       }
+      onKeyDown={(event) => {
+        if (
+          event.key !== 'Escape' ||
+          event.defaultPrevented ||
+          event.nativeEvent.isComposing
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         requestClose();
@@ -167,11 +179,14 @@ export function GroupStage({
                 : '已保存'}
         </span>
       </header>
-      {unavailableNotice && (
-        <div className="absolute inset-x-8 top-20 z-20 rounded-lg overflow-hidden shadow-sm">
-          {unavailableNotice}
-        </div>
-      )}
+      <div className="absolute inset-x-8 top-20 z-30 space-y-2">
+        <div data-save-status-host className="empty:hidden" />
+        {unavailableNotice && (
+          <div className="rounded-lg overflow-hidden shadow-sm">
+            {unavailableNotice}
+          </div>
+        )}
+      </div>
       {error && (
         <p role="alert" className="group-stage-error">
           {error}

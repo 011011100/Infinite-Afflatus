@@ -505,8 +505,28 @@ async function restartFailure(c) {
       );
     }, 'real independent durable keyboard draft');
     sameDocument(retained.workspace, c.expected.workspace);
-    await c.click('返回主画布');
-    await c.sleep(150);
+    const back = `${page} > header > button`;
+    assert.equal(
+      await c.run(`document.querySelector(${JSON.stringify(back)}).disabled`),
+      false,
+      'The return button remains available while project editing is blocked',
+    );
+    await c.nativeClick(back);
+    await c.waitFor(
+      () =>
+        c.run(
+          `!document.querySelector(${JSON.stringify(back)}).disabled&&!document.querySelector(${JSON.stringify(page)}).inert`,
+        ),
+      'failed material return restores its enabled control',
+    );
+    await c.frame();
+    assert.equal(
+      await c.run(
+        `document.activeElement===document.querySelector(${JSON.stringify(back)})`,
+      ),
+      true,
+      'Failed local save restores the real return button focus',
+    );
     assert.equal(
       await c.run(`!!document.querySelector(${JSON.stringify(page)})`),
       true,
@@ -522,6 +542,14 @@ async function restartFailure(c) {
       'native close refuses unsaved keyboard draft',
     );
     assert.equal(c.window.isDestroyed(), false);
+    await c.frame();
+    assert.equal(
+      await c.run(
+        `document.activeElement===document.querySelector(${JSON.stringify(back)})`,
+      ),
+      true,
+      'Failed native close restores the still-enabled return button',
+    );
     assert.equal(
       await c.hash(displaced),
       original,
@@ -542,10 +570,62 @@ async function restartFailure(c) {
     'original project recovery accepted',
   );
   await saved(c, c.expected.workspace.revision);
+  const textarea = `${nodeSelector(c.seed.ids.text)} textarea`;
+  await c.waitFor(
+    () =>
+      c.run(`!document.querySelector(${JSON.stringify(textarea)}).disabled`),
+    'restoring the original database makes the text editor available again',
+  );
+  await c.focus(textarea);
+  await c.run(`(() => {
+    const target=document.querySelector(${JSON.stringify(textarea)});
+    window.keyboardSaveTextArea=target;
+    target.setSelectionRange(1,4,'backward');
+  })()`);
+  const readSelection = () =>
+    c.run(`(() => {
+    const target=document.querySelector(${JSON.stringify(textarea)});
+    return {focused:document.activeElement===target,same:target===window.keyboardSaveTextArea,
+      value:target.value,start:target.selectionStart,end:target.selectionEnd,direction:target.selectionDirection};
+  })()`);
+  const insert = async (value) => {
+    const before = await readSelection();
+    assert.equal(
+      before.focused,
+      true,
+      'Continue real text input without refocusing',
+    );
+    assert.equal(before.same, true, 'The original textarea stays mounted');
+    const expected =
+      before.value.slice(0, before.start) +
+      value +
+      before.value.slice(before.end);
+    at(c, c.seed.ids.text).text = expected;
+    await c.run(`document.querySelector(${JSON.stringify(textarea)}).addEventListener('input',event=>{
+      window.keyboardTextInput={trusted:event.isTrusted,intended:event.target===window.keyboardSaveTextArea};
+    },{once:true})`);
+    await c.window.webContents.insertText(value);
+    await c.waitFor(
+      () =>
+        c.run(
+          `document.querySelector(${JSON.stringify(textarea)}).value===${JSON.stringify(expected)}`,
+        ),
+      'native text input is displayed',
+    );
+    assert.deepEqual(await c.run('window.keyboardTextInput'), {
+      trusted: true,
+      intended: true,
+    });
+  };
+  await insert('原库恢复后');
+  await c.run(
+    `document.querySelector(${JSON.stringify(textarea)}).setSelectionRange(1,5,'backward')`,
+  );
+  const selectionBeforeRetry = await readSelection();
   // The material error and global leave failure can briefly expose two buttons
   // with this label while the successful DB write finishes draft acknowledgement.
   // Retry the global native-close failure, not the material-only save handler.
-  const leaveRetry = 'body > div[role="alert"] button';
+  const leaveRetry = '[data-save-retry]';
   assert.equal(
     await c.run(
       `document.querySelector(${JSON.stringify(leaveRetry)}).closest('[role="alert"]').textContent.includes('仍有修改未保存')`,
@@ -557,10 +637,18 @@ async function restartFailure(c) {
     () => c.run('!document.body.textContent.includes("仍有修改未保存")'),
     'native close failure cleared',
   );
+  await c.frame();
+  assert.deepEqual(
+    await readSelection(),
+    selectionBeforeRetry,
+    'Global retry restores the same textarea, backward selection and live content',
+  );
+  sameDocument(await workspace(c), c.expected.workspace);
+  await insert('继续编辑');
   await returnHome(c);
   await saveExpected(c);
   console.log(
-    'PASS keyboard storage fault: actual SQLite loss, durable target positions, failed material return and native close retain editor; original database retry saves draft without changing unrelated fields',
+    'PASS keyboard storage fault: actual SQLite loss and durable positions; failed real return and native close restore enabled-button focus; original database recovery, native text input and global retry restore the same backward selection, continued text persists without changing unrelated fields',
   );
 }
 

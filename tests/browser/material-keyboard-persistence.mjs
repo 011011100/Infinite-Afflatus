@@ -113,6 +113,6 @@ await withFixture('afflatus-material-keyboard-', async (base, log) => {
       );
   }
   console.log(
-    'PASS material keyboard persistence: four production processes; default/custom steps and undo/redo, cleared arrows without transient drift, group-relative clamp and pinned label, SQLite-loss dirty-close refusal and recovery, native close/reopen, settings and source/unrelated database preservation',
+    'PASS material keyboard persistence: four production processes; default/custom steps and undo/redo, cleared arrows without transient drift, group-relative clamp and pinned label, SQLite-loss dirty-close refusal and enabled-button focus recovery, native text and backward selection across global retry, continued input across reopen, settings and source/unrelated database preservation',
   );
 });

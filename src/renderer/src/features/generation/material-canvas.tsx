@@ -16,7 +16,7 @@ import {
   Ungroup,
   Upload,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HistoryActions } from '@/components/canvas/history-actions';
@@ -27,6 +27,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { usePageFocus } from '@/components/ui/use-page-focus';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import {
   capturePendingSaves,
@@ -190,17 +191,7 @@ export function MaterialCanvas({
     blocked,
     beginImport,
   );
-  useEffect(() => {
-    const root = document.getElementById('root');
-    const focused = document.activeElement;
-    if (root) root.inert = true;
-    page.current?.focus();
-    return () => {
-      if (root) root.inert = false;
-      if (focused instanceof HTMLElement && focused.isConnected)
-        focused.focus({ preventScroll: true });
-    };
-  }, []);
+  usePageFocus(page);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
     if (recovering) return;
@@ -258,6 +249,7 @@ export function MaterialCanvas({
   return createPortal(
     <section
       ref={page}
+      data-focus-scope
       tabIndex={-1}
       aria-label={`${shot.name}素材子画布`}
       className="fixed inset-0 z-50 flex min-h-0 flex-col bg-canvas outline-none"

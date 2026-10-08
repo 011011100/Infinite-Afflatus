@@ -1,5 +1,6 @@
 import { type RefObject, useEffect, useRef } from 'react';
 import { instantMotion } from '@/lib/input-method';
+import { registerModal } from '@/lib/modal-hosts';
 
 export function useModalMotion(
   ref: RefObject<HTMLDialogElement | null>,
@@ -24,12 +25,14 @@ export function useModalMotion(
     checking.current = false;
     modal.inert = false;
     modal.showModal();
+    const releaseHost = registerModal(modal);
     // Establish the initial scale/opacity before applying the open state.
     void modal.offsetWidth;
     const frame = requestAnimationFrame(() => {
       if (!closing.current) modal.classList.add('is-open');
     });
     return () => {
+      releaseHost();
       epoch.current++;
       checking.current = false;
       cancelAnimationFrame(frame);

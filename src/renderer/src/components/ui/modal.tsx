@@ -26,7 +26,19 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      closedby="none"
       aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (
+          event.key !== 'Escape' ||
+          event.defaultPrevented ||
+          event.nativeEvent.isComposing
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         requestClose();
@@ -48,6 +60,7 @@ export function Modal({
         </Button>
       </header>
       <div className="p-6">
+        <div data-save-status-host className="mb-4 empty:hidden" />
         {error && (
           <p
             role="alert"

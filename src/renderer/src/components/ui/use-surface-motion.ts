@@ -5,6 +5,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  captureFocus,
+  type FocusSnapshot,
+  restoreFocusAfterCommit,
+} from '@/lib/focus-restoration';
+import { acquireInert } from '@/lib/inert-lease';
 import { instantMotion } from '@/lib/input-method';
 
 function timing(element: HTMLElement, closing = false) {
@@ -54,21 +60,40 @@ export function usePageMotion(
   callbacks.current = { onClose, beforeClose };
   const alive = useRef(false);
   const pending = useRef(false);
+  const epoch = useRef(0);
+  const releaseClose = useRef<(() => void) | null>(null);
   const [closing, setClosing] = useState(false);
+  const [restore, setRestore] = useState<{
+    epoch: number;
+    focus: FocusSnapshot | null;
+  } | null>(null);
   useLayoutEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      epoch.current += 1;
+      releaseClose.current?.();
+      releaseClose.current = null;
     };
   }, []);
+  useLayoutEffect(() => {
+    if (closing || !restore) return;
+    return restoreFocusAfterCommit(restore.focus, {
+      isCurrent: () =>
+        alive.current && !pending.current && epoch.current === restore.epoch,
+      fallback: ref.current,
+    });
+  }, [closing, restore, ref]);
   const requestClose = useCallback(async () => {
     const element = ref.current;
     if (!element || pending.current) return;
     pending.current = true;
+    const currentEpoch = ++epoch.current;
     setClosing(true);
     // Block edits during the final save as well as the exit; stop audio immediately.
-    const focused = document.activeElement;
-    element.inert = true;
+    const focus = captureFocus();
+    const release = acquireInert(element);
+    releaseClose.current = release;
     element
       .querySelectorAll<HTMLMediaElement>('video,audio')
       .forEach((media) => {
@@ -100,11 +125,11 @@ export function usePageMotion(
       }
     } finally {
       if (alive.current && !dismiss) {
-        element.inert = false;
+        release();
+        releaseClose.current = null;
         pending.current = false;
         setClosing(false);
-        if (focused instanceof HTMLElement && focused.isConnected)
-          focused.focus({ preventScroll: true });
+        setRestore({ epoch: currentEpoch, focus });
       }
     }
   }, [ref, animation]);

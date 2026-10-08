@@ -1,7 +1,8 @@
 import { ArrowLeft, LoaderCircle, Redo2, Undo2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { usePageFocus } from '@/components/ui/use-page-focus';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import { ExportButton } from '@/features/export/export-dialog';
 import type { VideoMetadata } from '../video-metadata';
@@ -17,19 +18,11 @@ export function SequenceEditor(props: EditorProps) {
   );
   const page = useRef<HTMLDivElement>(null);
   const { closing, requestClose } = usePageMotion(page, props.onClose);
-  useEffect(() => {
-    const root = document.getElementById('root');
-    const focus = document.activeElement;
-    if (root) root.inert = true;
-    page.current?.focus();
-    return () => {
-      if (root) root.inert = false;
-      if (focus instanceof HTMLElement && focus.isConnected) focus.focus();
-    };
-  }, []);
+  usePageFocus(page);
   return createPortal(
     <section
       ref={page}
+      data-focus-scope
       tabIndex={-1}
       className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background outline-none"
       aria-label="视频播放与编辑"

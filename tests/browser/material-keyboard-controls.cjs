@@ -21,8 +21,9 @@ writeFileSync(
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
-    width: 1400,
-    height: 950,
+    // Keep the offscreen-node focus panning exercised on local and CI screens.
+    width: 1024,
+    height: 673,
     show: true,
     webPreferences: { backgroundThrottling: false },
   });
@@ -51,6 +52,7 @@ app.whenReady().then(async () => {
     throw Error(`Timed out: ${label}`);
   };
   const focus = async (selector) => {
+    app.focus({ steal: true });
     win.focus();
     wc.focus();
     await run(
@@ -446,12 +448,23 @@ app.whenReady().then(async () => {
       // comparison after that real focus update, before activating the marker.
       await painted();
       const beforeJump = (await state()).current;
+      // The earlier fixed-label keyboard test can already have centered pinned
+      // on a small screen. Start with far, then return to pinned from elsewhere.
+      const markerId = labelKey === 'L' ? 'far' : 'pinned';
+      const alignment = () =>
+        run(
+          `(()=>{const area=document.querySelector('.react-flow').getBoundingClientRect();const label=document.querySelector(${JSON.stringify(node(markerId))}).getBoundingClientRect();return {dx:label.x+label.width/2-area.x-area.width/2,dy:label.y+label.height/2-area.y-area.height/2,viewport:materialKeys.state().current.viewport}})()`,
+        );
+      const beforeAlignment = await alignment();
+      assert.ok(
+        Math.hypot(beforeAlignment.dx, beforeAlignment.dy) > 20,
+        `locator target must begin away from the center: ${JSON.stringify(beforeAlignment)}`,
+      );
       wc.sendInputEvent({ type: 'keyDown', keyCode: labelKey });
       await wait(
         '!!document.querySelector("nav[aria-label=标签位置]")',
         'held label markers visible',
       );
-      const markerId = labelKey === 'L' ? 'pinned' : 'far';
       const marker = `nav[aria-label=标签位置] button[data-label-id=${markerId}]`;
       await focus(marker);
       await painted();
@@ -509,6 +522,13 @@ app.whenReady().then(async () => {
         `JSON.stringify(materialKeys.state().current.viewport)!==${JSON.stringify(JSON.stringify(beforeJump.viewport))}`,
         'real marker click changes camera',
       );
+      await painted();
+      const afterAlignment = await alignment();
+      assert.ok(
+        Math.hypot(afterAlignment.dx, afterAlignment.dy) < 1,
+        `locator arrives at the target center: ${JSON.stringify(afterAlignment)}`,
+      );
+      assert.equal(afterAlignment.viewport.zoom, beforeJump.viewport.zoom);
       assert.deepEqual((await state()).current.nodes, beforeJump.nodes);
       assert.equal(await run('materialKeys.flush()'), true);
       assert.deepEqual(
