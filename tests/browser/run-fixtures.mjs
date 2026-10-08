@@ -26,6 +26,7 @@ const available = [
   'timeline-keyboard-controls',
   'material-keyboard-controls',
   'save-focus-controls',
+  'material-search-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

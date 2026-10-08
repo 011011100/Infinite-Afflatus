@@ -32,5 +32,23 @@ export function withMovementDefaults(
       ? null
       : { ...binding };
   }
+  return withFindMaterialsDefault(next);
+}
+
+export function withFindMaterialsDefault(
+  settings: InteractionSettings,
+): InteractionSettings {
+  const next = structuredClone(settings);
+  if (Object.hasOwn(next.shortcuts, 'findMaterials')) return next;
+  const binding = { key: 'k', mod: true, shift: false, alt: false };
+  const conflict = Object.values(next.shortcuts).some(
+    (other: Shortcut | null) =>
+      other &&
+      other.key === binding.key &&
+      other.mod === binding.mod &&
+      other.shift === binding.shift &&
+      other.alt === binding.alt,
+  );
+  next.shortcuts.findMaterials = conflict ? null : binding;
   return next;
 }

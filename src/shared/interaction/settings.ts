@@ -19,6 +19,7 @@ export function defaultInteractionSettings(): InteractionSettings {
     longPressSplit: true,
     shortcuts: {
       locateLabels: { key: 'l', mod: false, shift: false, alt: false },
+      findMaterials: { key: 'k', mod: true, shift: false, alt: false },
       play: { key: 'Space', mod: false, shift: false, alt: false },
       split: { key: 'g', mod: true, shift: true, alt: false },
       undo: { key: 'z', mod: true, shift: false, alt: false },
@@ -75,7 +76,11 @@ export function upgradeInteractionSettings(
     typeof next.shortcuts === 'object'
   ) {
     const defaults = defaultInteractionSettings().shortcuts;
-    for (const action of ['locateLabels', ...MOVE_SHORTCUT_ACTIONS] as const) {
+    for (const action of [
+      'locateLabels',
+      ...MOVE_SHORTCUT_ACTIONS,
+      'findMaterials',
+    ] as const) {
       if (Object.hasOwn(next.shortcuts, action)) continue;
       const binding = defaults[action];
       const conflict =

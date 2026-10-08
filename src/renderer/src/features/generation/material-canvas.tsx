@@ -11,6 +11,7 @@ import {
   FolderOpen,
   LoaderCircle,
   Plus,
+  Search,
   Tag,
   Type,
   Ungroup,
@@ -27,6 +28,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { usePageFocus } from '@/components/ui/use-page-focus';
 import { usePageMotion } from '@/components/ui/use-surface-motion';
 import {
@@ -41,9 +47,10 @@ import type {
 } from '../../../../shared/generation/shot-history';
 import type { ShotWorkspace } from '../../../../shared/generation/workspace';
 import { defaultInteractionSettings } from '../../../../shared/interaction/settings';
-import type {
-  Shortcut,
-  Shortcuts,
+import {
+  formatShortcut,
+  type Shortcut,
+  type Shortcuts,
 } from '../../../../shared/interaction/shortcuts';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import { message } from './errors';
@@ -58,6 +65,8 @@ import { MaterialSelectionFrame } from './material-selection-frame';
 import { ReferenceImportStatus } from './reference-import-status';
 import type { ReferenceImportTarget } from './reference-import-target';
 import { ReferencePicker } from './reference-picker';
+import { MaterialSearchDialog } from './search/material-search-dialog';
+import { useMaterialSearch } from './search/use-material-search';
 import { useMaterialActions } from './use-material-actions';
 import { type MaterialCanvasNode, useMaterialFlow } from './use-material-flow';
 import { useMaterialGroupHover } from './use-material-group-hover';
@@ -218,10 +227,21 @@ export function MaterialCanvas({
   const editingGroup = shot.groups.find(
     (group) => group.id === model.activeGroup,
   );
+  const search = useMaterialSearch({
+    shot,
+    assets: snapshot.assets,
+    disabled: disabled || recovering || picker || !!editingGroup,
+    page,
+    area,
+    flow,
+    select: model.setSelected,
+    cancelNavigation: navigation.cancel,
+    update: onChange,
+  });
   const hoverGroup = useMaterialGroupHover({
     shot,
     assets: snapshot.assets,
-    disabled: disabled || picker || !!editingGroup,
+    disabled: disabled || picker || search.open || !!editingGroup,
     flow,
     area,
     join: model.join,
@@ -232,7 +252,7 @@ export function MaterialCanvas({
     page,
     history,
     scopedShortcuts,
-    disabled || picker || selection.open,
+    disabled || picker || search.open || selection.open,
     () => {
       navigation.cancel();
       model.resetTransient();
@@ -242,6 +262,7 @@ export function MaterialCanvas({
       model.moveSelected(delta);
     },
     !!editingGroup,
+    search.show,
   );
   const historyActions = history
     ? { ...history, undo: undoRedo.undo, redo: undoRedo.redo }
@@ -283,7 +304,7 @@ export function MaterialCanvas({
           >
             <HistoryActions
               {...historyActions}
-              disabled={disabled || picker || !!editingGroup}
+              disabled={disabled || picker || search.open || !!editingGroup}
               shortcuts={shortcuts}
               isMac={isMac}
             />
@@ -423,7 +444,7 @@ export function MaterialCanvas({
               labels={shot.labels ?? []}
               shortcut={resolvedLabelShortcut}
               held={undoRedo.labelsHeld}
-              disabled={disabled || picker || !!editingGroup}
+              disabled={disabled || picker || search.open || !!editingGroup}
               jump={navigation.jump}
               cancel={navigation.cancel}
             />
@@ -457,6 +478,26 @@ export function MaterialCanvas({
                   <FolderOpen />
                   项目素材
                 </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="查找镜头素材"
+                        disabled={disabled || recovering}
+                        onClick={search.show}
+                      />
+                    }
+                  >
+                    <Search />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    查找镜头素材
+                    {shortcuts.findMaterials &&
+                      ` · ${formatShortcut(shortcuts.findMaterials, isMac)}`}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </Panel>
             {model.grouping.materials.length > 0 &&
@@ -554,9 +595,19 @@ export function MaterialCanvas({
           projectId={snapshot.project.id}
           assets={snapshot.assets}
           selectedIds={[]}
-          remaining={24}
+          remaining={Math.min(24, Math.max(0, 500 - shot.nodes.length))}
+          disabled={disabled || recovering}
           onAdd={addAssets}
           onClose={() => setPicker(false)}
+        />
+      )}
+      {search.open && (
+        <MaterialSearchDialog
+          shot={shot}
+          assets={snapshot.assets}
+          disabled={disabled || recovering}
+          onChoose={search.choose}
+          onClose={search.close}
         />
       )}
       {editingGroup && (

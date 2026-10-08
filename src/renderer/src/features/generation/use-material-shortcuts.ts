@@ -29,6 +29,7 @@ export function useMaterialShortcuts(
   reset: () => void,
   move: (delta: Readonly<Point>) => void,
   keyboardInactive = false,
+  find?: () => void,
 ) {
   const pointer = useRef<number | null>(null);
   const [heldShortcut, setHeldShortcut] = useState<Shortcut | null>(null);
@@ -36,8 +37,15 @@ export function useMaterialShortcuts(
     !!heldShortcut &&
     !!shortcuts.locateLabels &&
     sameShortcut(heldShortcut, shortcuts.locateLabels);
-  const latest = useRef({ history, disabled, reset, move, keyboardInactive });
-  latest.current = { history, disabled, reset, move, keyboardInactive };
+  const latest = useRef({
+    history,
+    disabled,
+    reset,
+    move,
+    keyboardInactive,
+    find,
+  });
+  latest.current = { history, disabled, reset, move, keyboardInactive, find };
   const perform = (direction: 'undo' | 'redo') => {
     const current = latest.current;
     if (
@@ -130,6 +138,20 @@ export function useMaterialShortcuts(
         !!document.querySelector(
           'dialog[open], [role="dialog"], [role="menu"]',
         );
+      if (action === 'findMaterials') {
+        if (control) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (
+          !unavailable &&
+          !latest.current.disabled &&
+          pointer.current === null
+        ) {
+          setHeldShortcut(null);
+          latest.current.find?.();
+        }
+        return;
+      }
       if (action === 'locateLabels') {
         // The locator and node movement share one capture boundary. Never pass a
         // configured locator arrow down to React Flow's transient movement.

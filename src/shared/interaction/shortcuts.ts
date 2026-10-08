@@ -16,6 +16,7 @@ export const SHORTCUT_ACTIONS = [
   'undo',
   'redo',
   'locateLabels',
+  'findMaterials',
   ...MOVE_SHORTCUT_ACTIONS,
 ] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
@@ -25,6 +26,7 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   undo: '撤销',
   redo: '重做',
   locateLabels: '按住定位标签（素材画布）',
+  findMaterials: '查找镜头素材（素材画布）',
   moveLeft: '向左移动（素材画布）',
   moveRight: '向右移动（素材画布）',
   moveUp: '向上移动（素材画布）',
