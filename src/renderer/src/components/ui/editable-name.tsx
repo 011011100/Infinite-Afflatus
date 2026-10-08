@@ -57,7 +57,7 @@ export function EditableName({
             event.preventDefault();
             commit();
           }
-          if (event.key === 'Escape') {
+          if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
             event.preventDefault();
             setDraft(null);
           }

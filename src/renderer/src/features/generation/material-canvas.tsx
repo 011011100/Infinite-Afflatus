@@ -8,6 +8,7 @@ import {
 } from '@xyflow/react';
 import {
   ArrowLeft,
+  Copy,
   FolderOpen,
   LoaderCircle,
   Plus,
@@ -28,6 +29,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { EditableName } from '@/components/ui/editable-name';
 import {
   Tooltip,
   TooltipContent,
@@ -73,6 +75,7 @@ import { useMaterialGroupHover } from './use-material-group-hover';
 import { useMaterialSelection } from './use-material-selection';
 import { useMaterialShortcuts } from './use-material-shortcuts';
 import { useMaterialViewport } from './use-material-viewport';
+import { useShotDuplicate } from './use-shot-duplicate';
 import './generation.css';
 
 const nodeTypes = {
@@ -98,6 +101,8 @@ export function MaterialCanvas({
   onChange,
   beginImport,
   onClose,
+  onDuplicate,
+  duplicatePending = false,
   beforeClose,
   retry,
 }: {
@@ -116,6 +121,8 @@ export function MaterialCanvas({
   onChange: ShotUpdate;
   beginImport?: () => ReferenceImportTarget | null;
   onClose: () => void;
+  onDuplicate?: () => Promise<boolean>;
+  duplicatePending?: boolean;
   beforeClose: () => Promise<boolean>;
   retry: () => Promise<boolean>;
 }) {
@@ -203,7 +210,7 @@ export function MaterialCanvas({
   usePageFocus(page);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
-    if (recovering) return;
+    if (recovering || duplication.isCopying()) return;
     navigation.cancel();
     await requestClose();
   };
@@ -238,10 +245,23 @@ export function MaterialCanvas({
     cancelNavigation: navigation.cancel,
     update: onChange,
   });
+  const duplicateDisabled =
+    disabled || recovering || picker || search.open || !!editingGroup;
+  const duplication = useShotDuplicate({
+    page,
+    disabled: duplicateDisabled,
+    onDuplicate,
+    report: setLocalError,
+  });
   const hoverGroup = useMaterialGroupHover({
     shot,
     assets: snapshot.assets,
-    disabled: disabled || picker || search.open || !!editingGroup,
+    disabled:
+      disabled ||
+      duplication.copying ||
+      picker ||
+      search.open ||
+      !!editingGroup,
     flow,
     area,
     join: model.join,
@@ -252,7 +272,7 @@ export function MaterialCanvas({
     page,
     history,
     scopedShortcuts,
-    disabled || picker || search.open || selection.open,
+    disabled || duplication.copying || picker || search.open || selection.open,
     () => {
       navigation.cancel();
       model.resetTransient();
@@ -288,15 +308,44 @@ export function MaterialCanvas({
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-5">
         <Button
           variant="ghost"
-          disabled={closing || recovering}
+          disabled={closing || recovering || duplication.copying}
           onClick={() => void close()}
         >
           <ArrowLeft />
           返回主画布
         </Button>
         <span className="h-4 border-l" />
-        <span className="max-w-52 truncate text-sm">{shot.name}</span>
-        <span className="text-xs text-muted-foreground">素材画布</span>
+        <EditableName
+          value={shot.name}
+          label="镜头名称"
+          className="max-w-52 text-sm"
+          disabled={duplicateDisabled}
+          onChange={(name) => onChange((current) => ({ ...current, name }))}
+        />
+        <span className="shrink-0 text-xs text-muted-foreground">素材画布</span>
+        {onDuplicate && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  className="shrink-0"
+                  disabled={duplicateDisabled || duplication.copying}
+                  onClick={() => {
+                    navigation.cancel();
+                    void duplication.duplicate();
+                  }}
+                />
+              }
+            >
+              <Copy />
+              {duplicatePending ? '继续打开副本' : '复制镜头'}
+            </TooltipTrigger>
+            <TooltipContent>
+              保存当前内容并打开独立镜头，复用素材而不复制源文件
+            </TooltipContent>
+          </Tooltip>
+        )}
         {historyActions && (
           <fieldset
             className="ml-1 flex items-center gap-1 border-l pl-2"
@@ -304,7 +353,7 @@ export function MaterialCanvas({
           >
             <HistoryActions
               {...historyActions}
-              disabled={disabled || picker || search.open || !!editingGroup}
+              disabled={duplicateDisabled || duplication.copying}
               shortcuts={shortcuts}
               isMac={isMac}
             />
@@ -314,18 +363,22 @@ export function MaterialCanvas({
           className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
           role="status"
         >
-          {saving && <LoaderCircle className="size-3 animate-spin" />}
-          {recovering
-            ? '正在恢复镜头草稿…'
-            : blocked
-              ? projectUnavailable
-                ? '项目不可用，未保存输入仍在本页'
-                : '迁移中'
-              : error
-                ? '保存失败'
-                : saving
-                  ? '保存中…'
-                  : '已保存'}
+          {(saving || duplication.copying) && (
+            <LoaderCircle className="size-3 animate-spin" />
+          )}
+          {duplication.copying
+            ? '正在复制镜头…'
+            : recovering
+              ? '正在恢复镜头草稿…'
+              : blocked
+                ? projectUnavailable
+                  ? '项目不可用，未保存输入仍在本页'
+                  : '迁移中'
+                : error
+                  ? '保存失败'
+                  : saving
+                    ? '保存中…'
+                    : '已保存'}
         </span>
       </header>
       {unavailableNotice}

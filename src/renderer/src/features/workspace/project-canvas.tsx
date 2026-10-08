@@ -29,6 +29,7 @@ import { useShotWorkspace } from '@/features/generation/use-shot-workspace';
 import { isMac } from '@/lib/platform';
 import { CARD_HEIGHT, cardWidth } from '../../../../shared/canvas/model';
 import { splitSelectedAsset } from '../../../../shared/canvas/operations';
+import { MAX_SHOTS } from '../../../../shared/generation/shot-duplication';
 import { DRAG_THRESHOLD } from '../../../../shared/interaction/long-press';
 import type { InteractionSettings } from '../../../../shared/interaction/settings';
 import type { Asset, ProjectSnapshot } from '../../../../shared/models';
@@ -128,6 +129,16 @@ function CanvasContent({
     Record<string, { width: number; height: number }>
   >({});
   const flow = useRef<ReactFlowInstance<WorkspaceNode> | null>(null);
+  const nextShotPosition = () => ({
+    x: 100,
+    y: Math.max(
+      60,
+      ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
+      ...shots.shots
+        .filter((shot) => !shot.sourceAssetId)
+        .map((shot) => shot.position.y + CARD_HEIGHT + 48),
+    ),
+  });
   const assets = useMemo(
     () => new Map(document.snapshot.assets.map((asset) => [asset.id, asset])),
     [document.snapshot.assets],
@@ -486,20 +497,25 @@ function CanvasContent({
             <Button
               variant="outline"
               className="bg-background shadow-sm"
-              disabled={interactionBlocked || !shots.loaded}
+              disabled={
+                interactionBlocked ||
+                !shots.loaded ||
+                shots.shots.length >= MAX_SHOTS
+              }
+              title={
+                shots.shots.length >= MAX_SHOTS
+                  ? `项目最多容纳 ${MAX_SHOTS} 个镜头`
+                  : undefined
+              }
               onClick={() => {
                 if (isRecovering()) return;
-                const bottom = Math.max(
-                  60,
-                  ...cards.map((card) => card.position.y + CARD_HEIGHT + 48),
-                  ...shots.shots
-                    .filter((shot) => !shot.sourceAssetId)
-                    .map((shot) => shot.position.y + CARD_HEIGHT + 48),
+                const position = nextShotPosition();
+                shots.create(position);
+                void flow.current?.setCenter(
+                  position.x + 144,
+                  position.y + CARD_HEIGHT / 2,
+                  { zoom: 1 },
                 );
-                shots.create({ x: 100, y: bottom });
-                void flow.current?.setCenter(244, bottom + CARD_HEIGHT / 2, {
-                  zoom: 1,
-                });
               }}
             >
               <Plus />
@@ -599,6 +615,22 @@ function CanvasContent({
             shots.activeId ? shots.beginReferenceImport(shots.activeId) : null
           }
           beforeClose={shots.flush}
+          duplicatePending={shots.duplicatePending}
+          onDuplicate={async () => {
+            if (isRecovering() || !shots.activeId) return false;
+            const copy = await shots.duplicate(
+              shots.activeId,
+              nextShotPosition(),
+            );
+            if (!copy) return false;
+            void flow.current?.setCenter(
+              copy.position.x + 144,
+              copy.position.y + CARD_HEIGHT / 2,
+              { zoom: 1 },
+            );
+            setSelection({ cardId: `shot:${copy.id}`, assetId: null });
+            return true;
+          }}
           onClose={shots.dismiss}
           retry={shots.retry}
         />

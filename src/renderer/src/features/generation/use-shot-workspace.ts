@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  duplicateShot,
+  MAX_SHOTS,
+} from '../../../../shared/generation/shot-duplication';
+import {
   type ShotEditOptions,
   ShotHistory,
   type ShotHistoryActions,
@@ -44,6 +48,10 @@ export function useShotWorkspace(
   const locked = useRef(blocked);
   const history = useRef(new ShotHistory());
   const imports = useRef(new Set<symbol>());
+  // Keep a staged copy's identity across save failures. Retrying opens that copy,
+  // even when the ordinary save timer has since persisted it successfully.
+  const copyCandidates = useRef(new Map<string, string>());
+  const copying = useRef<Promise<ShotWorkspace | null> | null>(null);
   locked.current = blocked || recoveringRef.current;
   const flush = useCallback((): Promise<boolean> => {
     if (pending.current) return pending.current;
@@ -91,7 +99,12 @@ export function useShotWorkspace(
     })();
     return pending.current;
   }, [projectId, draftQueue]);
-  usePendingSave(`镜头草稿:${projectId}`, flush, 0, () => pending.current);
+  usePendingSave(
+    `镜头草稿:${projectId}`,
+    () => copying.current?.then(Boolean) ?? flush(),
+    0,
+    () => copying.current?.then(Boolean) ?? pending.current,
+  );
   useProjectRecoveryGuard(projectId, async () => {
     await pending.current;
     const remote = await window.desktop.getGenerationWorkspace(projectId);
@@ -226,7 +239,8 @@ export function useShotWorkspace(
       !current.current ||
       locked.current ||
       edit.current !== saved.current ||
-      pending.current
+      pending.current ||
+      copying.current
     )
       return false;
     recoveringRef.current = true;
@@ -241,6 +255,7 @@ export function useShotWorkspace(
         confirmed.current = value;
         current.current = value;
         history.current = new ShotHistory();
+        copyCandidates.current.clear();
         setActiveId((id) =>
           id && value.shots.some((shot) => shot.id === id) ? id : null,
         );
@@ -315,6 +330,10 @@ export function useShotWorkspace(
       open(existing.id);
       return;
     }
+    if (current.current.shots.length >= MAX_SHOTS) {
+      setError(`项目最多容纳 ${MAX_SHOTS} 个镜头，请在新项目中继续创作。`);
+      return;
+    }
     const id = crypto.randomUUID();
     change((doc) => ({
       ...doc,
@@ -330,6 +349,35 @@ export function useShotWorkspace(
       ],
     }));
     open(id);
+  };
+  const duplicate = (sourceId: string, position: Point) => {
+    if (copying.current) return copying.current;
+    copying.current = (async () => {
+      if (locked.current || !current.current) return null;
+      if (imports.current.size)
+        throw new Error('请完成或取消素材导入后再复制镜头。');
+      if (!(await flush()) || locked.current) return null;
+      const doc = current.current;
+      const source = doc.shots.find((shot) => shot.id === sourceId);
+      if (!source) throw new Error('原镜头已不可用，请返回主画布后重试。');
+      const candidateId = copyCandidates.current.get(sourceId);
+      let copy = doc.shots.find((shot) => shot.id === candidateId);
+      if (!copy) {
+        copy = duplicateShot(source, doc.shots, position);
+        copyCandidates.current.set(sourceId, copy.id);
+        history.current.breakMerge(sourceId);
+        commit({ ...doc, shots: [...doc.shots, copy] });
+      }
+      // A failed write leaves the original view and both drafts available. Never
+      // manufacture another copy to retry the same user's operation.
+      if (!(await flush()) || locked.current) return null;
+      copyCandidates.current.delete(sourceId);
+      open(copy.id);
+      return copy;
+    })().finally(() => {
+      copying.current = null;
+    });
+    return copying.current;
   };
   return {
     shots: workspace?.shots ?? [],
@@ -347,6 +395,8 @@ export function useShotWorkspace(
     activeId,
     open,
     create,
+    duplicate,
+    duplicatePending: !!activeId && copyCandidates.current.has(activeId),
     updateShot,
     beginReferenceImport,
     historyFor: (id: string): ShotHistoryActions => ({

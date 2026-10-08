@@ -62,3 +62,21 @@ B19-06 位于 `material-keyboard-persistence-bootstrap.cjs` 的 `focus`，由 `n
 - 本机日志：`/private/tmp/afflatus-batch20-check-final.log`、`afflatus-batch20-build-final.log`、`afflatus-batch20-unit.log`、`afflatus-batch20-upgrade.log`、`afflatus-batch20-browser-final.log`（查找三组通过，后续选择器注入前提失败）、`afflatus-batch20-picker-complete.log`（仅续跑选择器，两组通过）。
 
 本批未执行云端 API、正式安装包、全量桌面与跨平台桌面验收。B19-05、B19-06、B19-07 的原验收边界保持，不用本批通过结果关闭旧问题。新增 14 动作设置的固定写入基线在本批提交后追加，发布前须纳入升级验收，不能用当前代码伪造旧数据。
+
+## 第二十一批：镜头命名与复用
+
+功能收齐、源码冻结后统一执行静态检查、构建、单元、历史升级和本批镜头复用桌面范围。上一批已通过且未受影响的素材检索、媒体编码、项目包、安装流程不重复执行。
+
+| 编号 | 问题与影响 | 修复／处理 | 状态 |
+| --- | --- | --- | --- |
+| B21-01 | 新复制单元测试的可选字段构造不符合严格 TypeScript 类型：组 ID 映射可能 undefined，旧 kind 显式 undefined 被当作当前业务类型 | 查找结果及可选字段先明确断言，再还原；用 Reflect.set 构造旧字段形状，保留所有原场景和断言 | 已修复；6 项受影响单元、check 与 build 均通过 |
+
+### 首轮通过结果及复用范围
+
+- 单元回归 620 项，617 通过、3 项真实编码默认跳过；新增 6 项复制模型测试和 1 项真实 SQLite 保存／关闭重开测试通过。SQLite 用例核对独立名称、正文、两类参数、原视频关联与共享素材，两个存储服务重开后保持，无关项目数据库与原素材字节保持；并非独立 Electron 进程或媒体解码验证。
+- 固定历史升级 58／58 通过、无跳过。新增 2 项十四动作写入器场景保留自定义查找键和明确禁用，原 56 项与基线未改动。
+- 隔离 Electron 中 8 组镜头复用场景通过、渲染控制台零错误。真实点击／文字输入验证改名与撤销、未按回车的名称进入副本、后续编辑及历史独立；注入原稿／副本保存失败，核对原页保留、整页编辑锁、同一副本身份重试、容量限制和解除阻塞。输入法部分只检查 DOM 组合状态下 Esc 守卫及普通原生 Esc，不宣称真实中文输入法操作已验收。
+- 桌面夹具使用真实 MaterialCanvas、历史与保存队列，桌面存储和媒体接口为隔离替身；本批不把它当作主画布全链路、生产 IPC、云端 API 或正式安装包验证。B19-05／06／07 的原边界保持。
+- 日志：本机 `/private/tmp/afflatus-batch21-unit.log`、`afflatus-batch21-upgrade.log`、`afflatus-batch21-browser.log`。首次检查与构建失败见 `afflatus-batch21-check.log`、`afflatus-batch21-build.log`。本轮没有重复运行其他界面场景、真实编码、项目包和安装流程。
+
+修复仅调整新测试文件的类型构造。最终 `pnpm check` 检查 599 个文件并通过两套类型检查，`pnpm build` 通过；受影响的复制模型 6 项全部通过。结果分别保留在 `afflatus-batch21-check-final.log`、`afflatus-batch21-build-final.log`、`afflatus-batch21-model-final.log`。产品源码没有因验收再改动，完整单元、58 项升级和 8 组界面通过结果直接复用，未重复执行。

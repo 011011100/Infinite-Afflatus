@@ -16,7 +16,12 @@ export function ShotCard({ data, selected }: NodeProps<ShotCardNode>) {
     >
       <div className="flex h-[162px] flex-col items-center justify-center gap-3 bg-muted/50">
         <Clapperboard className="size-8 text-primary/60" />
-        <span className="text-sm font-medium">{data.name}</span>
+        <span
+          className="max-w-full truncate px-4 text-sm font-medium"
+          title={data.name}
+        >
+          {data.name}
+        </span>
         <span className="text-xs text-muted-foreground">
           待生成镜头{data.count ? ` · ${data.count} 个素材` : ''}
         </span>
