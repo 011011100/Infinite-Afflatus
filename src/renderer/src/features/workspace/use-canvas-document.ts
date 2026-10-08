@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { MainCanvasHistory } from '../../../../shared/canvas/main-history';
 import { type CanvasPatch, sameCard } from '../../../../shared/canvas/model';
 import {
   isTrimPatch,
@@ -32,6 +33,7 @@ export function useCanvasDocument(
   blocked: boolean,
   report: (reason: unknown) => void,
   prepareTransition: (patch: CanvasPatch) => (saved: boolean) => void,
+  sharedHistory?: MainCanvasHistory,
 ) {
   const [snapshot, setSnapshot] = useState(initial);
   const confirmed = useRef(initial);
@@ -50,29 +52,20 @@ export function useCanvasDocument(
     ticket: PendingTrimSubmission;
   } | null>(null);
   const acceptedInitial = useRef(initial);
-  const [history, setHistory] = useState<{
-    past: CanvasPatch[];
-    future: CanvasPatch[];
-  }>({ past: [], future: [] });
+  const [localHistory] = useState(() => new MainCanvasHistory());
+  const mainHistory = sharedHistory ?? localHistory;
+  const history = useSyncExternalStore(
+    mainHistory.subscribe,
+    mainHistory.getSnapshot,
+  );
   const writing = useRef(false);
   const pending = useRef<Promise<boolean> | null>(null);
   const settleHistory = useCallback(
     (patch: CanvasPatch, action: CanvasAction) => {
-      setHistory((current) => {
-        if (action === 'undo')
-          return {
-            past: current.past.slice(0, -1),
-            future: [...current.future, reversePatch(patch)],
-          };
-        if (action === 'redo')
-          return {
-            past: [...current.past, patch],
-            future: current.future.slice(0, -1),
-          };
-        return { past: [...current.past.slice(-49), patch], future: [] };
-      });
+      const ticket = mainHistory.begin({ kind: 'video', patch }, action);
+      return ticket?.commit({ kind: 'video', patch: reversePatch(patch) });
     },
-    [],
+    [mainHistory],
   );
   usePendingSave(
     `主画布:${initial.project.id}`,
@@ -138,6 +131,8 @@ export function useCanvasDocument(
       )
         return false;
       if (trimRecovery.hasPendingEdits() && !isTrimPatch(patch)) return false;
+      const historyTicket = mainHistory.begin({ kind: 'video', patch }, action);
+      if (!historyTicket) return false;
       writing.current = true;
       let resolveSave!: (saved: boolean) => void;
       pending.current = new Promise<boolean>((resolve) => {
@@ -167,7 +162,7 @@ export function useCanvasDocument(
         confirmed.current = saved;
         setSnapshot(saved);
         finishTransition(true);
-        settleHistory(patch, action);
+        historyTicket.commit({ kind: 'video', patch: reversePatch(patch) });
         if (trim) await trimRecovery.committed(trim);
         successful = true;
         return true;
@@ -180,29 +175,24 @@ export function useCanvasDocument(
         // after a failed acknowledgement is not permission to adopt another version.
         return false;
       } finally {
+        historyTicket.abort();
         writing.current = false;
         setSaving(false);
         pending.current = null;
         resolveSave(successful);
       }
     },
-    [
-      initial.project.id,
-      report,
-      prepareTransition,
-      settleHistory,
-      trimRecovery,
-    ],
+    [initial.project.id, report, prepareTransition, mainHistory, trimRecovery],
   );
 
   const undo = useCallback(() => {
-    const patch = history.past.at(-1);
-    if (patch) void commit(reversePatch(patch), 'undo');
-  }, [history.past, commit]);
+    const operation = mainHistory.getSnapshot().undo;
+    if (operation?.kind === 'video') void commit(operation.patch, 'undo');
+  }, [mainHistory, commit]);
   const redo = useCallback(() => {
-    const patch = history.future.at(-1);
-    if (patch) void commit(patch, 'redo');
-  }, [history.future, commit]);
+    const operation = mainHistory.getSnapshot().redo;
+    if (operation?.kind === 'video') void commit(operation.patch, 'redo');
+  }, [mainHistory, commit]);
 
   const acceptRecoveredEdit = useCallback(
     (record: ProjectEditDraftRecord, saved: ProjectSnapshot) => {
@@ -263,11 +253,23 @@ export function useCanvasDocument(
       !writing.current && !trimRecovery.hasPendingEdits(),
     acceptRecoveredEdit,
     prepareRecoveredEdit,
-    undoCardId: history.past.at(-1)?.after[0]?.id,
-    redoCardId: history.future.at(-1)?.before[0]?.id,
-    canUndoTrim: isTrimPatch(history.past.at(-1)),
-    canRedoTrim: isTrimPatch(history.future.at(-1)),
-    canUndo: !!history.past.length,
-    canRedo: !!history.future.length,
+    undoCardId:
+      history.undo?.kind === 'video'
+        ? history.undo.patch.before[0]?.id
+        : undefined,
+    redoCardId:
+      history.redo?.kind === 'video'
+        ? history.redo.patch.before[0]?.id
+        : undefined,
+    canUndoTrim:
+      !history.busy &&
+      history.undo?.kind === 'video' &&
+      isTrimPatch(history.undo.patch),
+    canRedoTrim:
+      !history.busy &&
+      history.redo?.kind === 'video' &&
+      isTrimPatch(history.redo.patch),
+    canUndo: !history.busy && history.undo?.kind === 'video',
+    canRedo: !history.busy && history.redo?.kind === 'video',
   };
 }

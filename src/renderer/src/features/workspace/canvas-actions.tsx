@@ -1,4 +1,4 @@
-import { Ungroup } from 'lucide-react';
+import { Trash2, Ungroup } from 'lucide-react';
 import { HistoryActions } from '@/components/canvas/history-actions';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,9 +16,11 @@ export function CanvasActions({
   canUndo,
   canRedo,
   canSplit,
+  canRemove = false,
   undo,
   redo,
   split,
+  remove,
   shortcuts,
   isMac,
 }: {
@@ -26,9 +28,11 @@ export function CanvasActions({
   canUndo: boolean;
   canRedo: boolean;
   canSplit: boolean;
+  canRemove?: boolean;
   undo: () => void;
   redo: () => void;
   split: () => void;
+  remove?: () => void;
   shortcuts: Shortcuts;
   isMac: boolean;
 }) {
@@ -40,6 +44,29 @@ export function CanvasActions({
       <HistoryActions
         {...{ disabled, canUndo, canRedo, undo, redo, shortcuts, isMac }}
       />
+      {canRemove && remove && (
+        <>
+          <span className="mx-1 h-4 w-px bg-border" />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  aria-label="移除镜头"
+                  disabled={disabled}
+                  onClick={remove}
+                />
+              }
+            >
+              <Trash2 />
+              移除镜头
+            </TooltipTrigger>
+            <TooltipContent>
+              从主画布移除镜头；素材文件保留，可在本次项目会话中撤销
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
       {canSplit && (
         <>
           <span className="mx-1 h-4 w-px bg-border" />

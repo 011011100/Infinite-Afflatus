@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  MainCanvasHistory,
+  type MainCanvasHistoryDirection,
+  type MainCanvasHistoryTicket,
+} from '../../../../shared/canvas/main-history';
+import {
   duplicateShot,
   MAX_SHOTS,
 } from '../../../../shared/generation/shot-duplication';
@@ -9,25 +14,38 @@ import {
   type ShotHistoryActions,
 } from '../../../../shared/generation/shot-history';
 import {
+  applyShotListOperation,
+  type ShotListOperation,
+} from '../../../../shared/generation/shot-list-operations';
+import {
   type GenerationWorkspace,
   newShot,
   type Point,
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
-import type { WorkspaceDraftRecord } from '../../../../shared/workspace-draft';
+import {
+  sameWorkspace,
+  type WorkspaceDraftRecord,
+} from '../../../../shared/workspace-draft';
 import { useWorkspaceDrafts } from '../drafts/use-workspace-drafts';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 import { message } from './errors';
 import type { ReferenceImportTarget } from './reference-import-target';
+import { saveWorkspaceSubmission } from './workspace-save-submission';
+
+type WorkspaceSubmission = { submitted: GenerationWorkspace; version: number };
 
 /** One project-scoped save stream, including edits made while an earlier write is pending. */
 export function useShotWorkspace(
   projectId: string,
   blocked: boolean,
   report?: (reason: unknown) => void,
+  sharedHistory?: MainCanvasHistory,
 ) {
+  const [localHistory] = useState(() => new MainCanvasHistory());
+  const mainHistory = sharedHistory ?? localHistory;
   const [workspace, setWorkspace] = useState<GenerationWorkspace | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,7 +70,41 @@ export function useShotWorkspace(
   // even when the ordinary save timer has since persisted it successfully.
   const copyCandidates = useRef(new Map<string, string>());
   const copying = useRef<Promise<ShotWorkspace | null> | null>(null);
+  const listing = useRef<Promise<boolean> | null>(null);
+  const listSubmission = useRef<{
+    version: number;
+    ticket: MainCanvasHistoryTicket;
+    inverse: ShotListOperation;
+  } | null>(null);
+  const unconfirmed = useRef<WorkspaceSubmission | null>(null);
   locked.current = blocked || recoveringRef.current;
+  const confirmSubmission = useCallback(
+    async (result: GenerationWorkspace, attempt: WorkspaceSubmission) => {
+      if (unconfirmed.current !== attempt) return;
+      if (
+        !sameWorkspace(result, {
+          ...attempt.submitted,
+          revision: attempt.submitted.revision + 1,
+        })
+      )
+        throw new Error('镜头保存回执与提交内容不一致，已保留输入与撤销记录。');
+      confirmed.current = result;
+      if (current.current)
+        current.current = { ...current.current, revision: result.revision };
+      unconfirmed.current = null;
+      saved.current = attempt.version;
+      setSavedEdit(attempt.version);
+      const list = listSubmission.current;
+      if (list && attempt.version >= list.version) {
+        listSubmission.current = null;
+        list.ticket.commit({ kind: 'shot', operation: list.inverse });
+      }
+      const settled = draftQueue.confirm(result, current.current ?? result);
+      await draftQueue.flush();
+      if (saved.current === edit.current) await draftQueue.acknowledge(settled);
+    },
+    [draftQueue],
+  );
   const flush = useCallback((): Promise<boolean> => {
     if (pending.current) return pending.current;
     if (!current.current || edit.current === saved.current)
@@ -63,6 +115,26 @@ export function useShotWorkspace(
       try {
         while (current.current && saved.current !== edit.current) {
           if (locked.current) return false;
+          const previous = unconfirmed.current;
+          if (previous) {
+            const remote =
+              await window.desktop.getGenerationWorkspace(projectId);
+            if (unconfirmed.current !== previous) continue;
+            if (
+              sameWorkspace(remote, {
+                ...previous.submitted,
+                revision: previous.submitted.revision + 1,
+              })
+            ) {
+              await confirmSubmission(remote, previous);
+              continue;
+            }
+            if (!confirmed.current || !sameWorkspace(remote, confirmed.current))
+              throw new Error(
+                '磁盘上的镜头草稿与本次提交不一致，已保留输入与撤销记录；未覆盖其他版本。',
+              );
+            unconfirmed.current = null;
+          }
           const version = edit.current;
           const submitted = current.current;
           draftQueue.prepareSubmission(
@@ -73,18 +145,14 @@ export function useShotWorkspace(
           // project transaction from saving the user's work.
           await draftQueue.flush();
           if (locked.current) return false;
-          const result = await window.desktop.saveGenerationWorkspace(
+          const submission = { submitted: structuredClone(submitted), version };
+          unconfirmed.current = submission;
+          const result = await saveWorkspaceSubmission(
+            window.desktop,
             projectId,
             submitted,
           );
-          confirmed.current = result;
-          current.current = { ...current.current, revision: result.revision };
-          saved.current = version;
-          setSavedEdit(version);
-          const settled = draftQueue.confirm(result, current.current);
-          await draftQueue.flush();
-          if (saved.current === edit.current)
-            await draftQueue.acknowledge(settled);
+          await confirmSubmission(result, submission);
         }
         setError(null);
         return true;
@@ -98,20 +166,30 @@ export function useShotWorkspace(
       }
     })();
     return pending.current;
-  }, [projectId, draftQueue]);
+  }, [projectId, draftQueue, confirmSubmission]);
   usePendingSave(
     `镜头草稿:${projectId}`,
-    () => copying.current?.then(Boolean) ?? flush(),
+    () => listing.current ?? copying.current?.then(Boolean) ?? flush(),
     0,
-    () => copying.current?.then(Boolean) ?? pending.current,
+    () => listing.current ?? copying.current?.then(Boolean) ?? pending.current,
   );
   useProjectRecoveryGuard(projectId, async () => {
     await pending.current;
     const remote = await window.desktop.getGenerationWorkspace(projectId);
+    const previous = unconfirmed.current;
     if (
-      confirmed.current &&
-      JSON.stringify(remote) !== JSON.stringify(confirmed.current)
-    )
+      previous &&
+      sameWorkspace(remote, {
+        ...previous.submitted,
+        revision: previous.submitted.revision + 1,
+      })
+    ) {
+      // This only acknowledges our proven write. Other project guards may still
+      // refuse to resume; the outer edit lock remains authoritative.
+      await confirmSubmission(remote, previous);
+      setError(null);
+    }
+    if (confirmed.current && !sameWorkspace(remote, confirmed.current))
       return '磁盘上的镜头草稿与本页最后确认的版本不同。当前输入和撤销记录仍保留，请先恢复原项目文件；未自动覆盖或合并。';
     if (!current.current) {
       current.current = remote;
@@ -159,6 +237,26 @@ export function useShotWorkspace(
     },
     [commit],
   );
+  const stageListOperation = (
+    operation: ShotListOperation,
+    direction: MainCanvasHistoryDirection = 'edit',
+    prepared?: MainCanvasHistoryTicket,
+  ) => {
+    const doc = current.current;
+    if (!doc || locked.current || listSubmission.current) return false;
+    const changed = applyShotListOperation(doc.shots, operation);
+    if (!changed) return false;
+    const ticket =
+      prepared ?? mainHistory.begin({ kind: 'shot', operation }, direction);
+    if (!ticket) return false;
+    listSubmission.current = {
+      ticket,
+      inverse: changed.inverse,
+      version: edit.current + 1,
+    };
+    commit({ ...doc, shots: changed.shots });
+    return true;
+  };
   const beginReferenceImport = (
     shotId: string,
   ): ReferenceImportTarget | null => {
@@ -240,7 +338,8 @@ export function useShotWorkspace(
       locked.current ||
       edit.current !== saved.current ||
       pending.current ||
-      copying.current
+      copying.current ||
+      mainHistory.getSnapshot().busy
     )
       return false;
     recoveringRef.current = true;
@@ -254,7 +353,9 @@ export function useShotWorkspace(
         });
         confirmed.current = value;
         current.current = value;
+        unconfirmed.current = null;
         history.current = new ShotHistory();
+        mainHistory.discardKind('shot');
         copyCandidates.current.clear();
         setActiveId((id) =>
           id && value.shots.some((shot) => shot.id === id) ? id : null,
@@ -314,6 +415,7 @@ export function useShotWorkspace(
     // before React has rendered disabled controls. Do not queue a late switch.
     if (
       recoveringRef.current ||
+      listing.current ||
       (id && !current.current?.shots.some((shot) => shot.id === id))
     )
       return;
@@ -322,7 +424,8 @@ export function useShotWorkspace(
     setActiveId(id);
   };
   const create = (position: Point, asset?: Asset) => {
-    if (!current.current || locked.current) return;
+    if (!current.current || locked.current || mainHistory.getSnapshot().busy)
+      return;
     const existing =
       asset &&
       current.current.shots.find((shot) => shot.sourceAssetId === asset.id);
@@ -335,19 +438,22 @@ export function useShotWorkspace(
       return;
     }
     const id = crypto.randomUUID();
-    change((doc) => ({
-      ...doc,
-      shots: [
-        ...doc.shots,
-        newShot(
-          id,
-          asset?.name.slice(0, 100) ??
-            `镜头 ${String(doc.shots.length + 1).padStart(2, '0')}`,
-          position,
-          asset?.id,
-        ),
-      ],
-    }));
+    const shot = newShot(
+      id,
+      asset?.name.slice(0, 100) ??
+        `镜头 ${String(current.current.shots.length + 1).padStart(2, '0')}`,
+      position,
+      asset?.id,
+    );
+    if (asset) change((doc) => ({ ...doc, shots: [...doc.shots, shot] }));
+    else if (
+      !stageListOperation({
+        type: 'insert',
+        shot,
+        index: current.current.shots.length,
+      })
+    )
+      return;
     open(id);
   };
   const duplicate = (sourceId: string, position: Point) => {
@@ -364,9 +470,16 @@ export function useShotWorkspace(
       let copy = doc.shots.find((shot) => shot.id === candidateId);
       if (!copy) {
         copy = duplicateShot(source, doc.shots, position);
+        if (
+          !stageListOperation({
+            type: 'insert',
+            shot: copy,
+            index: doc.shots.length,
+          })
+        )
+          return null;
         copyCandidates.current.set(sourceId, copy.id);
         history.current.breakMerge(sourceId);
-        commit({ ...doc, shots: [...doc.shots, copy] });
       }
       // A failed write leaves the original view and both drafts available. Never
       // manufacture another copy to retry the same user's operation.
@@ -378,6 +491,45 @@ export function useShotWorkspace(
       copying.current = null;
     });
     return copying.current;
+  };
+  const applyListOperation = (
+    operation: ShotListOperation,
+    direction: MainCanvasHistoryDirection = 'edit',
+  ) => {
+    if (
+      locked.current ||
+      listing.current ||
+      copying.current ||
+      imports.current.size ||
+      mainHistory.getSnapshot().busy ||
+      activeId
+    )
+      return Promise.resolve(false);
+    const ticket = mainHistory.begin({ kind: 'shot', operation }, direction);
+    if (!ticket) return Promise.resolve(false);
+    listing.current = (async () => {
+      try {
+        if (!(await flush()) || locked.current || imports.current.size)
+          return false;
+        const target =
+          operation.type === 'insert'
+            ? operation.shot
+            : current.current?.shots.find((shot) => shot.id === operation.id);
+        if (target?.sourceAssetId)
+          throw new Error(
+            '视频关联镜头由原视频保留，不能作为独立镜头移除或移动。',
+          );
+        if (!stageListOperation(operation, direction, ticket)) return false;
+        return await flush();
+      } catch (reason) {
+        setError(message(reason));
+        return false;
+      } finally {
+        if (listSubmission.current?.ticket !== ticket) ticket.abort();
+        listing.current = null;
+      }
+    })();
+    return listing.current;
   };
   return {
     shots: workspace?.shots ?? [],
@@ -397,6 +549,7 @@ export function useShotWorkspace(
     create,
     duplicate,
     duplicatePending: !!activeId && copyCandidates.current.has(activeId),
+    applyListOperation,
     updateShot,
     beginReferenceImport,
     historyFor: (id: string): ShotHistoryActions => ({

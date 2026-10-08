@@ -28,6 +28,7 @@ const available = [
   'save-focus-controls',
   'material-search-controls',
   'shot-reuse-controls',
+  'project-history-controls',
 ];
 const requested = process.argv.slice(2);
 const scenarios = requested.length ? requested : available;

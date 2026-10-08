@@ -16,6 +16,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import { CanvasControls } from '@/components/canvas/canvas-controls';
 import { HoldFeedbackProvider } from '@/components/canvas/hold-feedback';
@@ -27,6 +28,7 @@ import { MaterialCanvas } from '@/features/generation/material-canvas';
 import { ShotCard, type ShotCardNode } from '@/features/generation/shot-card';
 import { useShotWorkspace } from '@/features/generation/use-shot-workspace';
 import { isMac } from '@/lib/platform';
+import { MainCanvasHistory } from '../../../../shared/canvas/main-history';
 import { CARD_HEIGHT, cardWidth } from '../../../../shared/canvas/model';
 import { splitSelectedAsset } from '../../../../shared/canvas/operations';
 import { MAX_SHOTS } from '../../../../shared/generation/shot-duplication';
@@ -78,7 +80,17 @@ function CanvasContent({
   inactive,
   report,
 }: ProjectCanvasProps) {
-  const shots = useShotWorkspace(snapshot.project.id, blocked, report);
+  const [mainHistory] = useState(() => new MainCanvasHistory());
+  const mainState = useSyncExternalStore(
+    mainHistory.subscribe,
+    mainHistory.getSnapshot,
+  );
+  const shots = useShotWorkspace(
+    snapshot.project.id,
+    blocked,
+    report,
+    mainHistory,
+  );
   const interactionBlocked = blocked || shots.recovering;
   const isRecovering = useCallback(
     () =>
@@ -92,6 +104,8 @@ function CanvasContent({
       baseline={shots.baseline}
       dirty={shots.dirty}
       blocked={blocked}
+      editorBusy={mainState.busy}
+      saveFailed={!!shots.error}
       recovering={shots.recovering}
       restore={(record) => {
         if (!projectEditRecoveryGuards.isRecovering(snapshot.project.id))
@@ -118,7 +132,10 @@ function CanvasContent({
     interactionBlocked,
     report,
     prepareTransition,
+    mainHistory,
   );
+  const structureBlocked =
+    interactionBlocked || mainState.busy || !document.canRecoverProjectEdits();
   const { cards } = document.snapshot.canvas;
   const [selection, setSelection] = useState<{
     cardId: string;
@@ -168,6 +185,7 @@ function CanvasContent({
           const current = recoveryState.current;
           return (
             current.document.canRecoverProjectEdits() &&
+            !mainHistory.getSnapshot().busy &&
             !current.shots.isRecovering() &&
             !current.drag.drag &&
             Object.keys(current.shotPositions).length === 0
@@ -177,7 +195,7 @@ function CanvasContent({
           recoveryState.current.document.acceptRecoveredEdit(record, saved),
         (record) => recoveryState.current.document.prepareRecoveredEdit(record),
       ),
-    [snapshot.project.id],
+    [snapshot.project.id, mainHistory],
   );
   useEffect(
     () =>
@@ -196,16 +214,19 @@ function CanvasContent({
   );
   const play = useCallback(
     (id: string) => {
-      if (blocked || inactive || isRecovering()) return;
+      if (structureBlocked || inactive || isRecovering()) return;
       const card = cards.find((item) => item.id === id);
       if (card) {
         selectCard(id);
         setPlaying(id);
       }
     },
-    [cards, selectCard, blocked, inactive, isRecovering],
+    [cards, selectCard, structureBlocked, inactive, isRecovering],
   );
   const selectedCard = cards.find((card) => card.id === selection?.cardId);
+  const selectedShot = shots.shots.find(
+    (shot) => !shot.sourceAssetId && selection?.cardId === `shot:${shot.id}`,
+  );
   const selectedAssetId = selection?.assetId;
   const canSplit =
     !!selectedCard &&
@@ -215,7 +236,7 @@ function CanvasContent({
   const splitAsset = useCallback(
     (cardId: string, assetId: string) => {
       if (
-        interactionBlocked ||
+        structureBlocked ||
         isRecovering() ||
         inactive ||
         shots.activeId ||
@@ -240,7 +261,7 @@ function CanvasContent({
       });
     },
     [
-      interactionBlocked,
+      structureBlocked,
       isRecovering,
       inactive,
       shots.activeId,
@@ -255,10 +276,59 @@ function CanvasContent({
     if (canSplit && selectedCard && selectedAssetId)
       splitAsset(selectedCard.id, selectedAssetId);
   };
+  const changeHistory = async (direction: 'undo' | 'redo') => {
+    if (
+      structureBlocked ||
+      inactive ||
+      shots.activeId ||
+      playing ||
+      drag.drag ||
+      isRecovering()
+    )
+      return;
+    const operation = mainHistory.getSnapshot()[direction];
+    if (!operation) return;
+    if (operation.kind === 'video') {
+      if (await document.commit(operation.patch, direction)) {
+        const id = operation.patch.after[0]?.id;
+        setSelection(id ? { cardId: id, assetId: null } : null);
+      }
+      return;
+    }
+    if (!(await shots.applyListOperation(operation.operation, direction)))
+      return;
+    const action = operation.operation;
+    if (action.type === 'remove') setSelection(null);
+    else {
+      const id = action.type === 'insert' ? action.shot.id : action.id;
+      const position =
+        action.type === 'insert' ? action.shot.position : action.to;
+      setSelection({ cardId: `shot:${id}`, assetId: null });
+      void flow.current?.setCenter(
+        position.x + 144,
+        position.y + CARD_HEIGHT / 2,
+        { zoom: 1 },
+      );
+    }
+  };
+  const removeShot = async () => {
+    if (
+      !selectedShot ||
+      structureBlocked ||
+      inactive ||
+      shots.activeId ||
+      playing ||
+      drag.drag ||
+      isRecovering()
+    )
+      return;
+    if (await shots.applyListOperation({ type: 'remove', id: selectedShot.id }))
+      setSelection(null);
+  };
   useCanvasShortcuts({
     shortcuts: interactions.shortcuts,
     disabled:
-      interactionBlocked ||
+      structureBlocked ||
       inactive ||
       !!shots.activeId ||
       document.saving ||
@@ -270,13 +340,13 @@ function CanvasContent({
     actions: {
       play: selectedCard ? () => play(selectedCard.id) : null,
       split: canSplit ? split : null,
-      undo: document.canUndo ? document.undo : null,
-      redo: document.canRedo ? document.redo : null,
+      undo: mainState.undo ? () => void changeHistory('undo') : null,
+      redo: mainState.redo ? () => void changeHistory('redo') : null,
     },
   });
   const canHold =
     interactions.longPressSplit &&
-    !interactionBlocked &&
+    !structureBlocked &&
     !inactive &&
     !shots.activeId &&
     !document.saving &&
@@ -316,8 +386,8 @@ function CanvasContent({
             const asset = assets.get(assetId);
             if (asset) shots.create(card.position, asset);
           },
-          canOpenMaterials: shots.loaded && !interactionBlocked,
-          disabled: interactionBlocked || inactive,
+          canOpenMaterials: shots.loaded && !structureBlocked,
+          disabled: structureBlocked || inactive,
         },
       })),
       ...shots.shots
@@ -331,8 +401,10 @@ function CanvasContent({
           data: {
             name: shot.name,
             count: shot.nodes.length,
-            disabled: interactionBlocked || inactive,
-            open: () => shots.open(shot.id),
+            disabled: structureBlocked || inactive,
+            open: () => {
+              if (!mainHistory.getSnapshot().busy) shots.open(shot.id);
+            },
           },
         })),
     ],
@@ -351,7 +423,8 @@ function CanvasContent({
       shots.create,
       shots.open,
       shots.loaded,
-      interactionBlocked,
+      structureBlocked,
+      mainHistory,
       inactive,
       shotPositions,
     ],
@@ -379,10 +452,30 @@ function CanvasContent({
       ref={root}
       className="relative min-h-0 flex-1"
       aria-label="视频创作画布"
-      aria-busy={document.saving || shots.recovering}
+      aria-busy={mainState.busy || shots.recovering}
     >
       {!shots.activeShot && !playing && (
         <div className="absolute inset-x-0 top-0 z-20">
+          {shots.error && (
+            <div
+              role="alert"
+              className="flex items-center gap-3 border-b bg-warning px-4 py-3 text-xs text-warning-foreground"
+            >
+              <span className="min-w-0 flex-1 whitespace-pre-wrap">
+                {shots.error}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="重试镜头数据"
+                disabled={blocked || shots.recovering}
+                onClick={() => void shots.retry()}
+              >
+                <RotateCw />
+                重试保存
+              </Button>
+            </div>
+          )}
           {recoveryNotice}
           {trimNotice}
         </div>
@@ -399,7 +492,7 @@ function CanvasContent({
           minZoom={0.25}
           maxZoom={2}
           nodesConnectable={false}
-          nodesDraggable={!interactionBlocked && !document.saving}
+          nodesDraggable={!structureBlocked}
           nodeDragThreshold={DRAG_THRESHOLD}
           panActivationKeyCode={null}
           nodeClickDistance={5}
@@ -415,7 +508,7 @@ function CanvasContent({
             for (const change of changes) {
               if (
                 change.type === 'position' &&
-                !interactionBlocked &&
+                !structureBlocked &&
                 !isRecovering() &&
                 change.position &&
                 change.id.startsWith('shot:')
@@ -443,7 +536,7 @@ function CanvasContent({
           onNodeDoubleClick={(event, node) => {
             event.preventDefault();
             if (
-              interactionBlocked ||
+              structureBlocked ||
               isRecovering() ||
               inactive ||
               drag.drag ||
@@ -454,7 +547,7 @@ function CanvasContent({
             else play(node.id);
           }}
           onNodeDragStart={(_event, node) => {
-            if (interactionBlocked || isRecovering()) return;
+            if (structureBlocked || isRecovering()) return;
             if (node.type === 'video') drag.start(node.id);
           }}
           onNodeDrag={(_event, node) =>
@@ -462,15 +555,21 @@ function CanvasContent({
             drag.move(node.position, flow.current?.getZoom() ?? 1)
           }
           onNodeDragStop={(_event, node) => {
-            if (interactionBlocked || isRecovering()) {
+            if (structureBlocked || isRecovering()) {
               setShotPositions({});
               return;
             }
             if (node.type === 'shot') {
-              shots.updateShot(node.id.slice(5), (shot) => ({
-                ...shot,
-                position: node.position,
-              }));
+              const shot = shots.shots.find(
+                (item) => item.id === node.id.slice(5),
+              );
+              if (shot)
+                void shots.applyListOperation({
+                  type: 'move',
+                  id: shot.id,
+                  from: shot.position,
+                  to: node.position,
+                });
               setShotPositions({});
             } else void drag.stop(node.position, flow.current?.getZoom() ?? 1);
           }}
@@ -498,7 +597,7 @@ function CanvasContent({
               variant="outline"
               className="bg-background shadow-sm"
               disabled={
-                interactionBlocked ||
+                structureBlocked ||
                 !shots.loaded ||
                 shots.shots.length >= MAX_SHOTS
               }
@@ -522,34 +621,18 @@ function CanvasContent({
               新建镜头
             </Button>
           </Panel>
-          {shots.error && (
-            <Panel position="top-right">
-              <div
-                role="alert"
-                className="flex items-center gap-2 rounded-lg bg-warning p-3 text-xs text-warning-foreground"
-              >
-                {shots.error}
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="重试镜头数据"
-                  onClick={() => void shots.retry()}
-                >
-                  <RotateCw />
-                </Button>
-              </div>
-            </Panel>
-          )}
           <Panel position="bottom-center">
             <CanvasActions
-              disabled={interactionBlocked || document.saving || !!drag.drag}
-              canUndo={document.canUndo}
-              canRedo={document.canRedo}
+              disabled={structureBlocked || inactive || !!drag.drag}
+              canUndo={!!mainState.undo}
+              canRedo={!!mainState.redo}
               canSplit={canSplit}
+              canRemove={!!selectedShot}
+              remove={() => void removeShot()}
               shortcuts={interactions.shortcuts}
               isMac={isMac}
-              undo={document.undo}
-              redo={document.redo}
+              undo={() => void changeHistory('undo')}
+              redo={() => void changeHistory('redo')}
               split={split}
             />
           </Panel>
@@ -569,7 +652,7 @@ function CanvasContent({
                   .join(' → ')}{' '}
                 <span className="ml-2 text-muted-foreground">Esc 取消</span>
               </p>
-            ) : document.saving ? (
+            ) : mainState.busy ? (
               <p
                 role="status"
                 className="rounded-full bg-canvas/90 px-3 py-1.5 text-xs text-muted-foreground"

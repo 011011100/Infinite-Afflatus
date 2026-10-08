@@ -11,6 +11,8 @@ export function WorkspaceDraftNotice({
   baseline,
   dirty,
   blocked,
+  editorBusy = false,
+  saveFailed = false,
   recovering,
   restore,
 }: {
@@ -18,11 +20,14 @@ export function WorkspaceDraftNotice({
   baseline: GenerationWorkspace | null;
   dirty: boolean;
   blocked: boolean;
+  editorBusy?: boolean;
+  saveFailed?: boolean;
   recovering: boolean;
   restore: (record: WorkspaceDraftRecord) => Promise<boolean>;
 }) {
   const warning = recovery.error ?? recovery.protection.error;
-  const showCurrent = !!recovery.queue.snapshot() && (!!warning || blocked);
+  const showCurrent =
+    !!recovery.queue.snapshot() && (!!warning || blocked || saveFailed);
   if (
     !recovery.drafts.length &&
     !recovery.issues.length &&
@@ -78,6 +83,7 @@ export function WorkspaceDraftNotice({
               variant="outline"
               disabled={
                 blocked ||
+                editorBusy ||
                 recovering ||
                 recovery.busy ||
                 dirty ||
