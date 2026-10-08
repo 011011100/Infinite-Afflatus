@@ -182,7 +182,7 @@ async function main() {
     `window.desktop.openProject(${JSON.stringify(projectId)})`,
   );
   const info = await next(
-    `window.desktop.inspectProjectPackage(${JSON.stringify(projectId)})`,
+    `window.desktop.inspectProjectPackage(${JSON.stringify(projectId)}, crypto.randomUUID())`,
   );
   assert.equal(info.assetCount, 1);
   const packagePath = await next(

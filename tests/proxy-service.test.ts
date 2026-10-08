@@ -10,10 +10,12 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 import { ProxyService } from '../src/main/media/proxy-service';
 import { readProxies } from '../src/main/projects/project-database';
+import { fingerprint } from '../src/main/storage/files';
 import { Library } from '../src/main/storage/library';
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -87,6 +89,7 @@ test('proxy generation is deduplicated, reusable and migrated as registered deri
     const preview = await f.library.migration.prepare(target);
     await f.library.migration.start(preview.token);
     await f.library.migration.idle();
+    assert.equal(f.library.state().migration?.phase, 'completed');
     const after = await f.proxies.file(f.project.id, f.asset.id);
     assert.ok(after);
     assert.ok(after.startsWith(target));
@@ -194,6 +197,72 @@ test('missing cache rebuilds without blocking migration; unknown cache files rem
     await flush();
     assert.ok(await f.proxies.file(f.project.id, f.asset.id));
   } finally {
+    await f.dispose();
+  }
+});
+
+test('a target proxy record cannot replace a migrated original asset, and cache cleanup waits for migration recovery', async () => {
+  const f = await fixture(async (_input, output) => {
+    await writeFile(output, 'preview');
+  });
+  let stop = () => {};
+  try {
+    const sourceRoot = f.library.store.root;
+    const sourceDatabase = await f.library.projects.databasePath(f.project.id);
+    const databaseBytes = await readFile(sourceDatabase);
+    const source = await fingerprint(
+      join(dirname(sourceDatabase), f.asset.relativePath),
+    );
+    const target = join(f.base, 'moved');
+    await mkdir(target);
+    let changed = false;
+    stop = f.library.subscribe(() => {
+      if (changed || f.library.state().migration?.phase !== 'cleaning') return;
+      changed = true;
+      const database = new DatabaseSync(
+        join(target, f.project.folder, 'project.sqlite'),
+      );
+      try {
+        database.prepare('DELETE FROM assets WHERE id = ?').run(f.asset.id);
+        database
+          .prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)')
+          .run(
+            'proxies',
+            JSON.stringify([
+              {
+                ...source,
+                relativePath: f.asset.relativePath,
+                assetId: f.asset.id,
+                sourceHash: f.asset.sha256,
+                version: 1,
+              },
+            ]),
+          );
+      } finally {
+        database.close();
+      }
+    });
+    const preview = await f.library.migration.prepare(target);
+    await f.library.migration.start(preview.token);
+    await f.library.migration.idle();
+    assert.equal(changed, true);
+    assert.equal(f.library.store.root, target);
+    assert.equal(f.library.state().migration?.phase, 'cleaning');
+    assert.match(f.library.state().migration?.error ?? '', /原素材记录/);
+    assert.deepEqual(
+      await readFile(join(sourceRoot, f.project.folder, 'project.sqlite')),
+      databaseBytes,
+    );
+    assert.equal(
+      await readFile(
+        join(target, f.project.folder, f.asset.relativePath),
+        'utf8',
+      ),
+      'original source',
+    );
+    await assert.rejects(f.library.previewCache.preview(), /旧目录副本清理/);
+  } finally {
+    stop();
     await f.dispose();
   }
 });

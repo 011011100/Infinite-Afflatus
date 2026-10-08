@@ -2,7 +2,9 @@ export type MediaToolName = 'ffmpeg' | 'ffprobe';
 export interface MediaToolLocation {
   name: MediaToolName;
   command: string;
-  source: 'environment' | 'saved' | 'path' | 'standard-location';
+  source: 'environment' | 'saved' | 'bundled' | 'path' | 'standard-location';
+  /** A present, invalid bundle must never silently fall back or launch. */
+  unavailableReason?: string;
 }
 export type MediaToolPair = Readonly<
   Record<MediaToolName, Readonly<MediaToolLocation>>

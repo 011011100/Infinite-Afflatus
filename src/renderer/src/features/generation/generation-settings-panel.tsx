@@ -7,10 +7,14 @@ export function GenerationSettingsPanel({
   label = '生成设置',
   action,
   children,
+  actions,
+  disabled = false,
 }: {
   label?: string;
   action: string;
   children: ReactNode;
+  actions?: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <aside
@@ -18,15 +22,21 @@ export function GenerationSettingsPanel({
       aria-label={label}
     >
       <h2 className="mb-6 text-sm font-medium">生成设置</h2>
-      <div className="space-y-6">{children}</div>
+      <fieldset disabled={disabled} className="space-y-6">
+        {children}
+      </fieldset>
       <div className="mt-auto pt-10">
-        <Button disabled className="h-10 w-full">
-          <Sparkles />
-          {action}
-        </Button>
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          尚未接入生成服务
-        </p>
+        {actions ?? (
+          <>
+            <Button disabled className="h-10 w-full">
+              <Sparkles />
+              {action}
+            </Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              请在生成组中确认提交
+            </p>
+          </>
+        )}
       </div>
     </aside>
   );

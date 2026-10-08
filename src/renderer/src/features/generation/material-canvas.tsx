@@ -55,6 +55,7 @@ import {
   type Shortcuts,
 } from '../../../../shared/interaction/shortcuts';
 import type { ProjectSnapshot } from '../../../../shared/models';
+import { useArkAdoptionInputs } from './ark/use-ark-adoption-inputs';
 import { message } from './errors';
 import { GenerationGroupCard } from './generation-group';
 import { GroupStage } from './group-stage';
@@ -105,6 +106,10 @@ export function MaterialCanvas({
   duplicatePending = false,
   beforeClose,
   retry,
+  onAdoptGeneration,
+  onOpenArkSettings,
+  adopting = false,
+  pendingAdoptionJobId = null,
 }: {
   shot: ShotWorkspace;
   snapshot: ProjectSnapshot;
@@ -125,6 +130,10 @@ export function MaterialCanvas({
   duplicatePending?: boolean;
   beforeClose: () => Promise<boolean>;
   retry: () => Promise<boolean>;
+  onAdoptGeneration?: ((jobId: string) => Promise<void>) | undefined;
+  onOpenArkSettings?: (() => void) | undefined;
+  adopting?: boolean;
+  pendingAdoptionJobId?: string | null;
 }) {
   const flow = useRef<ReactFlowInstance<MaterialCanvasNode> | null>(null);
   const page = useRef<HTMLElement>(null);
@@ -207,10 +216,24 @@ export function MaterialCanvas({
     blocked,
     beginImport,
   );
+  const generationAdoption = useArkAdoptionInputs({
+    page,
+    shotId: shot.id,
+    disabled: blocked || closing || recovering,
+    pendingAdoptionJobId,
+    importing: importing || !!pendingAssets,
+    onAdopt: onAdoptGeneration,
+  });
   usePageFocus(page);
   useMaterialViewport(flow, area, model.activeGroup, model.detached);
   const close = async () => {
-    if (recovering || duplication.isCopying()) return;
+    if (
+      recovering ||
+      adopting ||
+      generationAdoption.isPending() ||
+      duplication.isCopying()
+    )
+      return;
     navigation.cancel();
     await requestClose();
   };
@@ -221,7 +244,13 @@ export function MaterialCanvas({
     model.selected.length === 1
       ? shot.nodes.find((node) => node.id === model.selected[0] && node.groupId)
       : undefined;
-  const disabled = blocked || importing || closing || pendingAssets;
+  const disabled =
+    blocked ||
+    adopting ||
+    generationAdoption.pending ||
+    importing ||
+    closing ||
+    pendingAssets;
   const groupActions = {
     count: model.grouping.materials.length,
     hasGroups: model.grouping.groups.length > 0,
@@ -670,6 +699,12 @@ export function MaterialCanvas({
           group={editingGroup}
           assets={snapshot.assets}
           projectId={snapshot.project.id}
+          onOpenArkSettings={onOpenArkSettings}
+          adopting={adopting}
+          pendingAdoptionJobId={pendingAdoptionJobId}
+          onAdoptGeneration={
+            onAdoptGeneration ? generationAdoption.adopt : undefined
+          }
           disabled={disabled}
           saving={saving}
           recovering={recovering}

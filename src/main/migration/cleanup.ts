@@ -1,5 +1,5 @@
 import { rmdir, unlink } from 'node:fs/promises';
-import { readProject } from '../projects/project-database';
+import { readProject, readProxies } from '../projects/project-database';
 import { errorMessage } from '../storage/database';
 import {
   fingerprint,
@@ -63,20 +63,51 @@ export async function cleanupMigration(
           const targetProject = readProject(destination);
           if (targetProject.project.id !== entry.projectId)
             throw new Error('目标项目身份不匹配');
-          // Recheck every migrated asset before removing the old project database.
+          const sourceProject = readProject(deleting);
+          const sourceProxies = readProxies(deleting);
+          const targetProxies = readProxies(destination);
+          // Classify from the unchanged source database, never by a filename or
+          // the current target alone. A proxy record cannot replace an original asset.
           for (const asset of journal.files.filter(
             (item) =>
               item.projectId === entry.projectId &&
               !item.relativePath.endsWith('/project.sqlite'),
           )) {
-            if (
-              !targetProject.assets.some(
-                (record) =>
-                  `${targetProject.project.folder}/${record.relativePath}` ===
-                    asset.relativePath && record.sha256 === asset.source.sha256,
+            const original = sourceProject.assets.find(
+              (record) =>
+                `${sourceProject.project.folder}/${record.relativePath}` ===
+                  asset.relativePath && sameContent(asset.source, record),
+            );
+            if (original) {
+              if (
+                !targetProject.assets.some(
+                  (record) =>
+                    record.id === original.id &&
+                    `${targetProject.project.folder}/${record.relativePath}` ===
+                      asset.relativePath &&
+                    sameContent(asset.source, record),
+                )
               )
-            )
-              throw new Error('目标项目缺少原素材记录');
+                throw new Error('目标项目缺少原素材记录');
+            } else {
+              const proxy = sourceProxies.find(
+                (record) =>
+                  `${sourceProject.project.folder}/${record.relativePath}` ===
+                    asset.relativePath && sameContent(record, asset.source),
+              );
+              if (
+                !proxy ||
+                !targetProxies.some(
+                  (record) =>
+                    record.relativePath === proxy.relativePath &&
+                    record.assetId === proxy.assetId &&
+                    record.sourceHash === proxy.sourceHash &&
+                    record.version === proxy.version &&
+                    sameContent(record, asset.source),
+                )
+              )
+                throw new Error('目标项目缺少对应的派生预览记录');
+            }
             if (
               !sameContent(
                 await fingerprint(await safeFile(target, asset.relativePath)),

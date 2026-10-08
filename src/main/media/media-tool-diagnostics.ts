@@ -5,6 +5,10 @@ import type {
   MediaToolResult,
   MediaToolsReport,
 } from '../../shared/media-tools';
+import {
+  assertMediaToolLaunch,
+  mediaToolLaunchProofKey,
+} from './media-tool-bundle';
 import { mediaToolStartError, resolveMediaToolPair } from './media-tools';
 
 type Launch = (command: string, args: string[]) => ChildProcess;
@@ -25,6 +29,17 @@ export function inspectMediaTool(
   location: MediaToolLocation,
   options: MediaToolInspectionOptions = {},
 ): Promise<MediaToolResult> {
+  if (options.signal?.aborted) return Promise.reject(options.signal.reason);
+  try {
+    assertMediaToolLaunch(location);
+  } catch (error) {
+    return Promise.resolve({
+      ...location,
+      status: 'invalid',
+      version: null,
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
   return new Promise((resolve, reject) => {
     const signal = options.signal;
     if (signal?.aborted) {
@@ -159,7 +174,11 @@ export class MediaToolDiagnostics {
   ): Promise<MediaToolsReport> {
     if (this.controller.signal.aborted)
       return Promise.reject(this.controller.signal.reason);
-    const key = JSON.stringify(pair);
+    const key = JSON.stringify([
+      pair,
+      mediaToolLaunchProofKey(pair.ffmpeg),
+      mediaToolLaunchProofKey(pair.ffprobe),
+    ]);
     const existing = this.pending.get(key);
     if (existing) return existing;
     const pending = Promise.allSettled(

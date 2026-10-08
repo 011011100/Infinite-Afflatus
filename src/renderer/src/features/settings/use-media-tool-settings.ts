@@ -23,7 +23,8 @@ function matchingReport(
         (tool) =>
           tool.name === location.name &&
           tool.source === location.source &&
-          tool.command === location.command,
+          tool.command === location.command &&
+          tool.unavailableReason === location.unavailableReason,
       );
     const result = matches(incoming) ?? matches(previous);
     return result ? [result] : [];
@@ -100,8 +101,28 @@ export function useMediaToolSettings() {
   const check = () => {
     if (!current.current?.paths || current.current.error) return;
     return perform('checking', async () => {
+      const captured = current.current;
       const result = await window.desktop.checkMediaTools();
+      // Bundled bytes can change outside this panel. Refresh paths only when a
+      // check observes a different bundle state, without another version run.
+      const changedBundle = result.tools.some((tool) => {
+        const previous = captured?.locations[tool.name];
+        return (
+          tool.source === 'bundled' &&
+          previous?.source === 'bundled' &&
+          (tool.command !== previous.command ||
+            tool.unavailableReason !== previous.unavailableReason)
+        );
+      });
+      const refreshed = changedBundle
+        ? await window.desktop.getMediaToolSettings()
+        : null;
       return () => {
+        if (refreshed) {
+          accept(refreshed, result);
+          setNotice(null);
+          return;
+        }
         const latest = current.current;
         if (!latest) return;
         setReport((previous) => matchingReport(latest, previous, result));

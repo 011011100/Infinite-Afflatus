@@ -3,6 +3,7 @@ import childProcess, {
   type ChildProcess,
   type SpawnOptions,
 } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   mkdtemp,
@@ -18,10 +19,12 @@ import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import { type TestContext, test } from 'node:test';
 import { SequenceExportService } from '../src/main/export/sequence-export-service';
+import { resolveMediaToolPair } from '../src/main/media/media-tools';
 import { ProxyService } from '../src/main/media/proxy-service';
 import { Library } from '../src/main/storage/library';
 import { exportIsActive } from '../src/shared/export';
 import type { MediaToolPair } from '../src/shared/media-tools';
+import { mediaToolBundleFixture } from './media-tool-bundle-fixture';
 
 function deferred() {
   let resolve!: () => void;
@@ -391,4 +394,194 @@ test('running proxies keep one tool pair, queued generation captures new setting
   } finally {
     release.resolve();
   }
+});
+
+for (const mutation of ['tool-only', 'tool-and-manifest'] as const) {
+  test(`delayed export/proxy refuse a captured bundle changed during preparation (${mutation}) without spawning`, {
+    timeout: 10_000,
+  }, async (t) => {
+    for (const kind of ['export', 'proxy'] as const) {
+      await t.test(kind, async (t) => {
+        const f = await fixture(t, 1);
+        const bundle = await mediaToolBundleFixture();
+        t.after(bundle.clean);
+        const captured = resolveMediaToolPair(undefined, {
+          env: {},
+          bundleDirectory: bundle.directory,
+          ...bundle.manifest.target,
+        });
+        const calls = mediaProcesses(t, 1);
+        const entered = deferred();
+        const release = deferred();
+        let pause = false;
+        const open = f.library.projects.open.bind(f.library.projects);
+        t.mock.method(f.library.projects, 'open', async (id: string) => {
+          if (pause) {
+            pause = false;
+            entered.resolve();
+            await release.promise;
+          }
+          return open(id);
+        });
+        const tools = () => {
+          pause = true;
+          return captured;
+        };
+        const card = f.snapshot.canvas.cards[0];
+        const asset = f.snapshot.assets[0];
+        assert.ok(card && asset);
+        const output = join(f.base, 'must-not-publish.mp4');
+        const exportService = new SequenceExportService(
+          f.library.projects,
+          f.library.gate,
+          f.library.store,
+          f.data,
+          undefined,
+          undefined,
+          tools,
+        );
+        const proxies = new ProxyService(
+          f.library.projects,
+          f.library.gate,
+          f.library.store,
+          f.data,
+          undefined,
+          tools,
+        );
+        f.services.push(exportService, proxies);
+        t.mock.method(console, 'warn', () => {});
+        const attempt =
+          kind === 'export'
+            ? exportService.start(f.project.id, card.id, output)
+            : proxies.ensure(f.project.id, asset.id);
+        try {
+          await entered.promise;
+          const changed = 'replaced inert tool';
+          await writeFile(join(bundle.directory, 'bin/ffmpeg'), changed);
+          if (mutation === 'tool-and-manifest') {
+            bundle.manifest.tools.ffmpeg.sha256 = createHash('sha256')
+              .update(changed)
+              .digest('hex');
+            bundle.manifest.build.version = 'replacement-build';
+            await bundle.save();
+            // A fresh task may verify the new consistent bundle; this old task must not adopt it.
+            assert.equal(
+              resolveMediaToolPair(undefined, {
+                env: {},
+                bundleDirectory: bundle.directory,
+                ...bundle.manifest.target,
+              }).ffmpeg.source,
+              'bundled',
+            );
+          }
+        } finally {
+          release.resolve();
+        }
+        if (kind === 'proxy') assert.deepEqual(await attempt, { ready: false });
+        else {
+          const job = await attempt;
+          assert.ok('id' in job);
+          for (
+            let count = 0;
+            count < 1000 && exportIsActive(exportService.get(job.id));
+            count++
+          )
+            await new Promise((resolve) => setTimeout(resolve, 5));
+          const failed = exportService.get(job.id);
+          assert.equal(failed.status, 'failed');
+          assert.match(failed.error ?? '', /内置视频处理组件校验失败/);
+        }
+        await exportService.close();
+        await proxies.close();
+        assert.equal(calls.length, 0);
+        assert.equal(await proxies.file(f.project.id, asset.id), null);
+        await assert.rejects(readFile(output), { code: 'ENOENT' });
+        await f.assertOriginals();
+      });
+    }
+  });
+}
+
+test('unchanged bundled task proof survives the actual export and proxy pipelines without copying away launch authority', {
+  timeout: 10_000,
+}, async (t) => {
+  const f = await fixture(t, 1);
+  const bundle = await mediaToolBundleFixture();
+  t.after(bundle.clean);
+  const captured = resolveMediaToolPair(undefined, {
+    env: {},
+    bundleDirectory: bundle.directory,
+    ...bundle.manifest.target,
+  });
+  const calls = mediaProcesses(t, 1);
+  const card = f.snapshot.canvas.cards[0];
+  const asset = f.snapshot.assets[0];
+  assert.ok(card && asset);
+  const exports = new SequenceExportService(
+    f.library.projects,
+    f.library.gate,
+    f.library.store,
+    f.data,
+    undefined,
+    undefined,
+    () => captured,
+  );
+  const proxies = new ProxyService(
+    f.library.projects,
+    f.library.gate,
+    f.library.store,
+    f.data,
+    undefined,
+    () => captured,
+  );
+  f.services.push(exports, proxies);
+  const job = await exports.start(
+    f.project.id,
+    card.id,
+    join(f.base, 'unchanged.mp4'),
+  );
+  await finishExport(exports, job.id);
+  assert.deepEqual(await proxies.ensure(f.project.id, asset.id), {
+    ready: true,
+  });
+  assert.equal(calls.length, 7);
+  await f.assertOriginals();
+});
+
+test('bundle integrity is checked again between the proxy probe and encoder spawn', {
+  timeout: 10_000,
+}, async (t) => {
+  const f = await fixture(t, 1);
+  const bundle = await mediaToolBundleFixture();
+  t.after(bundle.clean);
+  const captured = resolveMediaToolPair(undefined, {
+    env: {},
+    bundleDirectory: bundle.directory,
+    ...bundle.manifest.target,
+  });
+  const calls = mediaProcesses(t, 1, async () => {
+    await writeFile(
+      join(bundle.directory, 'bin/ffmpeg'),
+      'changed after first probe',
+    );
+  });
+  const proxies = new ProxyService(
+    f.library.projects,
+    f.library.gate,
+    f.library.store,
+    f.data,
+    undefined,
+    () => captured,
+  );
+  f.services.push(proxies);
+  t.mock.method(console, 'warn', () => {});
+  const asset = f.snapshot.assets[0];
+  assert.ok(asset);
+  assert.deepEqual(await proxies.ensure(f.project.id, asset.id), {
+    ready: false,
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.command, captured.ffprobe.command);
+  assert.equal(await proxies.file(f.project.id, asset.id), null);
+  await f.assertOriginals();
 });

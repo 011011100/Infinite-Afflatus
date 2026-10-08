@@ -1,4 +1,5 @@
 import { Volume2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select } from '@/components/ui/select';
 import {
@@ -11,12 +12,20 @@ import { GenerationSettingsPanel } from './generation-settings-panel';
 export function GenerationSettings({
   value,
   onChange,
+  actions,
+  disabled = false,
 }: {
   value: GenerationParameters;
+  actions?: ReactNode;
+  disabled?: boolean;
   onChange: (value: GenerationParameters) => void;
 }) {
   return (
-    <GenerationSettingsPanel action="生成视频">
+    <GenerationSettingsPanel
+      action="生成视频"
+      actions={actions}
+      disabled={disabled}
+    >
       <div className="space-y-2">
         <label
           htmlFor="generation-model"

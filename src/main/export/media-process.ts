@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { MediaToolLocation } from '../../shared/media-tools';
+import { assertMediaToolLaunch } from '../media/media-tool-bundle';
 import { mediaToolStartError } from '../media/media-tools';
 
 /** Bounded diagnostics and process lifetime; never invokes a command shell. */
@@ -11,6 +12,7 @@ export function mediaProcess(
 ): Promise<string> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
+    if (typeof executable !== 'string') assertMediaToolLaunch(executable);
     const child = spawn(
       typeof executable === 'string' ? executable : executable.command,
       args,

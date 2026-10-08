@@ -9,9 +9,13 @@ import { ProjectEditDraftService } from '../drafts/project-edit-draft-service';
 import { RescueImportService } from '../drafts/rescue-import-service';
 import { WorkspaceDraftService } from '../drafts/workspace-draft-service';
 import { SequenceExportService } from '../export/sequence-export-service';
+import type { ArkSecretStorage } from '../generation/ark-configuration';
+import { ArkGenerationService } from '../generation/ark-generation-service';
 import { GenerationService } from '../generation/generation-service';
 import { ReferenceImportService } from '../generation/reference-import-service';
 import { MediaToolSettings } from '../media/media-tool-settings';
+import type { MediaToolResolutionOptions } from '../media/media-tools';
+import { PreviewCacheService } from '../media/preview-cache-service';
 import { ProxyService } from '../media/proxy-service';
 import { MigrationService } from '../migration/migration-service';
 import { PackageRequests } from '../packages/package-requests';
@@ -19,6 +23,7 @@ import { ProjectPackageService } from '../packages/project-package-service';
 import { ProjectService } from '../projects/project-service';
 import { ProjectHealthService } from '../recovery/project-health-service';
 import { RootRelocationService } from '../relocation/root-relocation-service';
+import { ProjectReferenceReader } from '../saving/project-reference-reader';
 import { SaveQueue } from '../saving/save-queue';
 import { savedResultVerifier } from '../saving/saved-result-verifier';
 import {
@@ -40,10 +45,16 @@ import {
 import { WriteGate } from './write-gate';
 
 /** Main-process composition root. Feature modules depend on narrow services, never on Electron. */
+export interface LibraryOptions {
+  mediaTools?: MediaToolResolutionOptions;
+  arkSecrets?: ArkSecretStorage;
+}
+
 export class Library {
   readonly projects: ProjectService;
   readonly backups: AppBackupService;
   readonly generation: GenerationService;
+  readonly ark: ArkGenerationService;
   readonly interactions: InteractionSettingsStore;
   readonly mediaTools: MediaToolSettings;
   readonly staging: Staging;
@@ -51,6 +62,7 @@ export class Library {
   readonly saves: SaveQueue;
   readonly migration: MigrationService;
   readonly proxies: ProxyService;
+  readonly previewCache: PreviewCacheService;
   readonly exports: SequenceExportService;
   readonly packages: ProjectPackageService;
   readonly packageRequests: PackageRequests;
@@ -59,6 +71,7 @@ export class Library {
   readonly editDrafts: ProjectEditDraftService;
   readonly rescueImports: RescueImportService;
   readonly referenceImports: ReferenceImportService;
+  readonly referenceReads: ProjectReferenceReader;
   readonly gate = new WriteGate();
   private listeners = new Set<() => void>();
   private exportListeners = new Set<() => void>();
@@ -72,11 +85,12 @@ export class Library {
     userData: string,
     quota?: number,
     appVersion = 'development',
+    options: LibraryOptions = {},
   ) {
     this.drafts = new WorkspaceDraftService(userData);
     this.editDrafts = new ProjectEditDraftService(userData);
     this.interactions = new InteractionSettingsStore(store);
-    this.mediaTools = new MediaToolSettings(store);
+    this.mediaTools = new MediaToolSettings(store, options.mediaTools);
     this.projects = new ProjectService(store, this.gate);
     this.backups = new AppBackupService(store, userData, this.gate, appVersion);
     this.health = new ProjectHealthService(
@@ -103,7 +117,17 @@ export class Library {
       undefined,
       () => this.mediaTools.snapshot(),
     );
-    this.generation = new GenerationService(this.projects, store, this.gate);
+    this.referenceReads = new ProjectReferenceReader(
+      this.projects,
+      store,
+      join(userData, 'staging'),
+    );
+    this.generation = new GenerationService(
+      this.projects,
+      store,
+      this.gate,
+      this.referenceReads,
+    );
     this.rescueImports = new RescueImportService(this.drafts, this.editDrafts, {
       summary: (id) => this.projects.summary(id),
       read: (id) => this.projects.open(id),
@@ -132,6 +156,19 @@ export class Library {
       undefined,
       () => this.mediaTools.snapshot(),
     );
+    this.previewCache = new PreviewCacheService(
+      this.projects,
+      this.gate,
+      store,
+      this.proxies,
+      () => {
+        if (this.isClosing) throw new Error('应用正在关闭，请重新打开后检查');
+        if (this.migration.journal?.status.restartRequired)
+          throw new Error('项目目录切换等待恢复，请重新打开应用');
+        if (this.migration.journal?.status.phase === 'cleaning')
+          throw new Error('请先完成旧目录副本清理，再检查预览缓存');
+      },
+    );
     this.staging = new Staging(
       join(userData, 'staging'),
       store,
@@ -156,6 +193,18 @@ export class Library {
       },
       this.saves,
     );
+    this.ark = new ArkGenerationService({
+      userData,
+      projects: this.projects,
+      store,
+      gate: this.gate,
+      staging: this.staging,
+      saves: this.saves,
+      references: this.referenceReads,
+      readWorkspace: (id) => this.generation.readWorkspace(id),
+      notify: () => this.emit(),
+      ...(options.arkSecrets ? { secrets: options.arkSecrets } : {}),
+    });
     this.migration = new MigrationService(
       store,
       this.projects,
@@ -172,6 +221,7 @@ export class Library {
     defaultRoot: string,
     quota?: number,
     appVersion = 'development',
+    options: LibraryOptions = {},
   ): Promise<Library> {
     let store: AppStore | null = null;
     let recordedRoot: string | null = null;
@@ -207,7 +257,13 @@ export class Library {
         ...(existing ? { expected: existing } : {}),
       });
       if (store.root !== root) store.set('root', root);
-      const library = new Library(store, canonicalUserData, quota, appVersion);
+      const library = new Library(
+        store,
+        canonicalUserData,
+        quota,
+        appVersion,
+        options,
+      );
       stage = 'recovery';
       await library.backups.initialize();
       await library.migration.recover();
@@ -220,6 +276,7 @@ export class Library {
       await library.proxies.recover();
       await library.exports.recover();
       library.saves.start();
+      await library.ark.recover();
       return library;
     } catch (error) {
       await store?.close();
@@ -286,10 +343,12 @@ export class Library {
     // Fully received results remain durable and resume on the next library open.
     const stopped = await Promise.allSettled([
       this.rescueImports.close(),
+      this.ark.close(),
       this.backups.close(),
       this.mediaTools.close(),
       this.referenceImports.close(),
       this.stagingCleanup.close(),
+      this.previewCache.close(),
       this.health.close(),
       this.packages.close(),
       this.packageRequests.close(),

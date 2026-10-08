@@ -46,6 +46,37 @@ app.whenReady().then(async () => {
   });
   const run = (source) => win.webContents.executeJavaScript(source);
   const errors = [];
+  const nativeFocusEvents = [];
+  const beforeInputEvents = [];
+  const started = Date.now();
+  let focusedTarget = 'null';
+  const nativeFocus = () => ({
+    windowFocused: win.isFocused(),
+    contentsFocused: win.webContents.isFocused(),
+    visible: win.isVisible(),
+    loading: win.webContents.isLoadingMainFrame(),
+  });
+  const recordFocus = (type, target) =>
+    nativeFocusEvents.push({
+      atMs: Date.now() - started,
+      type,
+      target,
+      ...nativeFocus(),
+    });
+  for (const event of ['focus', 'blur']) {
+    win.on(event, () => recordFocus(`window-${event}`));
+    win.webContents.on(event, () => recordFocus(`contents-${event}`));
+  }
+  win.webContents.on('before-input-event', (_event, input) => {
+    beforeInputEvents.push({
+      atMs: Date.now() - started,
+      type: input.type,
+      key: input.key,
+      code: input.code,
+      repeat: input.isAutoRepeat,
+      ...nativeFocus(),
+    });
+  });
   win.webContents.on('console-message', (details) => {
     if (details.level === 'error') errors.push(details.message);
   });
@@ -60,15 +91,43 @@ app.whenReady().then(async () => {
   const scroll =
     'document.querySelector("section[aria-label=组合时间轨道] > div")';
   const state = () => run('timelineControls.state()');
-  const focus = async () => {
+  const painted = () =>
+    run(
+      'new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(()=>done(null))))',
+    );
+  const focusTarget = async (target, label) => {
+    focusedTarget = target;
+    recordFocus('request', label);
+    // A new document can report DOM focus before the macOS app is active.
+    // Activate only this fixture, then establish focus before injecting a key.
+    app.focus({ steal: true });
     win.focus();
     win.webContents.focus();
-    await run(`${second}.focus({preventScroll:true})`);
-    await wait(
-      `document.hasFocus() && document.activeElement===${second}`,
-      'second clip has real keyboard focus',
-    );
+    await run(`${target}.focus({preventScroll:true})`);
+    let stable = 0;
+    for (let i = 0; i < 300; i++) {
+      const domFocused = await run(
+        `document.hasFocus() && document.activeElement===${target}`,
+      );
+      if (
+        domFocused &&
+        win.isFocused() &&
+        win.webContents.isFocused() &&
+        !win.webContents.isLoadingMainFrame()
+      ) {
+        if (++stable === 3) {
+          recordFocus('stable', label);
+          return;
+        }
+        await painted();
+      } else {
+        stable = 0;
+        await sleep(20);
+      }
+    }
+    throw Error(`Timed out: ${label} owns stable native and DOM focus`);
   };
+  const focus = () => focusTarget(second, 'second clip');
   const key = async (keyCode) => {
     const previous = (await state()).events.length;
     const nativeKey = keyCode === 'Enter' ? 'Return' : keyCode;
@@ -217,18 +276,13 @@ app.whenReady().then(async () => {
       'editorCapture().pending===null&&!editorCapture().error&&!editorCapture().playing&&Math.abs(editorCapture().time)<0.001',
       'real controller paused and sought to the combination start',
     );
-    win.focus();
-    win.webContents.focus();
     for (const [label, target] of [
       ['播放位置', 0.1],
       ['播放头', 0.2],
     ]) {
-      await run(
-        `document.querySelector('[role=slider][aria-label=${label}]').focus()`,
-      );
-      await wait(
-        `document.hasFocus()&&document.activeElement===document.querySelector('[role=slider][aria-label=${label}]')`,
-        `${label} owns native keyboard focus`,
+      await focusTarget(
+        `document.querySelector('[role=slider][aria-label=${label}]')`,
+        label,
       );
       const before = await run('timelineInputEvents.length');
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
@@ -269,6 +323,14 @@ app.whenReady().then(async () => {
     failed = true;
     console.error(error);
     console.error('renderer errors', errors);
+    console.error('native focus events', nativeFocusEvents);
+    console.error('before-input events', beforeInputEvents);
+    console.error('focus diagnostic', {
+      ...nativeFocus(),
+      dom: await run(
+        `(()=>{const target=${focusedTarget};return {focused:document.hasFocus(),active:document.activeElement?.outerHTML.slice(0,600),target:target?.outerHTML.slice(0,600),inert:!!target?.closest('[inert]')}})()`,
+      ),
+    });
     console.error(
       'timeline state',
       await run(

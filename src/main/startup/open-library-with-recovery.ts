@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import { app, dialog, shell } from 'electron';
+import { app, dialog, safeStorage, shell } from 'electron';
 import { AppBackupRecovery } from '../backups/app-backup-recovery';
 import { RootRelocationService } from '../relocation/root-relocation-service';
 import { errorMessage } from '../storage/database';
@@ -49,6 +49,30 @@ export async function openLibraryWithRecovery(
             defaultRoot,
             undefined,
             app.getVersion(),
+            {
+              arkSecrets: {
+                isEncryptionAvailable: () =>
+                  safeStorage.isEncryptionAvailable(),
+                encryptString: (value) => safeStorage.encryptString(value),
+                decryptString: (value) => safeStorage.decryptString(value),
+                ...(process.platform === 'linux'
+                  ? {
+                      getSelectedStorageBackend: () =>
+                        safeStorage.getSelectedStorageBackend(),
+                    }
+                  : {}),
+              },
+              ...(app.isPackaged
+                ? {
+                    mediaTools: {
+                      bundleDirectory: join(
+                        process.resourcesPath,
+                        'media-tools',
+                      ),
+                    },
+                  }
+                : {}),
+            },
           );
           acquired.library = library;
           if (lifetime.signal.aborted) {

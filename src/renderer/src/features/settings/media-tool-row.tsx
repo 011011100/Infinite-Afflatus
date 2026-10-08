@@ -16,6 +16,7 @@ const statusLabels: Record<MediaToolResult['status'], string> = {
 const sourceLabels: Record<MediaToolLocation['source'], string> = {
   environment: '由环境变量指定',
   saved: '已保存的路径',
+  bundled: '应用内置组件',
   path: '系统搜索路径',
   'standard-location': 'macOS 常见安装位置',
 };
@@ -50,7 +51,11 @@ export function MediaToolRow({
               : 'text-muted-foreground'
           }
         >
-          {result ? statusLabels[result.status] : '未检查'}
+          {result
+            ? statusLabels[result.status]
+            : location?.unavailableReason
+              ? '校验失败'
+              : '未检查'}
         </span>
       </div>
       {result?.version && (
@@ -62,9 +67,9 @@ export function MediaToolRow({
           <span className="select-text">{location.command}</span>
         </p>
       )}
-      {result?.detail && (
+      {(result?.detail || location?.unavailableReason) && (
         <p className="text-xs leading-relaxed text-destructive">
-          {result.detail}
+          {result?.detail ?? location?.unavailableReason}
         </p>
       )}
       <div className="flex flex-wrap gap-2">

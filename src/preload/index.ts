@@ -2,6 +2,32 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { type DesktopBridge, IPC_CHANNELS } from '../shared/desktop';
 
 const desktop: DesktopBridge = {
+  getArkConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getArkConfig),
+  saveArkConfig: (input) =>
+    ipcRenderer.invoke(IPC_CHANNELS.saveArkConfig, input),
+  previewArkGeneration: (target) =>
+    ipcRenderer.invoke(IPC_CHANNELS.previewArkGeneration, target),
+  submitArkGeneration: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.submitArkGeneration, token),
+  cancelArkPreview: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelArkPreview, token),
+  listArkJobs: (projectId, shotId, groupId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.listArkJobs, projectId, shotId, groupId),
+  refreshArkJob: (id) => ipcRenderer.invoke(IPC_CHANNELS.refreshArkJob, id),
+  retryArkDownload: (id) =>
+    ipcRenderer.invoke(IPC_CHANNELS.retryArkDownload, id),
+  retryArkSave: (id) => ipcRenderer.invoke(IPC_CHANNELS.retryArkSave, id),
+  stopArkPolling: (id) => ipcRenderer.invoke(IPC_CHANNELS.stopArkPolling, id),
+  cancelArkQueued: (id) => ipcRenderer.invoke(IPC_CHANNELS.cancelArkQueued, id),
+  adoptArkJob: (id, revision) =>
+    ipcRenderer.invoke(IPC_CHANNELS.adoptArkJob, id, revision),
+  onArkJobsChanged: (listener) => {
+    const changed = () => listener();
+    ipcRenderer.on(IPC_CHANNELS.arkJobsChanged, changed);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.arkJobsChanged, changed);
+    };
+  },
   chooseRescueImport: () => ipcRenderer.invoke(IPC_CHANNELS.chooseRescueImport),
   confirmRescueImport: (token) =>
     ipcRenderer.invoke(IPC_CHANNELS.confirmRescueImport, token),
@@ -176,6 +202,18 @@ const desktop: DesktopBridge = {
   importVideos: (id) => ipcRenderer.invoke(IPC_CHANNELS.importVideos, id),
   prepareProxy: (projectId, assetId) =>
     ipcRenderer.invoke(IPC_CHANNELS.prepareProxy, projectId, assetId),
+  acquireProxyUsage: (projectId, assetIds) =>
+    ipcRenderer.invoke(IPC_CHANNELS.acquireProxyUsage, projectId, assetIds),
+  releaseProxyUsage: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.releaseProxyUsage, token),
+  inspectPreviewCache: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.inspectPreviewCache),
+  previewCacheCleanup: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.previewCacheCleanup),
+  executePreviewCacheCleanup: (token) =>
+    ipcRenderer.invoke(IPC_CHANNELS.executePreviewCacheCleanup, token),
+  cancelPreviewCacheOperations: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelPreviewCacheOperations),
   chooseDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.chooseDirectory),
   startMigration: (token) =>
     ipcRenderer.invoke(IPC_CHANNELS.startMigration, token),

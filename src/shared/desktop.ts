@@ -1,6 +1,7 @@
 import type { AppBackupInfo, AppBackupList } from './app-backup';
 import type { CanvasPatch } from './canvas/model';
 import type { SequenceExportJob, SequenceExportOptions } from './export';
+import type { ArkGenerationApi } from './generation/ark-types';
 import type {
   GenerationDraft,
   ReferenceImportResult,
@@ -20,6 +21,11 @@ import type {
   ProjectSnapshot,
   Viewport,
 } from './models';
+import type {
+  PreviewCacheCleanupPreview,
+  PreviewCacheCleanupResult,
+  PreviewCacheInspection,
+} from './preview-cache';
 import type {
   ProjectEditDraftExport,
   ProjectEditDraftInput,
@@ -50,6 +56,19 @@ import type {
 } from './workspace-draft';
 
 export const IPC_CHANNELS = {
+  getArkConfig: 'ark:configuration',
+  saveArkConfig: 'ark:save-configuration',
+  previewArkGeneration: 'ark:preview',
+  submitArkGeneration: 'ark:submit',
+  cancelArkPreview: 'ark:cancel-preview',
+  listArkJobs: 'ark:list',
+  refreshArkJob: 'ark:refresh',
+  retryArkDownload: 'ark:retry-download',
+  retryArkSave: 'ark:retry-save',
+  stopArkPolling: 'ark:stop-local',
+  cancelArkQueued: 'ark:cancel-queued',
+  adoptArkJob: 'ark:adopt',
+  arkJobsChanged: 'ark:changed',
   chooseRescueImport: 'draft:choose-rescue-import',
   confirmRescueImport: 'draft:confirm-rescue-import',
   cancelRescueImport: 'draft:cancel-rescue-import',
@@ -116,6 +135,12 @@ export const IPC_CHANNELS = {
   patchCanvas: 'project:canvas-patch',
   importVideos: 'project:import-videos',
   prepareProxy: 'media:prepare-proxy',
+  acquireProxyUsage: 'media:acquire-proxy-usage',
+  releaseProxyUsage: 'media:release-proxy-usage',
+  inspectPreviewCache: 'preview-cache:inspect',
+  previewCacheCleanup: 'preview-cache:preview-cleanup',
+  executePreviewCacheCleanup: 'preview-cache:execute-cleanup',
+  cancelPreviewCacheOperations: 'preview-cache:cancel',
   chooseDirectory: 'storage:choose',
   startMigration: 'storage:migrate',
   cancelMigration: 'storage:cancel',
@@ -139,7 +164,7 @@ export interface ProxyResult {
 }
 
 /** Only specific desktop capabilities cross the preload boundary. */
-export interface DesktopBridge {
+export interface DesktopBridge extends ArkGenerationApi {
   chooseRescueImport: () => Promise<RescueImportPreview | null>;
   confirmRescueImport: (token: string) => Promise<RescueImportResult>;
   cancelRescueImport: () => Promise<void>;
@@ -269,6 +294,14 @@ export interface DesktopBridge {
   patchCanvas: (id: string, patch: CanvasPatch) => Promise<ProjectSnapshot>;
   importVideos: (id: string) => Promise<void>;
   prepareProxy: (projectId: string, assetId: string) => Promise<ProxyResult>;
+  acquireProxyUsage: (projectId: string, assetIds: string[]) => Promise<string>;
+  releaseProxyUsage: (token: string) => Promise<void>;
+  inspectPreviewCache: () => Promise<PreviewCacheInspection>;
+  previewCacheCleanup: () => Promise<PreviewCacheCleanupPreview>;
+  executePreviewCacheCleanup: (
+    token: string,
+  ) => Promise<PreviewCacheCleanupResult>;
+  cancelPreviewCacheOperations: () => Promise<void>;
   chooseDirectory: () => Promise<MigrationPreview | null>;
   startMigration: (token: string) => Promise<void>;
   cancelMigration: () => Promise<void>;

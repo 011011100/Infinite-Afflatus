@@ -59,6 +59,8 @@ type ProjectCanvasProps = {
   interactions: InteractionSettings;
   inactive: boolean;
   report: (error: unknown) => void;
+  onOpenArkSettings?: () => void;
+  onAdoptedProject?: (snapshot: ProjectSnapshot) => Promise<void>;
 };
 
 export function ProjectCanvas(props: ProjectCanvasProps) {
@@ -79,6 +81,8 @@ function CanvasContent({
   interactions,
   inactive,
   report,
+  onOpenArkSettings,
+  onAdoptedProject,
 }: ProjectCanvasProps) {
   const [mainHistory] = useState(() => new MainCanvasHistory());
   const mainState = useSyncExternalStore(
@@ -91,12 +95,13 @@ function CanvasContent({
     report,
     mainHistory,
   );
-  const interactionBlocked = blocked || shots.recovering;
+  const interactionBlocked = blocked || shots.recovering || shots.adopting;
   const isRecovering = useCallback(
     () =>
       shots.isRecovering() ||
+      shots.isAdopting() ||
       projectEditRecoveryGuards.isRecovering(snapshot.project.id),
-    [shots.isRecovering, snapshot.project.id],
+    [shots.isRecovering, shots.isAdopting, snapshot.project.id],
   );
   const recoveryNotice = (
     <WorkspaceDraftNotice
@@ -104,7 +109,7 @@ function CanvasContent({
       baseline={shots.baseline}
       dirty={shots.dirty}
       blocked={blocked}
-      editorBusy={mainState.busy}
+      editorBusy={mainState.busy || shots.adopting}
       saveFailed={!!shots.error}
       recovering={shots.recovering}
       restore={(record) => {
@@ -187,6 +192,7 @@ function CanvasContent({
             current.document.canRecoverProjectEdits() &&
             !mainHistory.getSnapshot().busy &&
             !current.shots.isRecovering() &&
+            !current.shots.isAdopting() &&
             !current.drag.drag &&
             Object.keys(current.shotPositions).length === 0
           );
@@ -452,7 +458,7 @@ function CanvasContent({
       ref={root}
       className="relative min-h-0 flex-1"
       aria-label="视频创作画布"
-      aria-busy={mainState.busy || shots.recovering}
+      aria-busy={mainState.busy || shots.recovering || shots.adopting}
     >
       {!shots.activeShot && !playing && (
         <div className="absolute inset-x-0 top-0 z-20">
@@ -680,6 +686,27 @@ function CanvasContent({
           snapshot={document.snapshot}
           blocked={interactionBlocked}
           recovering={shots.recovering}
+          adopting={shots.adopting}
+          pendingAdoptionJobId={shots.pendingAdoptionJobId}
+          onOpenArkSettings={onOpenArkSettings}
+          onAdoptGeneration={(jobId) => {
+            if (shots.isAdopting()) return shots.adoptGeneration(jobId);
+            if (
+              inactive ||
+              isRecovering() ||
+              drag.drag ||
+              Object.keys(shotPositions).length ||
+              !document.canRecoverProjectEdits()
+            )
+              return Promise.reject(
+                new Error('请先完成当前编辑，再采用生成结果。'),
+              );
+            return shots.adoptGeneration(
+              jobId,
+              document.beginGenerationAdoption,
+              onAdoptedProject,
+            );
+          }}
           projectUnavailable={projectUnavailable}
           unavailableNotice={
             <>

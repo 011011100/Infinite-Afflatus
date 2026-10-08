@@ -1,5 +1,3 @@
-import { readFile, stat } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import { validateGenerationDraft } from '../../shared/generation/draft';
 import { imageInputError } from '../../shared/generation/image-generation';
 import { validateWorkspace } from '../../shared/generation/workspace';
@@ -9,8 +7,8 @@ import {
   writeGenerationDraft,
 } from '../projects/project-database';
 import type { ProjectService } from '../projects/project-service';
+import { ProjectReferenceReader } from '../saving/project-reference-reader';
 import type { AppStore } from '../storage/app-store';
-import { safeFile } from '../storage/files';
 import type { WriteGate } from '../storage/write-gate';
 import { readWorkspace, writeWorkspace } from './workspace-database';
 
@@ -19,6 +17,10 @@ export class GenerationService {
     private readonly projects: ProjectService,
     private readonly store: AppStore,
     private readonly gate: WriteGate,
+    private readonly referenceReads = new ProjectReferenceReader(
+      projects,
+      store,
+    ),
   ) {}
 
   async readWorkspace(projectId: string) {
@@ -123,23 +125,22 @@ export class GenerationService {
   }
 
   async readText(projectId: string, assetId: string): Promise<string> {
-    const snapshot = await this.projects.open(projectId);
-    const asset = snapshot.assets.find(
-      (item) => item.id === assetId && item.kind === 'text',
-    );
-    if (!asset) throw new Error('文本素材不存在');
-    const path = await safeFile(
-      dirname(await this.projects.databasePath(projectId)),
-      asset.relativePath,
-    );
-    if ((await stat(path)).size > 1024 * 1024)
-      throw new Error('文本素材不能超过 1 MB');
+    const media = await this.referenceReads.acquire(projectId, assetId, 'text');
+    if (!media) throw new Error('文本素材不存在');
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(
-        await readFile(path),
-      );
-    } catch {
-      throw new Error('无法读取文本，请使用 UTF-8 编码的 TXT 或 Markdown 文件');
+      if ((await media.handle.stat()).size > 1024 * 1024)
+        throw new Error('文本素材不能超过 1 MB');
+      try {
+        return new TextDecoder('utf-8', { fatal: true }).decode(
+          await media.handle.readFile(),
+        );
+      } catch {
+        throw new Error(
+          '无法读取文本，请使用 UTF-8 编码的 TXT 或 Markdown 文件',
+        );
+      }
+    } finally {
+      await media.handle.close();
     }
   }
 }

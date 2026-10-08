@@ -11,12 +11,14 @@ import {
   isTrimPatch,
   reversePatch,
 } from '../../../../shared/canvas/operations';
+import type { ArkAdoptionResult } from '../../../../shared/generation/ark-types';
 import type { ProjectSnapshot } from '../../../../shared/models';
 import type { ProjectEditDraftRecord } from '../../../../shared/project-edit-draft';
 import {
   type ProjectEditRecoveryAttempt,
   projectEditRecoveryGuards,
 } from '../drafts/project-edit-recovery-guards';
+import { validateArkProjectAdoption } from '../generation/ark-adoption';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
 import { canResumeCanvas } from './canvas-recovery';
@@ -52,6 +54,7 @@ export function useCanvasDocument(
     ticket: PendingTrimSubmission;
   } | null>(null);
   const acceptedInitial = useRef(initial);
+  const adoptedAssets = useRef(new Map<string, string>());
   const [localHistory] = useState(() => new MainCanvasHistory());
   const mainHistory = sharedHistory ?? localHistory;
   const history = useSyncExternalStore(
@@ -69,7 +72,9 @@ export function useCanvasDocument(
   );
   usePendingSave(
     `主画布:${initial.project.id}`,
-    () => pending.current ?? Promise.resolve(!trimRecovery.hasPendingEdits()),
+    () =>
+      pending.current ??
+      Promise.resolve(!writing.current && !trimRecovery.hasPendingEdits()),
   );
   useProjectRecoveryGuard(
     initial.project.id,
@@ -109,7 +114,12 @@ export function useCanvasDocument(
     const current = confirmed.current;
     if (
       initial.canvas.revision < current.canvas.revision ||
-      initial.assets.length < current.assets.length
+      initial.assets.length < current.assets.length ||
+      [...adoptedAssets.current].some(
+        ([id, value]) =>
+          JSON.stringify(initial.assets.find((asset) => asset.id === id)) !==
+          value,
+      )
     )
       return;
     // Update the ref synchronously before child passive effects retry their queue.
@@ -185,6 +195,62 @@ export function useCanvasDocument(
     [initial.project.id, report, prepareTransition, mainHistory, trimRecovery],
   );
 
+  // Reserve the existing canvas write lane before backend adoption. This also
+  // keeps parent refreshes and native close from racing its authoritative reply.
+  const beginGenerationAdoption = () => {
+    if (
+      writing.current ||
+      locked.current ||
+      mainHistory.getSnapshot().busy ||
+      trimRecovery.hasPendingEdits() ||
+      projectEditRecoveryGuards.isRecovering(initial.project.id)
+    )
+      return null;
+    const baseline = confirmed.current;
+    writing.current = true;
+    setSaving(true);
+    let settle!: (saved: boolean) => void;
+    const resume = () => {
+      if (pending.current) return;
+      pending.current = new Promise<boolean>((resolve) => {
+        settle = resolve;
+      });
+    };
+    resume();
+    let active = true;
+    return {
+      snapshot: baseline,
+      resume,
+      pause: () => {
+        pending.current = null;
+        settle(false);
+      },
+      accept: (result: ArkAdoptionResult) => {
+        if (!active || confirmed.current !== baseline)
+          throw new Error('采用期间主画布版本发生变化，未替换当前画布。');
+        validateArkProjectAdoption(baseline, result);
+        const saved = { ...result.snapshot, viewport: baseline.viewport };
+        confirmed.current = saved;
+        adoptedAssets.current.set(
+          result.assetId,
+          JSON.stringify(
+            saved.assets.find((asset) => asset.id === result.assetId),
+          ),
+        );
+        setSnapshot(saved);
+        trimRecovery.acceptUnchanged(saved);
+      },
+      finish: (saved: boolean) => {
+        if (!active) return;
+        active = false;
+        writing.current = false;
+        pending.current = null;
+        setSaving(false);
+        settle(saved);
+      },
+    };
+  };
+
   const undo = useCallback(() => {
     const operation = mainHistory.getSnapshot().undo;
     if (operation?.kind === 'video') void commit(operation.patch, 'undo');
@@ -244,6 +310,7 @@ export function useCanvasDocument(
   return {
     snapshot,
     saving,
+    beginGenerationAdoption,
     commit,
     undo,
     redo,

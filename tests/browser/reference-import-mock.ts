@@ -13,7 +13,11 @@ export function referenceImportMock() {
     | 'resumeReferenceSaves'
     | 'cancelStagingOperations'
     | 'getMediaToolSettings'
+    | 'listArkJobs'
+    | 'onArkJobsChanged'
   > = {
+    listArkJobs: async () => [],
+    onArkJobsChanged: () => () => {},
     getMediaToolSettings: async () => ({
       paths: { ffmpeg: null, ffprobe: null },
       locations: {

@@ -16,8 +16,11 @@ import { registerWorkspaceDraftIpc } from '../drafts/draft-ipc';
 import { registerProjectEditDraftIpc } from '../drafts/project-edit-draft-ipc';
 import { registerRescueImportIpc } from '../drafts/rescue-import-ipc';
 import { registerExportIpc } from '../export/export-ipc';
+import { registerArkIpc } from '../generation/ark-ipc';
 import { registerGenerationIpc } from '../generation/generation-ipc';
 import { registerMediaToolsIpc } from '../media/media-tools-ipc';
+import { registerPreviewCacheIpc } from '../media/preview-cache-ipc';
+import { registerProxyUsageIpc } from '../media/proxy-usage-ipc';
 import { registerPackageIpc } from '../packages/package-ipc';
 import {
   isId,
@@ -49,11 +52,14 @@ export function registerDesktop(
     return value;
   };
   registerGenerationIpc(library, trustedWindow);
+  registerArkIpc(library.ark, trustedWindow, getWindow);
   registerAppBackupIpc(library.backups, trustedWindow);
   registerExportIpc(library, trustedWindow);
   registerPackageIpc(library, trustedWindow);
   registerRecoveryIpc(library, trustedWindow, getWindow);
   registerMediaToolsIpc(library.mediaTools, trustedWindow);
+  registerPreviewCacheIpc(library.previewCache, trustedWindow);
+  registerProxyUsageIpc(library.proxies, library.gate, trustedWindow);
   registerStagingCleanupIpc(library.stagingCleanup, trustedWindow);
   registerRescueImportIpc(library.rescueImports, trustedWindow);
   registerWorkspaceDraftIpc(

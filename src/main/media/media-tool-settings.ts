@@ -10,6 +10,7 @@ import type {
   MediaToolsReport,
 } from '../../shared/media-tools';
 import type { AppStore } from '../storage/app-store';
+import { createMediaToolBundleReader } from './media-tool-bundle';
 import {
   inspectMediaTool,
   MediaToolDiagnostics,
@@ -86,11 +87,25 @@ export class MediaToolSettings {
   private diagnostics: MediaToolDiagnostics;
   private inspect: typeof inspectMediaTool;
   private closed: Promise<void> | null = null;
+  private readBundle: ReturnType<typeof createMediaToolBundleReader>;
   constructor(
     private store: Store,
     private options: Options = {},
   ) {
-    this.inspect = options.inspect ?? inspectMediaTool;
+    this.readBundle = createMediaToolBundleReader(
+      options.bundleDirectory,
+      options,
+    );
+    const inspect = options.inspect ?? inspectMediaTool;
+    this.inspect = (location, options) =>
+      location.unavailableReason
+        ? Promise.resolve({
+            ...location,
+            status: 'invalid',
+            version: null,
+            detail: location.unavailableReason,
+          })
+        : inspect(location, options);
     this.diagnostics = new MediaToolDiagnostics(this.inspect);
   }
 
@@ -106,7 +121,10 @@ export class MediaToolSettings {
     }
     return {
       paths,
-      locations: resolveMediaToolPair(paths ?? undefined, this.options),
+      locations: resolveMediaToolPair(
+        paths ?? undefined,
+        this.resolutionOptions(),
+      ),
       error,
     };
   }
@@ -115,11 +133,24 @@ export class MediaToolSettings {
     this.controller.signal.throwIfAborted();
     const state = this.state();
     if (state.error) throw new Error(state.error);
+    for (const location of Object.values(state.locations))
+      if (location.unavailableReason)
+        throw new Error(location.unavailableReason);
     return state.locations;
   }
 
+  private resolutionOptions() {
+    return {
+      ...this.options,
+      bundle: this.options.bundle ?? this.readBundle(),
+    };
+  }
+
   check(): Promise<MediaToolsReport> {
-    return this.diagnostics.check(this.snapshot());
+    this.controller.signal.throwIfAborted();
+    const state = this.state();
+    if (state.error) throw new Error(state.error);
+    return this.diagnostics.check(state.locations);
   }
 
   choose(
@@ -171,7 +202,7 @@ export class MediaToolSettings {
           throw new Error('清除两项路径仅用于修复损坏的视频处理配置。');
         paths = emptyPaths();
       } else paths = { ...this.assertEditable(name), [name]: null };
-      const locations = resolveMediaToolPair(paths, this.options);
+      const locations = resolveMediaToolPair(paths, this.resolutionOptions());
       // Reset is meaningful even if automatic discovery cannot find a tool.
       // Complete diagnosis before persisting so closure and write failure keep the old value.
       const names = name === 'all' ? (['ffmpeg', 'ffprobe'] as const) : [name];

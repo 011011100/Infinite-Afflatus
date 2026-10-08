@@ -19,6 +19,8 @@ import type {
   ShotWorkspace,
 } from '../../../../shared/generation/workspace';
 import type { Asset } from '../../../../shared/models';
+import { ArkGenerationControls } from './ark/ark-generation-controls';
+import { useArkGeneration } from './ark/use-ark-generation';
 import { GenerationSettings } from './generation-parameters';
 import { GroupTextStack } from './group-text-stack';
 import { ImageGenerationSettings } from './image-generation-parameters';
@@ -48,6 +50,10 @@ export function GroupStage({
   onClose,
   history,
   unavailableNotice,
+  onAdoptGeneration,
+  onOpenArkSettings,
+  adopting = false,
+  pendingAdoptionJobId = null,
 }: {
   shot: ShotWorkspace;
   group: GenerationGroup;
@@ -63,11 +69,35 @@ export function GroupStage({
   detach: (id: string, at?: { x: number; y: number }) => void;
   onClose: () => void;
   unavailableNotice?: ReactNode;
+  onAdoptGeneration?: ((jobId: string) => Promise<void>) | undefined;
+  onOpenArkSettings?: (() => void) | undefined;
+  adopting?: boolean;
+  pendingAdoptionJobId?: string | null;
 }) {
+  const generation = useArkGeneration({
+    target: { projectId, shotId: shot.id, groupId: group.id },
+    sourceVersion: JSON.stringify({
+      group,
+      nodes: shot.nodes.filter((node) => node.groupId === group.id),
+    }),
+    disabled,
+    pendingAdoptionJobId,
+    onAdopt: onAdoptGeneration,
+  });
+  const generationActions = (
+    <ArkGenerationControls
+      state={generation}
+      kind={group.kind === 'image' ? 'image' : 'video'}
+      disabled={disabled}
+      pendingAdoptionJobId={pendingAdoptionJobId}
+      canAdopt={!!onAdoptGeneration}
+      onOpenSettings={onOpenArkSettings}
+    />
+  );
   const dialog = useRef<HTMLDialogElement>(null);
   const closeMotion = useGroupStageMotion(dialog, origin, onClose);
   const requestClose = () => {
-    if (recovering) return;
+    if (recovering || adopting || generation.busy?.startsWith('adopt:')) return;
     // Local name inputs must join the retained draft before their editor unmounts.
     void flushPendingChanges().then((saved) => {
       if (saved) closeMotion();
@@ -143,7 +173,7 @@ export function GroupStage({
           variant="outline"
           className="rounded-full bg-background/90 shadow-sm"
           onClick={requestClose}
-          disabled={recovering}
+          disabled={recovering || adopting}
         >
           <ArrowLeft />
           收起组合
@@ -232,13 +262,11 @@ export function GroupStage({
             onViewCanvas={requestClose}
           />
         </div>
-        <fieldset
-          data-stage-panel
-          className="group-stage-parameters"
-          disabled={disabled}
-        >
+        <div data-stage-panel className="group-stage-parameters">
           {group.kind === 'image' ? (
             <ImageGenerationSettings
+              actions={generationActions}
+              disabled={disabled}
               value={group.parameters}
               references={imageReferenceCount(members, assets)}
               onChange={(parameters) =>
@@ -263,6 +291,8 @@ export function GroupStage({
             />
           ) : (
             <GenerationSettings
+              actions={generationActions}
+              disabled={disabled}
               value={group.parameters}
               onChange={(parameters) =>
                 update(
@@ -285,7 +315,7 @@ export function GroupStage({
               }
             />
           )}
-        </fieldset>
+        </div>
       </div>
     </dialog>
   );

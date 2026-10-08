@@ -6,6 +6,11 @@ import type {
   MediaToolPair,
   MediaToolPaths,
 } from '../../shared/media-tools';
+import {
+  bundledMediaToolLocation,
+  createMediaToolBundleReader,
+  type MediaToolBundleState,
+} from './media-tool-bundle';
 
 export const MEDIA_TOOL_ENV = {
   ffmpeg: 'FFMPEG_PATH',
@@ -16,6 +21,10 @@ export interface MediaToolResolutionOptions {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
   executable?: (file: string) => boolean;
+  /** Undefined is default-off; packaged apps supply their resource directory. */
+  bundleDirectory?: string;
+  arch?: string;
+  bundle?: MediaToolBundleState;
 }
 
 function isExecutable(file: string): boolean {
@@ -36,6 +45,18 @@ export function resolveMediaTool(
   const configured = env[MEDIA_TOOL_ENV[name]];
   if (configured) return { name, command: configured, source: 'environment' };
   if (options.saved) return { name, command: options.saved, source: 'saved' };
+  const bundle =
+    options.bundle ??
+    createMediaToolBundleReader(options.bundleDirectory, options)();
+  if (bundle.status === 'verified')
+    return bundledMediaToolLocation(bundle.bundle, name);
+  if (bundle.status === 'invalid')
+    return {
+      name,
+      command: join(bundle.directory, name),
+      source: 'bundled',
+      unavailableReason: bundle.error,
+    };
   if ((options.platform ?? process.platform) === 'darwin') {
     const executable = options.executable ?? isExecutable;
     // Finder does not normally inherit a shell's Homebrew PATH. Prefer the actual
@@ -59,13 +80,19 @@ export function resolveMediaToolPair(
   paths?: MediaToolPaths,
   options: MediaToolResolutionOptions = {},
 ): MediaToolPair {
+  const resolved = {
+    ...options,
+    bundle:
+      options.bundle ??
+      createMediaToolBundleReader(options.bundleDirectory, options)(),
+  };
   return Object.freeze({
     ffmpeg: Object.freeze(
-      resolveMediaTool('ffmpeg', { ...options, saved: paths?.ffmpeg ?? null }),
+      resolveMediaTool('ffmpeg', { ...resolved, saved: paths?.ffmpeg ?? null }),
     ),
     ffprobe: Object.freeze(
       resolveMediaTool('ffprobe', {
-        ...options,
+        ...resolved,
         saved: paths?.ffprobe ?? null,
       }),
     ),

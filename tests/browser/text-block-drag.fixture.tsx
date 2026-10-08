@@ -6,7 +6,10 @@ import {
   groupMaterials,
 } from '../../src/shared/generation/material-groups';
 import { newShot } from '../../src/shared/generation/workspace';
+import { referenceImportMock } from './reference-import-mock';
 import '../../src/renderer/src/styles.css';
+
+Object.assign(window, { desktop: referenceImportMock().bridge });
 
 const initial = newShot('shot', '拖动回归', { x: 0, y: 0 });
 const count = Number(new URLSearchParams(location.search).get('count') ?? 3);

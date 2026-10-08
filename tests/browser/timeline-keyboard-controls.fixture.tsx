@@ -119,8 +119,13 @@ const card = {
   trims: Object.fromEntries(clips.map((clip) => [clip.asset.id, clip.range])),
 };
 const seeks: number[] = [];
-const playbackBridge: Pick<DesktopBridge, 'prepareProxy'> = {
+const playbackBridge: Pick<
+  DesktopBridge,
+  'prepareProxy' | 'acquireProxyUsage' | 'releaseProxyUsage'
+> = {
   prepareProxy: async () => ({ ready: false }),
+  acquireProxyUsage: async () => 'fixture-lease',
+  releaseProxyUsage: async () => {},
 };
 Object.assign(window, { desktop: playbackBridge });
 

@@ -28,9 +28,9 @@ export function App() {
   const state = useLibrary();
   const lifecycle = useSaveLifecycle();
   const [settings, setSettings] = useState(false);
-  const [settingsPage, setSettingsPage] = useState<'interactions' | 'storage'>(
-    'interactions',
-  );
+  const [settingsPage, setSettingsPage] = useState<
+    'interactions' | 'storage' | 'ark'
+  >('interactions');
   const { library, project, busy, run, refreshProjectAfterEdit } = state;
   const baseProjectBlocked =
     library?.writeBlocked === true || !!state.projectUnavailable;
@@ -201,6 +201,11 @@ export function App() {
           >
             <ProjectCanvas
               snapshot={project}
+              onOpenArkSettings={() => {
+                setSettingsPage('ark');
+                setSettings(true);
+              }}
+              onAdoptedProject={refreshProjectAfterEdit}
               blocked={projectBlocked}
               projectUnavailable={!!state.projectUnavailable}
               unavailableNotice={

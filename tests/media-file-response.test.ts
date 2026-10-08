@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, open, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -97,4 +97,104 @@ test('a cancelled media response releases its stream and supports the next seek'
   );
   assert.equal(next.status, 206);
   assert.deepEqual(Buffer.from(await next.arrayBuffer()), Buffer.alloc(10, 7));
+});
+
+test('media read leases release exactly once for HEAD, invalid ranges, missing files and aborted requests', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'afflatus-media-lease-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, 'source.mp4');
+  await writeFile(file, 'preview');
+  for (const request of [
+    new Request('https://media.test/preview', { method: 'HEAD' }),
+    new Request('https://media.test/preview', {
+      headers: { Range: 'bytes=99-' },
+    }),
+  ]) {
+    let released = 0;
+    const response = await mediaFileResponse(file, request, () => {
+      released++;
+    });
+    assert.equal(response.body, null);
+    assert.equal(released, 1);
+  }
+  let released = 0;
+  await assert.rejects(
+    mediaFileResponse(
+      join(root, 'missing'),
+      new Request('https://media.test/preview'),
+      () => {
+        released++;
+      },
+    ),
+  );
+  assert.equal(released, 1);
+  const controller = new AbortController();
+  controller.abort();
+  released = 0;
+  await assert.rejects(
+    mediaFileResponse(
+      file,
+      new Request('https://media.test/preview', { signal: controller.signal }),
+      () => {
+        released++;
+      },
+    ),
+  );
+  assert.equal(released, 1);
+});
+
+test('authorized descriptors are never reopened and close for HEAD, ranges, cancellation and errors', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'afflatus-open-media-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, 'stage.ready');
+  await writeFile(file, '0123456789');
+  const handle = await open(file, 'r');
+  // A consumer receives the whole file even if authorization inspected its bytes.
+  await handle.read(Buffer.alloc(3), 0, 3, null);
+  await unlink(file);
+  await writeFile(file, 'replacement');
+  const complete = await mediaFileResponse(
+    { handle, filename: 'reference.mp4' },
+    new Request('https://media.test/open'),
+  );
+  assert.equal(complete.headers.get('content-type'), 'video/mp4');
+  assert.equal(await complete.text(), '0123456789');
+  assert.equal(handle.fd, -1);
+
+  for (const request of [
+    new Request('https://media.test/open', { method: 'HEAD' }),
+    new Request('https://media.test/open', { headers: { Range: 'bytes=99-' } }),
+  ]) {
+    const current = await open(file, 'r');
+    const response = await mediaFileResponse(
+      { handle: current, filename: 'reference.png' },
+      request,
+    );
+    assert.equal(response.body, null);
+    assert.equal(current.fd, -1);
+  }
+  const controller = new AbortController();
+  controller.abort();
+  const aborted = await open(file, 'r');
+  await assert.rejects(
+    mediaFileResponse(
+      { handle: aborted, filename: 'reference.wav' },
+      new Request('https://media.test/open', { signal: controller.signal }),
+    ),
+  );
+  assert.equal(aborted.fd, -1);
+  const cancelled = await open(file, 'r');
+  let closed = () => {};
+  const closure = new Promise<void>((resolve) => {
+    closed = resolve;
+  });
+  const response = await mediaFileResponse(
+    { handle: cancelled, filename: 'reference.wav' },
+    new Request('https://media.test/open'),
+    closed,
+  );
+  await response.body?.cancel();
+  // Cancellation destroys the stream; its close event owns descriptor release.
+  await closure;
+  assert.equal(cancelled.fd, -1);
 });

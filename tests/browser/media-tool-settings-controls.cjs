@@ -190,6 +190,41 @@ app.whenReady().then(async () => {
       'PASS environment-managed tools cannot be overwritten or reset while the other tool remains configurable',
     );
 
+    await load('bundled');
+    assert.equal((await state()).checks, 0);
+    assert.match(await row('FFmpeg'), /应用内置组件/);
+    await check();
+    assert.match(await row('FFmpeg'), /可运行/);
+    await run('toolsControls.bundleState(true)');
+    await click('重新检查');
+    await run('toolsControls.check()');
+    await wait('toolsControls.state().reads === 2', 'changed bundle read');
+    await run('toolsControls.read()');
+    await ready();
+    assert.match(await row('FFmpeg'), /校验失败/);
+    assert.doesNotMatch(await row('FFmpeg'), /可运行|版本 8/);
+    await run('toolsControls.bundleState(false)');
+    await click('重新检查');
+    await run('toolsControls.check()');
+    await wait('toolsControls.state().reads === 3', 'repaired bundle read');
+    await run('toolsControls.read()');
+    await ready();
+    assert.match(await row('FFmpeg'), /可运行/);
+    assert.doesNotMatch(await row('FFmpeg'), /校验失败/);
+    await load('bundled-invalid');
+    assert.equal((await state()).checks, 0);
+    assert.match(await row('FFmpeg'), /校验失败/);
+    assert.equal(await run(`${button('选择 FFmpeg 程序')}.disabled`), false);
+    await click('选择 FFmpeg 程序');
+    await run('toolsControls.choose("/独立组件/ffmpeg")');
+    await ready();
+    assert.match(await row('FFmpeg'), /已保存的路径|可运行/);
+    assert.doesNotMatch(await row('FFmpeg'), /校验失败/);
+    assert.match(await row('FFprobe'), /校验失败/);
+    console.log(
+      'PASS bundled source is read-only on open; integrity changes replace stale reports and invalid bundles keep explicit overrides editable',
+    );
+
     for (const mismatch of ['name', 'source', 'command']) {
       await load();
       await click('检查组件');

@@ -1,4 +1,5 @@
 import { Image, Type } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select } from '@/components/ui/select';
 import {
@@ -11,13 +12,22 @@ export function ImageGenerationSettings({
   value,
   references,
   onChange,
+  actions,
+  disabled = false,
 }: {
   value: ImageGenerationParameters;
+  actions?: ReactNode;
+  disabled?: boolean;
   references: number;
   onChange: (value: ImageGenerationParameters) => void;
 }) {
   return (
-    <GenerationSettingsPanel label="图片生成设置" action="生成图片">
+    <GenerationSettingsPanel
+      label="图片生成设置"
+      action="生成图片"
+      actions={actions}
+      disabled={disabled}
+    >
       <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2.5 text-sm text-primary">
         {references ? (
           <Image className="size-4" />

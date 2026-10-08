@@ -96,7 +96,7 @@ export function MediaToolsSettings() {
         </p>
       )}
       <p className="text-xs leading-relaxed text-muted-foreground">
-        本应用尚未内置这些组件。此处只确认组件能够启动并读取版本，不代表已验证
+        仅在安装包明确包含并通过完整性校验时使用内置组件。版本检查只确认组件能够启动并读取版本，不代表已验证
         libx264、AAC 编码器或所有视频格式的兼容性。
       </p>
       <details className="rounded-lg border p-3 text-xs leading-relaxed">
@@ -107,7 +107,8 @@ export function MediaToolsSettings() {
             可分别指定可执行文件的完整路径，路径不带引号或命令参数。环境变量优先于此处保存的路径；明确指定的路径错误时不会自动改用其他组件。
           </p>
           <p>
-            没有指定路径时使用应用启动时的系统 PATH。macOS 还会检查
+            没有指定路径时优先使用通过校验的内置组件；安装包未附带组件时使用应用启动时的系统
+            PATH。内置组件校验失败时不会自动回退。macOS 还会检查
             /opt/homebrew/bin 与 /usr/local/bin 下真实存在且可执行的工具。从
             Finder 启动时，应用可能无法读取终端的 PATH 配置。
           </p>

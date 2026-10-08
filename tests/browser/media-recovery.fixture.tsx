@@ -43,6 +43,8 @@ const bridge = {
     return structuredClone(stored);
   },
   prepareProxy: async () => ({ ready: false }),
+  acquireProxyUsage: async () => 'fixture-lease',
+  releaseProxyUsage: async () => {},
   readReferenceText: async () => {
     if (!sourceAvailable) throw new Error('原文本暂时缺失');
     return '恢复后的原文本';

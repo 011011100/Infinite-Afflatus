@@ -12,10 +12,12 @@ import config from '../../electron.vite.config.ts';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const available = [
   'xyflow-lifecycle',
+  'ark-generation-controls',
   'canvas-recovery',
   'media-tool-settings-controls',
   'reference-import-controls',
   'staging-cleanup-controls',
+  'preview-cache-controls',
   'project-rename-controls',
   'trim-recovery-controls',
   'project-edit-recovery-controls',

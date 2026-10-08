@@ -3,6 +3,7 @@ import type {
   MediaToolLocation,
   MediaToolPair,
 } from '../../shared/media-tools';
+import { assertMediaToolLaunch } from './media-tool-bundle';
 import { mediaToolStartError, resolveMediaToolPair } from './media-tools';
 
 export const PROXY_VERSION = 1;
@@ -15,6 +16,7 @@ function run(
 ): Promise<string> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
+    assertMediaToolLaunch(location);
     const child = spawn(location.command, args, {
       shell: false,
       windowsHide: true,

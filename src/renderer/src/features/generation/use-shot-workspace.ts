@@ -23,7 +23,7 @@ import {
   type Point,
   type ShotWorkspace,
 } from '../../../../shared/generation/workspace';
-import type { Asset } from '../../../../shared/models';
+import type { Asset, ProjectSnapshot } from '../../../../shared/models';
 import {
   sameWorkspace,
   type WorkspaceDraftRecord,
@@ -31,6 +31,12 @@ import {
 import { useWorkspaceDrafts } from '../drafts/use-workspace-drafts';
 import { usePendingSave } from '../lifecycle/use-pending-save';
 import { useProjectRecoveryGuard } from '../projects/use-project-recovery-guard';
+import {
+  type ArkAdoptionBaseline,
+  type ArkAdoptionCanvasLease,
+  arkAdoptionDidNotCommit,
+  requestArkAdoption,
+} from './ark-adoption';
 import { message } from './errors';
 import type { ReferenceImportTarget } from './reference-import-target';
 import { saveWorkspaceSubmission } from './workspace-save-submission';
@@ -51,6 +57,18 @@ export function useShotWorkspace(
   const [saving, setSaving] = useState(false);
   const [savedEdit, setSavedEdit] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [adopting, setAdopting] = useState(false);
+  const adoptingRef = useRef(false);
+  const adoptionLocked = useRef(false);
+  const adoption = useRef<Promise<void> | null>(null);
+  const adoptionJob = useRef<string | null>(null);
+  const adoptionAttempt = useRef<{
+    baseline: ArkAdoptionBaseline;
+    version: number;
+    lease: ArkAdoptionCanvasLease;
+    notify?: (snapshot: ProjectSnapshot) => Promise<void>;
+  } | null>(null);
+  const isAdopting = useCallback(() => adoptingRef.current, []);
   const [recovering, setRecovering] = useState(false);
   const recoveringRef = useRef(false);
   const isRecovering = useCallback(() => recoveringRef.current, []);
@@ -63,6 +81,8 @@ export function useShotWorkspace(
   const edit = useRef(0);
   const saved = useRef(0);
   const pending = useRef<Promise<boolean> | null>(null);
+  const blockedRef = useRef(blocked);
+  blockedRef.current = blocked;
   const locked = useRef(blocked);
   const history = useRef(new ShotHistory());
   const imports = useRef(new Set<symbol>());
@@ -77,7 +97,7 @@ export function useShotWorkspace(
     inverse: ShotListOperation;
   } | null>(null);
   const unconfirmed = useRef<WorkspaceSubmission | null>(null);
-  locked.current = blocked || recoveringRef.current;
+  locked.current = blocked || recoveringRef.current || adoptionLocked.current;
   const confirmSubmission = useCallback(
     async (result: GenerationWorkspace, attempt: WorkspaceSubmission) => {
       if (unconfirmed.current !== attempt) return;
@@ -169,11 +189,30 @@ export function useShotWorkspace(
   }, [projectId, draftQueue, confirmSubmission]);
   usePendingSave(
     `镜头草稿:${projectId}`,
-    () => listing.current ?? copying.current?.then(Boolean) ?? flush(),
+    () =>
+      adoption.current?.then(
+        () => true,
+        () => false,
+      ) ??
+      (adoptionAttempt.current ? Promise.resolve(false) : null) ??
+      listing.current ??
+      copying.current?.then(Boolean) ??
+      flush(),
     0,
-    () => listing.current ?? copying.current?.then(Boolean) ?? pending.current,
+    () =>
+      adoption.current?.then(
+        () => true,
+        () => false,
+      ) ??
+      (adoptionAttempt.current ? Promise.resolve(false) : null) ??
+      listing.current ??
+      copying.current?.then(Boolean) ??
+      pending.current,
   );
   useProjectRecoveryGuard(projectId, async () => {
+    await adoption.current?.catch(() => undefined);
+    if (adoptionAttempt.current)
+      return '生成结果采用尚未确认，请先重试核对同一候选结果；当前内容和撤销记录仍保留。';
     await pending.current;
     const remote = await window.desktop.getGenerationWorkspace(projectId);
     const previous = unconfirmed.current;
@@ -232,7 +271,7 @@ export function useShotWorkspace(
   );
   const change = useCallback(
     (update: (value: GenerationWorkspace) => GenerationWorkspace) => {
-      if (!current.current || locked.current) return;
+      if (!current.current || locked.current || adoptingRef.current) return;
       commit(update(current.current));
     },
     [commit],
@@ -243,7 +282,8 @@ export function useShotWorkspace(
     prepared?: MainCanvasHistoryTicket,
   ) => {
     const doc = current.current;
-    if (!doc || locked.current || listSubmission.current) return false;
+    if (!doc || locked.current || adoptingRef.current || listSubmission.current)
+      return false;
     const changed = applyShotListOperation(doc.shots, operation);
     if (!changed) return false;
     const ticket =
@@ -262,6 +302,7 @@ export function useShotWorkspace(
   ): ReferenceImportTarget | null => {
     if (
       locked.current ||
+      adoptingRef.current ||
       !current.current?.shots.some((shot) => shot.id === shotId)
     )
       return null;
@@ -274,6 +315,7 @@ export function useShotWorkspace(
         if (
           !imports.current.has(token) ||
           recoveringRef.current ||
+          adoptingRef.current ||
           !doc ||
           !shot
         )
@@ -336,6 +378,7 @@ export function useShotWorkspace(
     if (
       !current.current ||
       locked.current ||
+      adoptingRef.current ||
       edit.current !== saved.current ||
       pending.current ||
       copying.current ||
@@ -415,6 +458,7 @@ export function useShotWorkspace(
     // before React has rendered disabled controls. Do not queue a late switch.
     if (
       recoveringRef.current ||
+      adoptingRef.current ||
       listing.current ||
       (id && !current.current?.shots.some((shot) => shot.id === id))
     )
@@ -424,7 +468,12 @@ export function useShotWorkspace(
     setActiveId(id);
   };
   const create = (position: Point, asset?: Asset) => {
-    if (!current.current || locked.current || mainHistory.getSnapshot().busy)
+    if (
+      !current.current ||
+      locked.current ||
+      adoptingRef.current ||
+      mainHistory.getSnapshot().busy
+    )
       return;
     const existing =
       asset &&
@@ -459,7 +508,8 @@ export function useShotWorkspace(
   const duplicate = (sourceId: string, position: Point) => {
     if (copying.current) return copying.current;
     copying.current = (async () => {
-      if (locked.current || !current.current) return null;
+      if (locked.current || adoptingRef.current || !current.current)
+        return null;
       if (imports.current.size)
         throw new Error('请完成或取消素材导入后再复制镜头。');
       if (!(await flush()) || locked.current) return null;
@@ -498,6 +548,7 @@ export function useShotWorkspace(
   ) => {
     if (
       locked.current ||
+      adoptingRef.current ||
       listing.current ||
       copying.current ||
       imports.current.size ||
@@ -531,16 +582,158 @@ export function useShotWorkspace(
     })();
     return listing.current;
   };
+  const adoptGeneration = (
+    jobId: string,
+    reserveCanvas?: () => ArkAdoptionCanvasLease | null,
+    notify?: (snapshot: ProjectSnapshot) => Promise<void>,
+  ): Promise<void> => {
+    if (adoption.current) {
+      if (adoptionJob.current !== jobId)
+        return Promise.reject(new Error('请先完成当前候选结果的采用。'));
+      return adoption.current;
+    }
+    const previous = adoptionAttempt.current;
+    if (previous && previous.baseline.jobId !== jobId)
+      return Promise.reject(
+        new Error('请先重试确认原候选结果，不能同时采用其他结果。'),
+      );
+    if (
+      !previous &&
+      (locked.current ||
+        adoptingRef.current ||
+        !current.current ||
+        copying.current ||
+        listing.current ||
+        imports.current.size ||
+        mainHistory.getSnapshot().busy)
+    )
+      return Promise.reject(
+        new Error('请先完成当前编辑、素材导入或保存，再采用生成结果。'),
+      );
+    // Reserve before publishing the adoption lock; React may render it while
+    // the ordinary workspace save below is still draining.
+    const reserved = previous ? null : reserveCanvas?.();
+    if (!previous && !reserved)
+      return Promise.reject(
+        new Error('主画布尚有未完成的修改，请保存后再采用结果。'),
+      );
+    adoptionJob.current = jobId;
+    adoptingRef.current = true;
+    setAdopting(true);
+    // Yield once so every leave guard sees the complete operation before IPC begins.
+    const operation = Promise.resolve().then(async () => {
+      let attempt = previous;
+      try {
+        if (!attempt) {
+          if (
+            !(await flush()) ||
+            locked.current ||
+            !current.current ||
+            imports.current.size ||
+            copying.current ||
+            listing.current ||
+            mainHistory.getSnapshot().busy
+          )
+            throw new Error('当前镜头尚未保存完成，请检查保存提示后重试采用。');
+          const lease = reserved;
+          if (!lease)
+            throw new Error('主画布尚有未完成的修改，请保存后再采用结果。');
+          attempt = {
+            baseline: {
+              jobId,
+              project: structuredClone(lease.snapshot),
+              workspace: structuredClone(current.current),
+            },
+            version: edit.current,
+            lease,
+            ...(notify ? { notify } : {}),
+          };
+          adoptionAttempt.current = attempt;
+          adoptionLocked.current = true;
+          locked.current = true;
+        } else attempt.lease.resume();
+        const result = await requestArkAdoption(
+          window.desktop,
+          attempt.baseline,
+        );
+        if (
+          adoptionAttempt.current !== attempt ||
+          edit.current !== attempt.version ||
+          saved.current !== attempt.version ||
+          !current.current ||
+          !sameWorkspace(current.current, attempt.baseline.workspace)
+        )
+          throw new Error(
+            '采用期间镜头输入发生变化，当前内容仍保留，未应用旧回执。',
+          );
+        // The canvas reservation validates before either editor installs this receipt.
+        attempt.lease.accept(result);
+        if (result.kind === 'image') {
+          const before = attempt.baseline.workspace.shots.find(
+            (shot) => shot.id === result.sourceShotId,
+          );
+          const after = result.workspace.shots.find(
+            (shot) => shot.id === result.shotId,
+          );
+          if (before && after) history.current.record(before, after);
+        }
+        confirmed.current = result.workspace;
+        current.current = result.workspace;
+        unconfirmed.current = null;
+        setWorkspace(result.workspace);
+        setError(null);
+        // Advance the independent recovery watermark before releasing the edit lock.
+        // Older protect/acknowledge messages cannot resurrect the pre-adoption draft.
+        const settled = draftQueue.confirm(result.workspace, result.workspace);
+        if (await draftQueue.flush()) await draftQueue.acknowledge(settled);
+        adoptionAttempt.current = null;
+        attempt.lease.finish(true);
+        adoptionLocked.current = false;
+        try {
+          await attempt.notify?.(result.snapshot);
+        } catch (reason) {
+          // The exact commit is already installed. A library refresh failure is not
+          // permission to submit another adoption or roll back either editor.
+          setError(`生成结果已采用，项目状态刷新失败：${message(reason)}`);
+        }
+      } catch (reason) {
+        if (!attempt) reserved?.finish(false);
+        if (attempt && adoptionAttempt.current === attempt) {
+          if (await arkAdoptionDidNotCommit(window.desktop, attempt.baseline)) {
+            adoptionAttempt.current = null;
+            adoptionLocked.current = false;
+            attempt.lease.finish(false);
+          } else attempt.lease.pause();
+        }
+        setError(message(reason));
+        throw reason;
+      } finally {
+        adoption.current = null;
+        adoptionJob.current = adoptionAttempt.current?.baseline.jobId ?? null;
+        locked.current =
+          blockedRef.current || recoveringRef.current || adoptionLocked.current;
+        adoptingRef.current = adoptionAttempt.current !== null;
+        setAdopting(adoptingRef.current);
+      }
+    });
+    adoption.current = operation;
+    return operation;
+  };
+
   return {
     shots: workspace?.shots ?? [],
     recovery,
     recoverDraft,
     recovering,
     isRecovering,
+    adopting,
+    pendingAdoptionJobId: adoptionJob.current,
+    isAdopting,
+    adoptGeneration,
     baseline: confirmed.current,
     dirty: edit.current !== saved.current,
     loaded: !!workspace,
-    saving: saving || savedEdit !== edit.current,
+    saving: saving || adopting || savedEdit !== edit.current,
     error,
     setError,
     activeShot: workspace?.shots.find((shot) => shot.id === activeId),
@@ -558,8 +751,20 @@ export function useShotWorkspace(
       redo: () => restore(id, 'redo'),
       breakMerge: () => history.current.breakMerge(id),
     }),
-    flush,
+    flush: () =>
+      adoption.current?.then(
+        () => true,
+        () => false,
+      ) ?? (adoptionAttempt.current ? Promise.resolve(false) : flush()),
     retry: async () => {
+      if (adoptionAttempt.current) {
+        try {
+          await adoptGeneration(adoptionAttempt.current.baseline.jobId);
+          return true;
+        } catch {
+          return false;
+        }
+      }
       if (current.current) return flush();
       try {
         const loaded = await window.desktop.getGenerationWorkspace(projectId);

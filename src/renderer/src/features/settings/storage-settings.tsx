@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DraftImportPanel } from '@/features/drafts/draft-import-panel';
 import type { LibraryState, MigrationPreview } from '../../../../shared/models';
 import { AppBackupPanel } from './app-backup-panel';
+import { PreviewCachePanel } from './preview-cache-panel';
 import { StagingCleanupPanel } from './staging-cleanup-panel';
 
 const phaseLabels = {
@@ -177,6 +178,14 @@ export function StorageSettings({
         暂存文件与项目目录分开保存。完整结果只有在项目保存成功后，才会自动清除对应暂存文件。
       </p>
       <StagingCleanupPanel />
+      <PreviewCachePanel
+        active={active}
+        disabled={
+          library.writeBlocked ||
+          restartRequired ||
+          migration?.phase === 'cleaning'
+        }
+      />
       <AppBackupPanel
         active={active}
         disabled={library.writeBlocked || restartRequired}

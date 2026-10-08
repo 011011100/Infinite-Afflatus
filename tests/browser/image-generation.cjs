@@ -256,8 +256,9 @@ app.whenReady().then(async () => {
     assert.equal(content.includes('视频时长'), false);
     assert.equal(content.includes('生成声音'), false);
     assert.equal(await exists('#generation-model'), false);
-    assert.equal(await disabled(`${imageDialog} button`, '生成图片'), true);
-    assert.ok(content.includes('尚未接入生成服务'));
+    assert.equal(await disabled(`${imageDialog} button`, '生成图片'), false);
+    assert.ok(content.includes('任务与候选'));
+    assert.ok(!content.includes('生成成功'));
     assert.deepEqual(group.parameters, {
       model: 'seedream-5.0-lite',
       ratio: '1:1',

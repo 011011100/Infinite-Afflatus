@@ -53,6 +53,22 @@ if (mode === 'broken') {
   stored.paths = null;
   stored.error = '组件配置来自较新版本，原值已保留。';
 }
+function bundleState(invalid: boolean) {
+  for (const name of names)
+    stored.locations = {
+      ...stored.locations,
+      [name]: {
+        name,
+        source: 'bundled',
+        command: invalid ? `/内置组件/${name}` : `/内置组件/bin/${name}`,
+        ...(invalid
+          ? { unavailableReason: '内置组件校验失败：测试散列不匹配' }
+          : {}),
+      },
+    };
+}
+if (mode === 'bundled' || mode === 'bundled-invalid')
+  bundleState(mode === 'bundled-invalid');
 const report = (
   settings: MediaToolSettingsState,
   tools: readonly MediaToolName[] = names,
@@ -60,10 +76,15 @@ const report = (
   checkedAt: new Date().toISOString(),
   tools: tools.map((name) => ({
     ...settings.locations[name],
-    status: 'available',
-    version:
-      settings.locations[name].source === 'saved' ? '8.2.saved' : '8.1.auto',
-    detail: null,
+    status: settings.locations[name].unavailableReason
+      ? 'invalid'
+      : 'available',
+    version: settings.locations[name].unavailableReason
+      ? null
+      : settings.locations[name].source === 'saved'
+        ? '8.2.saved'
+        : '8.1.auto',
+    detail: settings.locations[name].unavailableReason ?? null,
   })),
 });
 const reads: {
@@ -114,6 +135,7 @@ const bridge: Pick<
 Object.assign(window, {
   desktop: bridge,
   toolsControls: {
+    bundleState,
     state: () => ({
       reads: reads.length,
       checks: checks.length,
@@ -128,9 +150,11 @@ Object.assign(window, {
       const request = checks[index];
       if (!request) throw new Error('Missing check request');
       const result = report(request.snapshot);
-      if (mismatch === 'command') result.tools[0].command = '/旧工具/ffmpeg';
-      if (mismatch === 'source') result.tools[0].source = 'environment';
-      if (mismatch === 'name') result.tools[0].name = 'ffprobe';
+      const first = result.tools[0];
+      if (!first) throw new Error('Missing fixture media tool');
+      if (mismatch === 'command') first.command = '/旧工具/ffmpeg';
+      if (mismatch === 'source') first.source = 'environment';
+      if (mismatch === 'name') first.name = 'ffprobe';
       request.pending.resolve(result);
     },
     choose: (command: string | null, index = choices.length - 1) => {

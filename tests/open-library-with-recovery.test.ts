@@ -100,7 +100,7 @@ test('real startup entry exposes relocation only when eligible, preserves dialog
     },
     shell: { openPath: async () => '' },
   };
-  const module = `data:text/javascript,${encodeURIComponent('export const {app,dialog,shell}=globalThis.startupEntryElectron;')}`;
+  const module = `data:text/javascript,${encodeURIComponent('export const {app,dialog,shell}=globalThis.startupEntryElectron; export const safeStorage=undefined;')}`;
   const hook = registerHooks({
     resolve(specifier, context, nextResolve) {
       return specifier === 'electron'

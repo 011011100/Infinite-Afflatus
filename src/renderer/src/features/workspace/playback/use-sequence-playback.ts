@@ -3,6 +3,7 @@ import type { TimelineClip } from '../editor/timeline';
 import { mediaUrl } from '../media';
 import { mediaRevision, useMediaRevision } from '../use-media-revision';
 import { AdaptivePlayback } from './adaptive-playback';
+import { prepareSequenceProxies } from './prepare-sequence-proxies';
 import type { PlaybackState } from './sequence-playback';
 
 export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
@@ -73,26 +74,14 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
         resume.playing,
       );
     else void playback.select(0);
-    let disposed = false;
     setProxyStatus('preparing');
-    void Promise.all(
-      sourceKey.split(',').map(async (id, index) => {
-        try {
-          const result = await window.desktop.prepareProxy(projectId, id);
-          if (result.ready && !disposed)
-            playback.setProxy(
-              index,
-              `afflatus-media://proxy/${projectId}/${id}`,
-            );
-          return result.ready;
-        } catch {
-          return false;
-        }
-      }),
-    ).then((results) => {
-      if (!disposed)
-        setProxyStatus(results.every(Boolean) ? 'ready' : 'unavailable');
-    });
+    const releaseUsage = prepareSequenceProxies(
+      window.desktop,
+      projectId,
+      sourceKey.split(','),
+      (index, url) => playback.setProxy(index, url),
+      (ready) => setProxyStatus(ready ? 'ready' : 'unavailable'),
+    );
     return () => {
       retained.current = {
         projectId,
@@ -100,9 +89,9 @@ export function useSequencePlayback(projectId: string, clips: TimelineClip[]) {
         revisions,
         state: { ...currentState.current },
       };
-      disposed = true;
       controller.current = null;
       playback.dispose();
+      releaseUsage();
     };
   }, [projectId, sourceKey, revisions]);
   useEffect(() => {

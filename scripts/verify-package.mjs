@@ -1,13 +1,19 @@
 import { lstat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractFile, listPackage, statFile } from '@electron/asar';
+import { extractFile, listPackage, statFile, uncache } from '@electron/asar';
+import {
+  MEDIA_TOOL_BUNDLE_DIRECTORY,
+  verifyMediaToolBundle,
+} from '../src/main/media/media-tool-bundle.ts';
 import { APP_NAME, checkApplicationFiles } from './package-content.mjs';
 
 export function verifyAsar(
   archive,
   reader = { listPackage, statFile, extractFile },
 ) {
+  // ASAR caches headers by filename; a repeated validation must read current bytes.
+  uncache(archive);
   const files = [];
   const nativePaths = new Map();
   for (const path of reader.listPackage(archive)) {
@@ -32,7 +38,13 @@ export function verifyAsar(
 
 export async function verifyPackagedApp(
   appOutDir,
-  { platform = process.platform, productName = APP_NAME } = {},
+  {
+    platform = process.platform,
+    arch = process.arch,
+    productName = APP_NAME,
+    requireMediaTools = false,
+    expectedMediaToolManifest,
+  } = {},
 ) {
   const resources =
     platform === 'darwin'
@@ -46,7 +58,34 @@ export async function verifyPackagedApp(
   );
   if (unpacked)
     throw new Error('This application must not contain unpacked dependencies');
-  return verifyAsar(join(resources, 'app.asar'));
+  const application = verifyAsar(join(resources, 'app.asar'));
+  const directory = join(resources, MEDIA_TOOL_BUNDLE_DIRECTORY);
+  const bundle = await lstat(directory).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+    return null;
+  });
+  if (!bundle) {
+    if (requireMediaTools || expectedMediaToolManifest)
+      throw new Error('Expected packaged media tool bundle is missing');
+    return application;
+  }
+  const verified = verifyMediaToolBundle(directory, { platform, arch });
+  if (
+    expectedMediaToolManifest &&
+    JSON.stringify(verified.manifest) !==
+      JSON.stringify(expectedMediaToolManifest)
+  )
+    throw new Error(
+      'Packaged media tool bundle differs from the verified supplied manifest',
+    );
+  return {
+    ...application,
+    mediaTools: {
+      directory,
+      manifest: verified.manifest,
+      files: verified.files.length,
+    },
+  };
 }
 
 if (

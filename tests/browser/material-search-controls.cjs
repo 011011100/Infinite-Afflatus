@@ -1,6 +1,7 @@
 // Actual canvas, picker and modal components; native keys/clicks with isolated storage/media.
 const assert = require('node:assert/strict');
-const { writeFileSync } = require('node:fs');
+const { mkdtempSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
 const { basename, join, resolve } = require('node:path');
 const { app, BrowserWindow, protocol } = require('electron');
 const root = resolve(__dirname, '../..');
@@ -9,6 +10,8 @@ const scratch = process.env.AFFLATUS_FIXTURE_SCRATCH;
 const profile = process.env.AFFLATUS_FIXTURE_PROFILE;
 if (!origin || !scratch || !profile)
   throw new Error('Use the isolated fixture runner');
+const screenshots = mkdtempSync(join(tmpdir(), 'afflatus-material-search-'));
+console.log(`Material search screenshots: ${screenshots}`);
 app.setPath('userData', profile);
 protocol.registerSchemesAsPrivileged([
   {
@@ -203,7 +206,7 @@ app.whenReady().then(async () => {
         2,
       );
       writeFileSync(
-        '/private/tmp/afflatus-batch20-search.png',
+        join(screenshots, 'search.png'),
         (await wc.capturePage()).toPNG(),
       );
       await click('[data-material-search-id="member"]');
@@ -314,7 +317,7 @@ app.whenReady().then(async () => {
     );
     await button('查看已选');
     writeFileSync(
-      '/private/tmp/afflatus-batch20-reference-picker.png',
+      join(screenshots, 'reference-picker.png'),
       (await wc.capturePage()).toPNG(),
     );
     await click('[aria-label="取消选择IMAGE 晨光.png"]');
@@ -326,17 +329,38 @@ app.whenReady().then(async () => {
       true,
     );
     await run('materialSearch.block(false)');
+    const beforeAddViewport = (await state()).shot.viewport;
     await button('添加素材');
     await wait('!document.querySelector("dialog[open]")', 'picker applied');
     const added = (await state()).shot.nodes.filter((n) => n.type === 'asset');
     assert.equal(added.length, 1);
     assert.equal(added[0].assetId, 'text-a');
+    // Adding references reveals them with a viewport animation. Its onMoveEnd
+    // writes the final viewport; flushing earlier only saves the previous view.
+    await wait(
+      `JSON.stringify(materialSearch.state().shot.viewport)!==${JSON.stringify(JSON.stringify(beforeAddViewport))}`,
+      'added reference reveal completed its viewport update',
+    );
+    await paint();
+    const revealedViewport = (await state()).shot.viewport;
+    const renderedViewport = await run(
+      `(()=>{const viewport=document.querySelector('.react-flow__viewport');if(!viewport)throw Error('Missing material viewport');const matrix=new DOMMatrixReadOnly(getComputedStyle(viewport).transform);return{x:matrix.e,y:matrix.f,zoom:matrix.a}})()`,
+    );
+    // Computed CSS matrices round their decimal representation.
+    assert.ok(
+      Math.abs(renderedViewport.x - revealedViewport.x) < 0.01 &&
+        Math.abs(renderedViewport.y - revealedViewport.y) < 0.01 &&
+        Math.abs(renderedViewport.zoom - revealedViewport.zoom) < 0.00001,
+      `Rendered viewport must match the completed reveal: ${JSON.stringify({ renderedViewport, revealedViewport })}`,
+    );
     assert.equal(await run('materialSearch.flush()'), true);
+    const savedState = await state();
+    assert.deepEqual(savedState.stored.shots[0], savedState.shot);
     console.log(
       'PASS picker: normalized query, hidden selection review/removal, live lock and one add through the real canvas',
     );
 
-    const saved = (await state()).shot;
+    const saved = savedState.shot;
     await button('返回主画布');
     await wait(
       `!document.querySelector(${JSON.stringify(page)})`,

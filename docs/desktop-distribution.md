@@ -44,6 +44,8 @@ pnpm package:verify release/mac-arm64
 
 ## 媒体工具与发布边界
 
+新增可选的本地组件包清单／哈希校验与 `--media-tools`、`--output` 参数，默认行为仍不附带任何媒体二进制。详见 [可选随包视频组件](media-tool-bundle.md)。`pnpm test:mac` 将本批桌面阶段串行执行并分别记录结果，详见 [Mac 统一验收](mac-acceptance.md)；准备好入口不等于已经执行。
+
 本包**没有附带独立 `ffmpeg` 或 `ffprobe` 可执行工具**。视频轻量预览和成片导出仍依赖外部工具；`FFMPEG_PATH`、`FFPROBE_PATH` 和系统可执行路径由应用运行时检测。macOS 的 Finder 启动环境可能与终端不同，应使用应用设置中的视频处理检查确认。`pnpm doctor:media` 仅代表当前终端环境。这里没有自动下载媒体工具，也没有确定可再分发版本、许可证与来源清单。
 
 构建脚本强制 `--publish never`，清除传入的签名环境变量并禁用证书自动发现。macOS 明确设置 `identity: null`、`notarize: false`、`hardenedRuntime: false`；Windows 使用 v26 的 `signExecutable: false` 保留图标／版本资源编辑，同时跳过签名。依据 [macOS 配置](https://www.electron.build/v26/docs/mac/) 与 [Windows 配置](https://www.electron.build/v26/docs/win/)，这些是内部未签名产物，不能据此宣称通过 Gatekeeper、SmartScreen 或正式发布验证。

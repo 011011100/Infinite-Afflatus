@@ -18,7 +18,9 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { createPackage, extractFile, getRawHeader } from '@electron/asar';
 import { stageApplication } from '../scripts/package-content.mjs';
-import { verifyAsar } from '../scripts/verify-package.mjs';
+import { stageMediaToolBundle } from '../scripts/package-media-tools.mjs';
+import { verifyAsar, verifyPackagedApp } from '../scripts/verify-package.mjs';
+import { mediaToolBundleFixture } from './media-tool-bundle-fixture';
 
 async function archive(source: string, destination: string) {
   // ASAR 3.4.1 returns the output stream from end(), despite declaring Promise<void>.
@@ -199,4 +201,105 @@ test('staging rejects symlinks and unexpected build output instead of following 
     join(f.root, 'out/renderer/assets/private.js'),
   );
   await assert.rejects(stageApplication(f.root, f.stage), /symbolic links/);
+});
+
+test('final resources verify optional external bundle while preserving strict ASAR and pinned supplied provenance', async (t) => {
+  const f = await fixture();
+  const bundle = await mediaToolBundleFixture();
+  t.after(f.clean);
+  t.after(bundle.clean);
+  await stageApplication(f.root, f.stage);
+  const appOutDir = join(f.base, 'unpacked');
+  const resources = join(
+    appOutDir,
+    'Infinite Afflatus.app',
+    'Contents',
+    'Resources',
+  );
+  await mkdir(resources, { recursive: true });
+  const asar = join(resources, 'app.asar');
+  await archive(f.stage, asar);
+  const options = { platform: 'darwin' as const, arch: 'arm64' };
+  assert.deepEqual(await verifyPackagedApp(appOutDir, options), {
+    asar,
+    files: 8,
+  });
+  await assert.rejects(
+    verifyPackagedApp(appOutDir, { ...options, requireMediaTools: true }),
+    /missing/,
+  );
+  const destination = join(resources, 'media-tools');
+  await stageMediaToolBundle(bundle.directory, destination, options);
+  const result = await verifyPackagedApp(appOutDir, {
+    ...options,
+    requireMediaTools: true,
+    expectedMediaToolManifest: bundle.manifest,
+  });
+  assert.equal(result.files, 8);
+  assert.equal(result.mediaTools?.files, 4);
+  assert.deepEqual(result.mediaTools?.manifest, bundle.manifest);
+  await assert.rejects(
+    verifyPackagedApp(appOutDir, { ...options, arch: 'x64' }),
+    /target/,
+  );
+  const altered = {
+    ...bundle.manifest,
+    build: { ...bundle.manifest.build, version: 'other-build' },
+  };
+  await writeFile(join(destination, 'manifest.json'), JSON.stringify(altered));
+  await assert.rejects(
+    verifyPackagedApp(appOutDir, {
+      ...options,
+      expectedMediaToolManifest: bundle.manifest,
+    }),
+    /differs from/,
+  );
+  await writeFile(
+    join(destination, 'manifest.json'),
+    JSON.stringify(bundle.manifest),
+  );
+  await writeFile(join(destination, 'private.txt'), 'must not ship');
+  await assert.rejects(verifyPackagedApp(appOutDir, options), /undeclared/);
+  await rm(join(destination, 'private.txt'));
+  await writeFile(join(destination, 'bin/ffmpeg'), 'corrupt');
+  await assert.rejects(verifyPackagedApp(appOutDir, options), /SHA-256/);
+  await writeFile(join(destination, 'bin/ffmpeg'), 'inert ffmpeg fixture');
+  await mkdir(join(resources, 'app.asar.unpacked'));
+  await assert.rejects(
+    verifyPackagedApp(appOutDir, options),
+    /unpacked dependencies/,
+  );
+  await rm(join(resources, 'app.asar.unpacked'), { recursive: true });
+  await writeFile(join(f.stage, 'ffmpeg'), 'must never enter ASAR');
+  await archive(f.stage, asar);
+  await assert.rejects(
+    verifyPackagedApp(appOutDir, options),
+    /Unexpected packaged file/,
+  );
+});
+
+test('Windows final resources use the declared target and executable pair without host platform assumptions', async (t) => {
+  const f = await fixture();
+  const bundle = await mediaToolBundleFixture();
+  t.after(f.clean);
+  t.after(bundle.clean);
+  bundle.manifest.target = { platform: 'win32', arch: 'x64' };
+  await bundle.save();
+  await stageApplication(f.root, f.stage);
+  const appOutDir = join(f.base, 'win-unpacked');
+  const resources = join(appOutDir, 'resources');
+  await mkdir(resources, { recursive: true });
+  await archive(f.stage, join(resources, 'app.asar'));
+  const options = { platform: 'win32' as const, arch: 'x64' };
+  await stageMediaToolBundle(
+    bundle.directory,
+    join(resources, 'media-tools'),
+    options,
+  );
+  const result = await verifyPackagedApp(appOutDir, {
+    ...options,
+    requireMediaTools: true,
+  });
+  assert.equal(result.mediaTools?.manifest.target.platform, 'win32');
+  assert.equal(result.mediaTools?.manifest.target.arch, 'x64');
 });

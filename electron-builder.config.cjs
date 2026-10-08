@@ -8,6 +8,16 @@ module.exports = {
   directories: { output: 'release', buildResources: 'src/shared/assets' },
   files: ['out/**/*', 'package.json'],
   asar: true,
+  // Supplied only by the guarded packager, outside the application ASAR.
+  extraResources: process.env.AFFLATUS_MEDIA_TOOLS_STAGING
+    ? [
+        {
+          from: process.env.AFFLATUS_MEDIA_TOOLS_STAGING,
+          to: 'media-tools',
+          filter: ['**/*'],
+        },
+      ]
+    : [],
   // v26 treats false from beforeBuild as externally handled node_modules.
   // The staged bundle has no runtime dependencies; do not traverse the parent workspace.
   beforeBuild: () => false,
@@ -40,7 +50,13 @@ module.exports = {
     const result = await verifyPackagedApp(context.appOutDir, {
       platform: context.electronPlatformName,
       productName: context.packager.appInfo.productFilename,
+      arch: ['ia32', 'x64', 'armv7l', 'arm64', 'universal'][context.arch],
+      requireMediaTools: !!process.env.AFFLATUS_MEDIA_TOOLS_STAGING,
+      expectedMediaToolManifest: process.env.AFFLATUS_MEDIA_TOOLS_MANIFEST
+        ? JSON.parse(process.env.AFFLATUS_MEDIA_TOOLS_MANIFEST)
+        : undefined,
     });
     console.log(`Verified ${result.files} application files: ${result.asar}`);
+    console.log(`Verified packaged app directory: ${context.appOutDir}`);
   },
 };

@@ -1,8 +1,6 @@
-import { dirname } from 'node:path';
 import { protocol } from 'electron';
 import { mediaFileResponse } from '../media/file-response';
 import { isId } from '../projects/project-service';
-import { safeFile } from '../storage/files';
 import type { Library } from '../storage/library';
 
 export function registerMediaScheme(): void {
@@ -33,16 +31,19 @@ export function serveProjectMedia(library: Library): void {
         !['GET', 'HEAD'].includes(request.method)
       )
         return new Response(null, { status: 400 });
-      const snapshot = await library.projects.open(projectId);
-      const asset = snapshot.assets.find((item) => item.id === assetId);
-      if (!asset) return new Response(null, { status: 404 });
-      const root = dirname(await library.projects.databasePath(projectId));
-      const file =
-        url.host === 'proxy'
-          ? await library.proxies.file(projectId, assetId)
-          : await safeFile(root, asset.relativePath);
-      if (!file) return new Response(null, { status: 404 });
-      return await mediaFileResponse(file, request);
+      if (url.host === 'proxy') {
+        const leased = await library.proxies.acquireFile(projectId, assetId);
+        if (!leased) return new Response(null, { status: 404 });
+        return await mediaFileResponse(leased.file, request, leased.release);
+      }
+      const media = await library.referenceReads.acquire(
+        projectId,
+        assetId,
+        undefined,
+        request.signal,
+      );
+      if (!media) return new Response(null, { status: 404 });
+      return await mediaFileResponse(media, request);
     } catch {
       return new Response(null, { status: 404 });
     }

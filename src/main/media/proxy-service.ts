@@ -31,6 +31,51 @@ export class ProxyService {
   private abort = new AbortController();
   private tail: Promise<unknown> = Promise.resolve();
   private pending = new Map<string, Promise<ProxyResult>>();
+  private protectedAssets = new Map<string, number>();
+
+  /** Editor leases bridge the gaps between Chromium range requests. */
+  protect(projectId: string, assetIds: string[]): () => void {
+    const keys = [...new Set(assetIds)].map((id) => `${projectId}:${id}`);
+    for (const key of keys)
+      this.protectedAssets.set(key, (this.protectedAssets.get(key) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      for (const key of keys) {
+        const count = this.protectedAssets.get(key) ?? 0;
+        if (count <= 1) this.protectedAssets.delete(key);
+        else this.protectedAssets.set(key, count - 1);
+      }
+    };
+  }
+
+  busyReason(projectId: string, assetId: string): string | null {
+    const key = `${projectId}:${assetId}`;
+    if (this.pending.has(key)) return '预览正在排队、生成或发布，已保留';
+    if (this.protectedAssets.has(key))
+      return '预览正在播放、读取或编辑，已保留';
+    return null;
+  }
+
+  /** Admission shares the cleanup/migration gate; release only when the response closes. */
+  acquireFile(
+    projectId: string,
+    assetId: string,
+  ): Promise<{ file: string; release: () => void } | null> {
+    return this.gate.run(async () => {
+      const release = this.protect(projectId, [assetId]);
+      try {
+        const file = await this.file(projectId, assetId);
+        if (file) return { file, release };
+        release();
+        return null;
+      } catch (error) {
+        release();
+        throw error;
+      }
+    });
+  }
 
   constructor(
     private projects: ProjectService,
