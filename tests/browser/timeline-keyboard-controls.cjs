@@ -50,12 +50,20 @@ app.whenReady().then(async () => {
   const beforeInputEvents = [];
   const started = Date.now();
   let focusedTarget = 'null';
-  const nativeFocus = () => ({
-    windowFocused: win.isFocused(),
-    contentsFocused: win.webContents.isFocused(),
-    visible: win.isVisible(),
-    loading: win.webContents.isLoadingMainFrame(),
-  });
+  const nativeFocus = () => {
+    // Windows can emit blur while the renderer or window is being destroyed.
+    const windowDestroyed = win.isDestroyed();
+    const contents = windowDestroyed ? null : win.webContents;
+    const contentsDestroyed = !contents || contents.isDestroyed();
+    return {
+      windowDestroyed,
+      contentsDestroyed,
+      windowFocused: !windowDestroyed && win.isFocused(),
+      contentsFocused: !contentsDestroyed && contents.isFocused(),
+      visible: !windowDestroyed && win.isVisible(),
+      loading: !contentsDestroyed && contents.isLoadingMainFrame(),
+    };
+  };
   const recordFocus = (type, target) =>
     nativeFocusEvents.push({
       atMs: Date.now() - started,
@@ -339,12 +347,15 @@ app.whenReady().then(async () => {
     );
     console.error('native input', await run('window.timelineInputEvents'));
   } finally {
-    win.destroy();
     try {
+      win.destroy();
       if (!process.env.AFFLATUS_FIXTURE_SCRATCH)
         rmSync(scratch, { recursive: true, force: true });
       if (!process.env.AFFLATUS_FIXTURE_PROFILE)
         rmSync(profile, { recursive: true, force: true });
+    } catch (error) {
+      failed = true;
+      console.error('Timeline fixture cleanup failed', error);
     } finally {
       app.exit(failed ? 1 : 0);
     }
