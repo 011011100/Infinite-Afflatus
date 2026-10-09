@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stageApplication } from './package-content.mjs';
 import {
   parsePackagingArguments,
@@ -64,7 +64,7 @@ try {
   env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
   const args = [
     '--import',
-    require.resolve('tsx'),
+    pathToFileURL(require.resolve('tsx')).href,
     require.resolve('electron-builder/cli.js'),
     '--config',
     join(root, 'electron-builder.config.cjs'),
